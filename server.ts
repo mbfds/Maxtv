@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
@@ -962,14 +963,43 @@ app.get('/api/channels', (req, res) => {
   });
 });
 
-// 2.1 VOD CATALOG API (Filmes e Séries do Ramys/Iptv-Brasil-2026)
+// 2.1 VOD CATALOG API (Filmes e Séries - Arquivos Enriquecidos ou Ramys/Iptv-Brasil-2026)
 app.get('/api/vod', (req, res) => {
+  try {
+    const enrichedPath = path.join(process.cwd(), 'public', 'data', 'enriched', 'vod.json');
+    if (fs.existsSync(enrichedPath)) {
+      const rawData = fs.readFileSync(enrichedPath, 'utf-8');
+      const parsed = JSON.parse(rawData);
+      return res.json({
+        success: true,
+        count: parsed.items?.length || parsed.count || 0,
+        source: 'Enriched Local M3U (public/data/enriched/vod.json)',
+        updatedAt: parsed.updatedAt,
+        items: parsed.items || []
+      });
+    }
+  } catch (err) {
+    console.warn('[VOD API] Erro ao ler public/data/enriched/vod.json:', err);
+  }
+
   res.json({
     success: true,
     count: parsedRamysVod.length,
     source: 'Ramys/Iptv-Brasil-2026',
     items: parsedRamysVod
   });
+});
+
+// Sincronização de Filmes e Séries via M3U (executável também pelo painel Admin)
+app.post('/api/admin/vod/sync-m3u', async (req, res) => {
+  try {
+    const { m3uUrl } = req.body;
+    const { updateCatalogFromM3U } = await import('./scripts/updateContent');
+    const result = await updateCatalogFromM3U(m3uUrl);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao sincronizar catálogo M3U' });
+  }
 });
 
 // 2.2 AUTHENTICATION SYSTEM (Cadastro, Login, Sessão do Usuário)

@@ -162,6 +162,16 @@ export const api = {
     return await res.json();
   },
 
+  async syncVodM3U(m3uUrl?: string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
+    const res = await fetch('/api/admin/vod/sync-m3u', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ m3uUrl })
+    });
+    if (!res.ok) throw new Error('Falha ao sincronizar catálogo VOD M3U');
+    return await res.json();
+  },
+
   async getVodCatalog(): Promise<{ success: boolean; count: number; items: any[] }> {
     try {
       const res = await fetch('/api/vod');

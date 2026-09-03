@@ -5,7 +5,7 @@ import {
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
-  Activity
+  Activity, Film
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant } from '../types';
 import { api } from '../services/api';
@@ -241,6 +241,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       showFeedback(res.message);
       const cRes = await api.getChannels();
       if (cRes.channels) setChannels(cRes.channels);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSyncVod = async () => {
+    const customUrl = prompt('Informe a URL da lista M3U de filmes e séries (ou deixe em branco para usar o padrão):');
+    if (customUrl === null) return;
+    try {
+      setIsLoading(true);
+      const res = await api.syncVodM3U(customUrl.trim() || undefined);
+      if (res.success) {
+        showFeedback(`Catálogo de filmes e séries atualizado! (${res.count} títulos processados)`);
+      } else {
+        alert(res.error || 'Erro ao sincronizar catálogo VOD');
+      }
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -1204,6 +1222,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Saimo-TV</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncVod}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-950/70 hover:bg-purple-900/70 text-purple-300 border border-purple-500/40 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <Film className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Atualizar Filmes/Séries (M3U)</span>
                   </button>
                   <button
                     type="button"
