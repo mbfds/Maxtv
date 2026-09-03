@@ -709,6 +709,12 @@ app.all('/api/proxy', async (req, res) => {
       }
     });
 
+    // Segmentos de vídeo (.ts, .m4s) são imutáveis; adicionar cache para evitar re-requests desnecessários
+    const isSegment = decodedUrl.endsWith('.ts') || decodedUrl.includes('.ts?') || decodedUrl.endsWith('.m4s') || decodedUrl.includes('.m4s?');
+    if (isSegment && !res.getHeader('cache-control')) {
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    }
+
     res.status(response.status);
 
     if (req.method === 'HEAD') {
@@ -717,11 +723,20 @@ app.all('/api/proxy', async (req, res) => {
 
     if (response.body) {
       const reader = response.body.getReader();
+      let isClientClosed = false;
+
+      req.on('close', () => {
+        isClientClosed = true;
+        try {
+          reader.cancel();
+        } catch (e) {}
+      });
+
       const pump = async () => {
         try {
-          while (true) {
+          while (!isClientClosed) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done || isClientClosed) break;
             res.write(value);
           }
           res.end();
@@ -1050,12 +1065,15 @@ app.get('/api/vod', (req, res) => {
   });
 });
 
-// Sincronização de Filmes e Séries via M3U (executável também pelo painel Admin)
+// Sincronização de Filmes e Séries via M3U e Catálogo Gabriel Saimo (executável também pelo painel Admin)
 app.post('/api/admin/vod/sync-m3u', async (req, res) => {
   try {
-    const { m3uUrl } = req.body;
+    const { m3uUrl, source } = req.body || {};
     const { updateCatalogFromM3U } = await import('./scripts/updateContent');
-    const result = await updateCatalogFromM3U(m3uUrl);
+    const result = await updateCatalogFromM3U({
+      targetUrl: m3uUrl,
+      source: (source as 'both' | 'ramys' | 'saimo') || (m3uUrl ? undefined : 'both')
+    });
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao sincronizar catálogo M3U' });

@@ -48,6 +48,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState<boolean>(false);
   const [newChannelData, setNewChannelData] = useState({ name: '', category: 'Abertos', logo: '', streamUrl: '', referer: '', isVipOnly: false });
 
+  // VOD Sync Modal State
+  const [isSyncVodModalOpen, setIsSyncVodModalOpen] = useState<boolean>(false);
+  const [vodSyncSource, setVodSyncSource] = useState<'both' | 'ramys' | 'saimo' | 'custom'>('both');
+  const [customVodUrl, setCustomVodUrl] = useState<string>('');
+  const [vodSyncLoading, setVodSyncLoading] = useState<boolean>(false);
+
   // Filters
   const [subscriberSearch, setSubscriberSearch] = useState<string>('');
   const [subscriberFilter, setSubscriberFilter] = useState<string>('all');
@@ -276,21 +282,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
     }
   };
 
-  const handleSyncVod = async () => {
-    const customUrl = prompt('Informe a URL da lista M3U de filmes e séries (ou deixe em branco para usar o padrão):');
-    if (customUrl === null) return;
+  const handleSyncVod = () => {
+    setIsSyncVodModalOpen(true);
+  };
+
+  const handleExecuteSyncVod = async () => {
     try {
-      setIsLoading(true);
-      const res = await api.syncVodM3U(customUrl.trim() || undefined);
+      setVodSyncLoading(true);
+      const options = vodSyncSource === 'custom'
+        ? { m3uUrl: customVodUrl.trim() || undefined }
+        : { source: vodSyncSource };
+
+      const res = await api.syncVodM3U(options);
       if (res.success) {
-        showFeedback(`Catálogo de filmes e séries atualizado! (${res.count} títulos processados)`);
+        showFeedback(`Catálogo de filmes e séries atualizado! (${res.count} títulos consolidados)`);
+        setIsSyncVodModalOpen(false);
       } else {
         alert(res.error || 'Erro ao sincronizar catálogo VOD');
       }
     } catch (e: any) {
-      alert(e.message);
+      alert(e.message || 'Erro ao atualizar catálogo');
     } finally {
-      setIsLoading(false);
+      setVodSyncLoading(false);
     }
   };
 
@@ -2005,6 +2018,175 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SINCRONIZAÇÃO DE FILMES E SÉRIES */}
+      {isSyncVodModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
+                  <Film className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Sincronização de Filmes & Séries</h3>
+                  <p className="text-[11px] text-slate-400">Integração multi-projeto GitHub e catálogo unificado</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSyncVodModalOpen(false)}
+                className="p-1 rounded-full hover:bg-white/10 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <label className="text-xs font-semibold text-slate-300 block">Selecione a Fonte do Catálogo</label>
+
+              <div className="space-y-2">
+                {/* AMBOS (RECOMENDADO) */}
+                <label
+                  onClick={() => setVodSyncSource('both')}
+                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                    vodSyncSource === 'both'
+                      ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
+                      : 'bg-slate-950/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="vodSource"
+                    checked={vodSyncSource === 'both'}
+                    onChange={() => setVodSyncSource('both')}
+                    className="mt-1 accent-purple-500"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">Ambos os Projetos GitHub (Recomendado)</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">DUAL-REPO</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Combina <strong>Ramys IPTV Brasil 2026</strong> + <strong>Gabriel Saimo VOD</strong>. Deduplica títulos e cria servidores espelho redundantes (Hubby, TJTOR, Kiwi e Ramys).
+                    </p>
+                  </div>
+                </label>
+
+                {/* RAMYS */}
+                <label
+                  onClick={() => setVodSyncSource('ramys')}
+                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                    vodSyncSource === 'ramys'
+                      ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
+                      : 'bg-slate-950/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="vodSource"
+                    checked={vodSyncSource === 'ramys'}
+                    onChange={() => setVodSyncSource('ramys')}
+                    className="mt-1 accent-purple-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white">Ramys IPTV Brasil 2026</span>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Atualiza a partir da lista oficial <code className="text-purple-300">Filmes-Series.m3u8</code> com metadados e logos TMDB.
+                    </p>
+                  </div>
+                </label>
+
+                {/* SAIMO */}
+                <label
+                  onClick={() => setVodSyncSource('saimo')}
+                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                    vodSyncSource === 'saimo'
+                      ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
+                      : 'bg-slate-950/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="vodSource"
+                    checked={vodSyncSource === 'saimo'}
+                    onChange={() => setVodSyncSource('saimo')}
+                    className="mt-1 accent-purple-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white">Gabriel Saimo (SaimoPlayer VOD)</span>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Atualiza diretamente do catálogo indexado VOD do Gabriel Saimo (TJTOR, Hubby e Kiwi).
+                    </p>
+                  </div>
+                </label>
+
+                {/* CUSTOM URL */}
+                <label
+                  onClick={() => setVodSyncSource('custom')}
+                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                    vodSyncSource === 'custom'
+                      ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
+                      : 'bg-slate-950/60 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="vodSource"
+                    checked={vodSyncSource === 'custom'}
+                    onChange={() => setVodSyncSource('custom')}
+                    className="mt-1 accent-purple-500"
+                  />
+                  <div className="flex-1">
+                    <span className="text-xs font-bold text-white">Lista M3U / M3U8 Personalizada</span>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Cole qualquer link de playlist M3U ou M3U8 de filmes/séries.
+                    </p>
+                    {vodSyncSource === 'custom' && (
+                      <input
+                        type="url"
+                        placeholder="https://exemplo.com/lista-filmes.m3u8"
+                        value={customVodUrl}
+                        onChange={e => setCustomVodUrl(e.target.value)}
+                        className="w-full mt-2 bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-purple-500/40 focus:outline-none"
+                      />
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setIsSyncVodModalOpen(false)}
+                  disabled={vodSyncLoading}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteSyncVod}
+                  disabled={vodSyncLoading}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-purple-600/30 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {vodSyncLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Sincronizando Catálogo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Iniciar Sincronização</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

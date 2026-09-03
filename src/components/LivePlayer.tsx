@@ -736,16 +736,27 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       } else if (isHls && Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: type === 'channel',
-          backBufferLength: 90,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-          maxBufferSize: 60 * 1000 * 1000,
-          manifestLoadingTimeOut: 12000,
+          // Desativar lowLatencyMode agressivo para transmissões IPTV. Evita que o player
+          // acelere a reprodução e esgote o buffer a cada 5 segundos.
+          lowLatencyMode: false,
+          backBufferLength: 60,
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          maxBufferSize: 90 * 1000 * 1000,
+          // Mantém uma margem confortável de 5 segmentos (~15s) para absorver flutuações de rede sem travar
+          liveSyncDurationCount: 5,
+          liveMaxLatencyDurationCount: 12,
+          // Pré-carrega o próximo fragmento antes do atual terminar, eliminando micro-pausas entre chunks
+          startFragPrefetch: true,
+          progressive: true,
+          highBufferWatchdogPeriod: 2,
+          nudgeOffset: 0.2,
+          nudgeMaxRetry: 10,
+          manifestLoadingTimeOut: 15000,
           manifestLoadingMaxRetry: 4,
-          fragLoadingTimeOut: 14000,
+          fragLoadingTimeOut: 20000,
           fragLoadingMaxRetry: 5,
-          levelLoadingTimeOut: 12000,
+          levelLoadingTimeOut: 15000,
         });
 
         hlsRef.current = hls;
@@ -785,6 +796,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
+          // Recuperação inteligente de micro-travamentos de buffer (Buffer Stalled)
+          if (!data.fatal && data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+            console.log('HLS buffer stalled momentarily, nudging video smoothly...');
+            if (video && !video.paused && video.readyState >= 2) {
+              video.currentTime += 0.15;
+            }
+            return;
+          }
+
           console.warn('HLS.js event error:', data);
           if (data.fatal) {
             switch (data.type) {
@@ -846,8 +866,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             url: streamUrl,
           }, {
             enableWorker: true,
-            lazyLoadMaxDuration: 30,
-            seekType: 'range'
+            lazyLoad: false,
+            lazyLoadMaxDuration: 60,
+            seekType: 'range',
+            liveBufferLatencyChasing: false,
+            liveBufferLatencyMaxLatency: 20,
+            liveBufferLatencyMinRemain: 5,
+            autoCleanupSourceBuffer: true,
+            autoCleanupMaxBackwardDuration: 60,
+            autoCleanupMinBackwardDuration: 30,
           });
 
           mpegtsRef.current = player;

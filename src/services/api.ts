@@ -214,11 +214,12 @@ export const api = {
     return await res.json();
   },
 
-  async syncVodM3U(m3uUrl?: string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
+  async syncVodM3U(options?: { m3uUrl?: string; source?: 'both' | 'ramys' | 'saimo' } | string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
+    const payload = typeof options === 'string' ? { m3uUrl: options } : options || {};
     const res = await fetch('/api/admin/vod/sync-m3u', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ m3uUrl })
+      body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error('Falha ao sincronizar catálogo VOD M3U');
     return await res.json();
