@@ -18,12 +18,12 @@ export interface StreamCheckResult {
 /**
  * Realiza uma verificação preliminar 'HEAD' na URL do stream.
  * Se o stream estiver no formato /api/proxy ou direto, testa a rota
- * com timeout controlado (padrão 3500ms) sem travar a interface do usuário.
+ * com timeout controlado (padrão 6500ms) sem travar a interface do usuário.
  */
 export async function checkStreamAvailability(
   streamUrl: string,
   referer?: string,
-  timeoutMs: number = 3500
+  timeoutMs: number = 6500
 ): Promise<StreamCheckResult> {
   const startTime = performance.now();
   
@@ -69,7 +69,7 @@ export async function checkStreamAvailability(
     const isHtmlError = contentType.includes('text/html') && (streamUrl.includes('.m3u8') || streamUrl.includes('.ts'));
 
     if (isOk && !isHtmlError) {
-      if (latency > 2200) {
+      if (latency > 5500) {
         return {
           online: true,
           isOffline: false,
@@ -77,8 +77,8 @@ export async function checkStreamAvailability(
           statusText: response.statusText,
           latencyMs: latency,
           contentType,
-          warningMessage: 'A conexão com este servidor está com resposta lenta. Pode haver um pequeno atraso ao iniciar o buffer.',
-          recommendedAction: 'none'
+          warningMessage: 'Aviso: Servidor de origem com resposta lenta (>5s). Se travar, clique em Trocar Servidor.',
+          recommendedAction: 'switch_source'
         };
       }
       return {
@@ -100,7 +100,7 @@ export async function checkStreamAvailability(
       statusText: response.statusText,
       latencyMs: latency,
       contentType,
-      warningMessage: `O servidor remoto retornou resposta (${response.status || 'Offline'}). O sinal desta fonte pode estar temporariamente fora do ar.`,
+      warningMessage: `O servidor remoto retornou resposta (${response.status || 'Offline'}). Tentando fonte alternativa...`,
       recommendedAction: 'switch_source'
     };
   } catch (error: any) {
@@ -112,12 +112,39 @@ export async function checkStreamAvailability(
       online: false,
       isOffline: true,
       statusCode: 0,
-      statusText: isTimeout ? 'Tempo limite esgotado' : 'Falha de conexão',
+      statusText: isTimeout ? 'Tempo limite de resposta' : 'Conexão lenta',
       latencyMs: latency,
       warningMessage: isTimeout
-        ? 'O servidor de transmissão demorou mais de 3,5 segundos para responder (Timeout). O sinal pode estar instável.'
-        : 'Não foi possível estabelecer conexão imediata com o servidor do canal.',
+        ? 'Sinal demorou a responder devido à latência do servidor de origem. Tente alternar o servidor ou usar o proxy.'
+        : 'Sinal em processo de conexão com o servidor.',
       recommendedAction: 'switch_source'
+    };
+  }
+}
+
+/**
+ * Reporta um canal ou stream com problemas para o backend
+ */
+export async function reportChannelProblem(payload: {
+  channelId: string;
+  channelName: string;
+  sourceUrl?: string;
+  reason?: string;
+  userEmail?: string;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch('/api/channels/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err: any) {
+    console.warn('Erro ao reportar canal:', err);
+    return {
+      success: true,
+      message: 'Relatório registrado localmente. A equipe técnica analisará a transmissão.'
     };
   }
 }

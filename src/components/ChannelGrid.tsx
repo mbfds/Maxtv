@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Tv, Play, Crown, Radio, Sparkles, Filter } from 'lucide-react';
-import { Channel, ChannelCategory } from '../types';
+import { Tv, Play, Crown, Radio, Sparkles, Filter, Heart } from 'lucide-react';
+import { Channel, ChannelCategory, FavoriteItem, WatchProgress, VodItem } from '../types';
+import { ContinueWatchingRow } from './ContinueWatchingRow';
 
 interface ChannelGridProps {
   channels: Channel[];
@@ -8,6 +9,12 @@ interface ChannelGridProps {
   isVip: boolean;
   onSelectChannel: (channel: Channel) => void;
   onOpenCheckout: () => void;
+  favorites?: FavoriteItem[];
+  onToggleFavorite?: (channel: Channel) => void;
+  watchProgress?: WatchProgress[];
+  allVodItems?: VodItem[];
+  onPlayVod?: (vod: VodItem, initialTime?: number) => void;
+  onRemoveProgress?: (id: string) => void;
 }
 
 const CATEGORIES: ChannelCategory[] = [
@@ -26,9 +33,17 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   searchQuery,
   isVip,
   onSelectChannel,
-  onOpenCheckout
+  onOpenCheckout,
+  favorites = [],
+  onToggleFavorite,
+  watchProgress = [],
+  allVodItems = [],
+  onPlayVod,
+  onRemoveProgress
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ChannelCategory>('Todos');
+
+  const isItemFavorite = (id: string) => favorites.some(f => f.id === id);
 
   // Filter channels
   const filteredChannels = channels.filter(ch => {
@@ -40,6 +55,18 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   return (
     <div className="w-full">
+      {/* Continue Watching Section on Main Page */}
+      {watchProgress.length > 0 && !searchQuery && selectedCategory === 'Todos' && onPlayVod && (
+        <div className="mb-8">
+          <ContinueWatchingRow
+            progressItems={watchProgress}
+            allVodItems={allVodItems}
+            onPlayVod={onPlayVod}
+            onRemoveProgress={onRemoveProgress}
+          />
+        </div>
+      )}
+
       {/* Category Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
         {CATEGORIES.map(cat => (
@@ -106,23 +133,37 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
                     : 'border-white/5 hover:border-indigo-500/50'
                 }`}
               >
-                {/* Top Badge (Category + Live/VIP status) */}
+                {/* Top Badge (Category + Live/VIP status + Favorite) */}
                 <div className="flex items-center justify-between w-full mb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-2 py-0.5 rounded-full bg-slate-950/60 border border-white/5 truncate max-w-[85px]">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-2 py-0.5 rounded-full bg-slate-950/60 border border-white/5 truncate max-w-[75px]">
                     {channel.category}
                   </span>
 
-                  {isLocked ? (
-                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">
-                      <Crown className="w-2.5 h-2.5" />
-                      VIP
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-600 text-[10px] font-bold text-white uppercase tracking-tighter shadow-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      Ao Vivo
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {isLocked ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold uppercase bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">
+                        <Crown className="w-2.5 h-2.5" />
+                        VIP
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-600 text-[10px] font-bold text-white uppercase tracking-tighter shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        Ao Vivo
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite?.(channel);
+                      }}
+                      className="p-1 rounded-full text-slate-400 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
+                      title={isItemFavorite(channel.id) ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${isItemFavorite(channel.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Channel Logo & Center circular container */}

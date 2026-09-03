@@ -194,3 +194,43 @@ export interface ChannelHealthSummary {
   lastChecked?: string;
 }
 
+export type NavigationTab = 'live' | 'movies' | 'series' | 'favorites' | 'plans' | 'admin';
+
+export interface WatchProgress {
+  id: string; // vod id
+  title: string;
+  type: 'movie' | 'series';
+  posterUrl: string;
+  bannerUrl?: string;
+  currentTime: number; // in seconds
+  duration: number; // in seconds
+  percent: number; // 0 to 100
+  lastWatchedAt: string; // ISO string
+  streamUrl: string;
+  year?: number;
+  rating?: string;
+  genre?: string[];
+  episodeTitle?: string;
+  episodeNumber?: number;
+  seasonNumber?: number;
+}
+
+export interface FavoriteItem {
+  id: string; // channel id or vod id
+  type: 'channel' | 'vod';
+  addedAt: string; // ISO string
+  name?: string;
+  title?: string;
+  logo?: string;
+  posterUrl?: string;
+  bannerUrl?: string;
+  category?: string;
+  year?: number;
+  rating?: string;
+  duration?: string;
+  genre?: string[];
+  synopsis?: string;
+  isVipOnly?: boolean;
+  streamUrl?: string;
+}
+

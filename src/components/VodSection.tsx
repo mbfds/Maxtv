@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
-import { Film, PlayCircle, Star, Clock, Calendar, Crown, Play, X, Info } from 'lucide-react';
-import { VodItem } from '../types';
+import { Film, PlayCircle, Star, Clock, Calendar, Crown, Play, X, Info, Heart } from 'lucide-react';
+import { VodItem, FavoriteItem, WatchProgress } from '../types';
+import { ContinueWatchingRow } from './ContinueWatchingRow';
 
 interface VodSectionProps {
   items: VodItem[];
   filterType?: 'all' | 'movie' | 'series';
   searchQuery: string;
   isVip: boolean;
-  onPlayVod: (vod: VodItem) => void;
+  onPlayVod: (vod: VodItem, initialTime?: number) => void;
   onOpenCheckout: () => void;
+  favorites?: FavoriteItem[];
+  onToggleFavorite?: (vod: VodItem) => void;
+  watchProgress?: WatchProgress[];
+  onRemoveProgress?: (id: string) => void;
 }
 
 export const VodSection: React.FC<VodSectionProps> = ({
@@ -17,11 +22,17 @@ export const VodSection: React.FC<VodSectionProps> = ({
   searchQuery,
   isVip,
   onPlayVod,
-  onOpenCheckout
+  onOpenCheckout,
+  favorites = [],
+  onToggleFavorite,
+  watchProgress = [],
+  onRemoveProgress
 }) => {
   const [activeType, setActiveType] = useState<'all' | 'movie' | 'series'>(filterType);
   const [selectedGenre, setSelectedGenre] = useState<string>('Todos');
   const [activeModalItem, setActiveModalItem] = useState<VodItem | null>(null);
+
+  const isItemFavorite = (id: string) => favorites.some(f => f.id === id);
 
   // Extract all unique genres
   const allGenres = ['Todos', ...Array.from(new Set(items.flatMap(i => i.genre)))];
@@ -35,6 +46,18 @@ export const VodSection: React.FC<VodSectionProps> = ({
 
   return (
     <div className="w-full">
+      {/* Continue Watching Row if user has progress */}
+      {watchProgress.length > 0 && !searchQuery && selectedGenre === 'Todos' && (
+        <div className="mb-8">
+          <ContinueWatchingRow
+            progressItems={watchProgress}
+            allVodItems={items}
+            onPlayVod={onPlayVod}
+            onRemoveProgress={onRemoveProgress}
+          />
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-1 bg-slate-900/50 p-1.5 rounded-full border border-white/10">
@@ -132,12 +155,30 @@ export const VodSection: React.FC<VodSectionProps> = ({
                     )}
                   </div>
 
-                  {isLocked && (
-                    <div className="absolute top-2.5 right-2.5 bg-indigo-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20">
-                      <Crown className="w-3 h-3" />
-                      VIP
-                    </div>
-                  )}
+                  {/* Top Right: Favorite Button + VIP badge */}
+                  <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
+                    {isLocked && (
+                      <div className="bg-indigo-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20">
+                        <Crown className="w-3 h-3" />
+                        VIP
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite?.(item);
+                      }}
+                      className={`p-1.5 rounded-full backdrop-blur-md border transition-all cursor-pointer ${
+                        isItemFavorite(item.id)
+                          ? 'bg-red-600/30 text-red-400 border-red-500/50 hover:bg-red-600/40'
+                          : 'bg-slate-900/80 text-white/70 border-white/10 hover:text-white hover:bg-slate-800'
+                      }`}
+                      title={isItemFavorite(item.id) ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${isItemFavorite(item.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                    </button>
+                  </div>
 
                   {/* Play icon overlay on hover */}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-slate-950/40 backdrop-blur-[2px] transition-all">
@@ -243,7 +284,19 @@ export const VodSection: React.FC<VodSectionProps> = ({
               )}
 
               {/* Action */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => onToggleFavorite?.(activeModalItem)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
+                    isItemFavorite(activeModalItem.id)
+                      ? 'bg-red-600/20 text-red-400 border-red-500/40 hover:bg-red-600/30'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/10'
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 ${isItemFavorite(activeModalItem.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                  <span>{isItemFavorite(activeModalItem.id) ? 'Nos Favoritos' : 'Favoritar'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setActiveModalItem(null)}

@@ -8,18 +8,21 @@ import { LivePlayer } from './components/LivePlayer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { AdminPanel } from './components/AdminPanel';
 import { AuthModal } from './components/AuthModal';
+import { FavoritesView } from './components/FavoritesView';
 
-import { Channel, VodItem, Subscriber, SubscriptionPlan, User } from './types';
+import { Channel, VodItem, Subscriber, SubscriptionPlan, User, NavigationTab, FavoriteItem, WatchProgress } from './types';
 import { INITIAL_CHANNELS } from './data/channelsData';
 import { INITIAL_VOD } from './data/vodData';
 import { SUBSCRIPTION_PLANS } from './data/plansData';
 import { api } from './services/api';
+import { favoritesStorage, FAVORITES_UPDATED_EVENT } from './services/favoritesStorage';
+import { watchProgressStorage, PROGRESS_UPDATED_EVENT } from './services/watchProgressStorage';
 import { Tv, Sparkles, Shield, Heart, Radio, ExternalLink, UserCheck, Crown, Lock, LogIn } from 'lucide-react';
 
 export default function App() {
   const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
   const [vodItems, setVodItems] = useState<VodItem[]>(INITIAL_VOD);
-  const [currentTab, setCurrentTab] = useState<'live' | 'movies' | 'series' | 'plans' | 'admin'>('live');
+  const [currentTab, setCurrentTab] = useState<NavigationTab>('live');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Authentication State
@@ -37,6 +40,15 @@ export default function App() {
     return localStorage.getItem('maxtv_token') || '';
   });
 
+  // Favorites & Watch Progress State
+  const [favorites, setFavorites] = useState<FavoriteItem[]>(() => {
+    return favoritesStorage.getFavorites(currentUser?.email);
+  });
+
+  const [watchProgress, setWatchProgress] = useState<WatchProgress[]>(() => {
+    return watchProgressStorage.getProgressList(currentUser?.email);
+  });
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalConfig, setAuthModalConfig] = useState<{
     title?: string;
@@ -48,6 +60,7 @@ export default function App() {
   const [pendingMediaAfterAuth, setPendingMediaAfterAuth] = useState<{
     item: Channel | VodItem;
     type: 'channel' | 'vod';
+    initialSeekTime?: number;
   } | null>(null);
 
   // Active Subscriber state
@@ -65,6 +78,7 @@ export default function App() {
   const [activeMedia, setActiveMedia] = useState<{
     item: Channel | VodItem;
     type: 'channel' | 'vod';
+    initialSeekTime?: number;
   } | null>(null);
 
   // Checkout Modal
@@ -195,6 +209,57 @@ export default function App() {
     setAuthToken('');
     localStorage.removeItem('maxtv_user');
     localStorage.removeItem('maxtv_token');
+    setFavorites(favoritesStorage.getFavorites());
+    setWatchProgress(watchProgressStorage.getProgressList());
+  };
+
+  // Listen to local storage update events (reactive synchronization)
+  useEffect(() => {
+    const handleFavUpdate = () => {
+      setFavorites(favoritesStorage.getFavorites(currentUser?.email));
+    };
+    const handleProgressUpdate = () => {
+      setWatchProgress(watchProgressStorage.getProgressList(currentUser?.email));
+    };
+
+    window.addEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
+    window.addEventListener(PROGRESS_UPDATED_EVENT, handleProgressUpdate);
+
+    return () => {
+      window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
+      window.removeEventListener(PROGRESS_UPDATED_EVENT, handleProgressUpdate);
+    };
+  }, [currentUser?.email]);
+
+  // Sync favorites and watch progress from backend API when user is logged in
+  useEffect(() => {
+    setFavorites(favoritesStorage.getFavorites(currentUser?.email));
+    setWatchProgress(watchProgressStorage.getProgressList(currentUser?.email));
+
+    if (currentUser?.email && authToken) {
+      favoritesStorage.syncWithServer(currentUser.email, authToken)
+        .then(favs => setFavorites(favs))
+        .catch(() => {});
+      watchProgressStorage.syncWithServer(currentUser.email, authToken)
+        .then(progs => setWatchProgress(progs))
+        .catch(() => {});
+    }
+  }, [currentUser?.email, authToken]);
+
+  const handleToggleFavoriteChannel = (channel: Channel) => {
+    favoritesStorage.toggleFavorite(channel, 'channel', currentUser?.email, authToken);
+  };
+
+  const handleToggleFavoriteVod = (vod: VodItem) => {
+    favoritesStorage.toggleFavorite(vod, 'vod', currentUser?.email, authToken);
+  };
+
+  const handleRemoveFavorite = (id: string) => {
+    favoritesStorage.removeFavorite(id, currentUser?.email, authToken);
+  };
+
+  const handleRemoveProgress = (id: string) => {
+    watchProgressStorage.removeProgress(id, currentUser?.email, authToken);
   };
 
   const handleSubscriptionSuccess = (subscriber: Subscriber) => {
@@ -229,21 +294,25 @@ export default function App() {
   const isVip = (currentUser?.vipStatus === 'active') || (currentSubscriber?.status === 'active');
 
   // Trigger media playback with immediate access for free content
-  const handlePlayMedia = (item: Channel | VodItem, type: 'channel' | 'vod') => {
+  const handlePlayMedia = (item: Channel | VodItem, type: 'channel' | 'vod', initialTime?: number) => {
     // Free channels and free movies play immediately!
     if (!item.isVipOnly || currentUser) {
-      setActiveMedia({ item, type });
+      setActiveMedia({ item, type, initialSeekTime: initialTime });
       return;
     }
 
     // Item is VIP only and user is not logged in yet
-    setPendingMediaAfterAuth({ item, type });
+    setPendingMediaAfterAuth({ item, type, initialSeekTime: initialTime });
     setAuthModalConfig({
       title: `Conteúdo VIP: ${'title' in item ? item.title : item.name}`,
       subtitle: 'Faça login na sua conta VIP ou acesse para começar a reprodução.',
       mode: 'login'
     });
     setIsAuthModalOpen(true);
+  };
+
+  const handlePlayVodWithSeek = (vod: VodItem, initialTime?: number) => {
+    handlePlayMedia(vod, 'vod', initialTime);
   };
 
   // Featured items for Hero Banner
@@ -268,6 +337,7 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         currentSubscriber={currentSubscriber}
         currentUser={currentUser}
+        favoritesCount={favorites.length}
         onOpenCheckout={() => {
           setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
           setIsCheckoutOpen(true);
@@ -349,6 +419,12 @@ export default function App() {
                   setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
                   setIsCheckoutOpen(true);
                 }}
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavoriteChannel}
+                watchProgress={watchProgress}
+                allVodItems={vodItems}
+                onPlayVod={handlePlayVodWithSeek}
+                onRemoveProgress={handleRemoveProgress}
               />
             )}
 
@@ -359,11 +435,15 @@ export default function App() {
                 filterType="movie"
                 searchQuery={searchQuery}
                 isVip={isVip}
-                onPlayVod={(vod) => handlePlayMedia(vod, 'vod')}
+                onPlayVod={handlePlayVodWithSeek}
                 onOpenCheckout={() => {
                   setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
                   setIsCheckoutOpen(true);
                 }}
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavoriteVod}
+                watchProgress={watchProgress}
+                onRemoveProgress={handleRemoveProgress}
               />
             )}
 
@@ -374,11 +454,28 @@ export default function App() {
                 filterType="series"
                 searchQuery={searchQuery}
                 isVip={isVip}
-                onPlayVod={(vod) => handlePlayMedia(vod, 'vod')}
+                onPlayVod={handlePlayVodWithSeek}
                 onOpenCheckout={() => {
                   setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
                   setIsCheckoutOpen(true);
                 }}
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavoriteVod}
+                watchProgress={watchProgress}
+                onRemoveProgress={handleRemoveProgress}
+              />
+            )}
+
+            {/* Tab: Favoritos */}
+            {currentTab === 'favorites' && (
+              <FavoritesView
+                favorites={favorites}
+                channels={channels}
+                vodItems={vodItems}
+                onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
+                onPlayVod={handlePlayVodWithSeek}
+                onRemoveFavorite={handleRemoveFavorite}
+                onExplore={() => setCurrentTab('live')}
               />
             )}
 
@@ -448,8 +545,10 @@ export default function App() {
         <LivePlayer
           item={activeMedia.item}
           type={activeMedia.type}
+          initialSeekTime={activeMedia.initialSeekTime}
           isVip={isVip}
           currentUser={currentUser}
+          authToken={authToken}
           onClose={() => setActiveMedia(null)}
           onOpenCheckout={() => {
             setActiveMedia(null);

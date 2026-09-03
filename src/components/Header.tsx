@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound } from 'lucide-react';
-import { Subscriber, User } from '../types';
+import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound, Heart } from 'lucide-react';
+import { Subscriber, User, NavigationTab } from '../types';
 
 interface HeaderProps {
-  currentTab: 'live' | 'movies' | 'series' | 'plans' | 'admin';
-  setCurrentTab: (tab: 'live' | 'movies' | 'series' | 'plans' | 'admin') => void;
+  currentTab: NavigationTab;
+  setCurrentTab: (tab: NavigationTab) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   currentSubscriber: Subscriber | null;
@@ -13,6 +13,7 @@ interface HeaderProps {
   onOpenAuth: () => void;
   onLogout: () => void;
   totalChannelsCount: number;
+  favoritesCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,7 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCheckout,
   onOpenAuth,
   onLogout,
-  totalChannelsCount
+  totalChannelsCount,
+  favoritesCount = 0
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const isVip = currentSubscriber?.status === 'active' || currentUser?.vipStatus === 'active';
@@ -96,6 +98,24 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <PlayCircle className="w-4 h-4" />
             <span>Séries</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentTab('favorites')}
+            className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              currentTab === 'favorites'
+                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+            }`}
+          >
+            <Heart className={`w-4 h-4 ${currentTab === 'favorites' ? 'fill-red-500 text-red-500' : 'text-slate-400'}`} />
+            <span>Favoritos</span>
+            {favoritesCount > 0 && (
+              <span className="ml-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-red-600 text-white shadow-sm">
+                {favoritesCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -284,6 +304,23 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <PlayCircle className="w-4 h-4" />
           <span>Séries</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrentTab('favorites')}
+          className={`relative flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
+            currentTab === 'favorites' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <div className="relative">
+            <Heart className={`w-4 h-4 ${currentTab === 'favorites' ? 'fill-red-500 text-red-500' : ''}`} />
+            {favoritesCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 text-[8px] font-bold w-3.5 h-3.5 rounded-full bg-red-600 text-white flex items-center justify-center">
+                {favoritesCount}
+              </span>
+            )}
+          </div>
+          <span>Favoritos</span>
         </button>
         <button
           type="button"

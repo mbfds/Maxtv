@@ -112,9 +112,9 @@ const systemSettings = {
 
 const subscribers: ServerSubscriber[] = [
   {
-    id: 'sub-cebolao',
-    name: 'Cebolão VIP',
-    email: 'cebolao1302@gmail.com',
+    id: 'sub-vip-demo',
+    name: 'Assinante VIP Master',
+    email: 'vip@maxtv.vip',
     cpf: '123.456.789-00',
     planId: 'plan-anual-vip',
     planName: 'MAXTV VIP Anual (Acesso Liberado)',
@@ -164,9 +164,9 @@ const subscribers: ServerSubscriber[] = [
 // In-memory registered user accounts
 const users: ServerUser[] = [
   {
-    id: 'user-cebolao',
-    name: 'Cebolão VIP',
-    email: 'cebolao1302@gmail.com',
+    id: 'user-vip-demo',
+    name: 'Assinante VIP Master',
+    email: 'vip@maxtv.vip',
     passwordHash: '123456',
     cpf: '123.456.789-00',
     role: 'user',
@@ -176,7 +176,7 @@ const users: ServerUser[] = [
     startDate: '2026-09-02T19:00:00.000Z',
     expiresAt: '2027-09-02T19:00:00.000Z',
     createdAt: '2026-09-02T19:00:00.000Z',
-    subscriberId: 'sub-cebolao'
+    subscriberId: 'sub-vip-demo'
   },
   {
     id: 'user-admin',
@@ -789,6 +789,51 @@ app.all('/api/check-stream', async (req, res) => {
   }
 });
 
+// --- CHANNEL ISSUE REPORTING SYSTEM ---
+interface ChannelReport {
+  id: string;
+  channelId: string;
+  channelName: string;
+  sourceUrl: string;
+  reason: string;
+  timestamp: string;
+  userEmail: string;
+}
+
+const channelReports: ChannelReport[] = [];
+
+app.post('/api/channels/report', (req, res) => {
+  const { channelId, channelName, sourceUrl, reason, userEmail } = req.body || {};
+  const report: ChannelReport = {
+    id: `rep-${Date.now()}`,
+    channelId: channelId || 'desconhecido',
+    channelName: channelName || 'Canal',
+    sourceUrl: sourceUrl || '',
+    reason: reason || 'Sinal não carrega ou demora para responder',
+    timestamp: new Date().toISOString(),
+    userEmail: userEmail || 'anônimo'
+  };
+
+  channelReports.unshift(report);
+  if (channelReports.length > 200) channelReports.pop();
+
+  console.log(`[ALERTA DE TRANSMISSÃO] Canal "${report.channelName}" reportado por ${report.userEmail}: ${report.reason}`);
+
+  res.json({
+    success: true,
+    message: 'Relatório recebido com sucesso! Nossa equipe técnica foi alertada.',
+    report
+  });
+});
+
+app.get('/api/channels/reports', (req, res) => {
+  res.json({
+    success: true,
+    total: channelReports.length,
+    reports: channelReports
+  });
+});
+
 // --- CHANNEL HEALTH CHECKING SYSTEM ---
 interface ServerHealthResult {
   channelId: string;
@@ -844,7 +889,7 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4200);
+    const timeoutId = setTimeout(() => controller.abort(), 6500);
 
     const response = await fetch(decodedUrl, {
       headers,
@@ -1168,7 +1213,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.post('/api/auth/demo', (req, res) => {
   const { type } = req.body;
-  let targetEmail = 'cebolao1302@gmail.com';
+  let targetEmail = 'vip@maxtv.vip';
   if (type === 'admin') targetEmail = 'admin@maxtv.vip';
   if (type === 'free') targetEmail = 'rodrigo.futebol@bol.com.br';
   if (type === 'carlos') targetEmail = 'carlos.mendes@gmail.com';
@@ -1189,6 +1234,91 @@ app.post('/api/auth/demo', (req, res) => {
     token,
     message: `Autenticado como ${user.name}`
   });
+});
+
+// 2.3 USER FAVORITES & WATCH PROGRESS STORES
+const userFavoritesStore = new Map<string, any[]>();
+const userProgressStore = new Map<string, any[]>();
+
+// Helpers to get user identifier
+function getUserKeyFromReq(req: express.Request): string {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.replace('Bearer ', '').trim();
+    const user = users.find(u => token.includes(u.id));
+    if (user) return user.email.toLowerCase();
+  }
+  const email = (req.query.email as string) || req.body?.email || '';
+  return email ? email.toLowerCase().trim() : 'guest';
+}
+
+// User Favorites Endpoints
+app.get('/api/user/favorites', (req, res) => {
+  const userKey = getUserKeyFromReq(req);
+  const favorites = userFavoritesStore.get(userKey) || [];
+  res.json({ success: true, count: favorites.length, favorites });
+});
+
+app.post('/api/user/favorites', (req, res) => {
+  const userKey = getUserKeyFromReq(req);
+  const { item } = req.body;
+  if (!item || !item.id) {
+    return res.status(400).json({ error: 'Item de favorito inválido' });
+  }
+
+  let list = userFavoritesStore.get(userKey) || [];
+  if (!list.some(f => f.id === item.id)) {
+    list = [item, ...list];
+    userFavoritesStore.set(userKey, list);
+  }
+
+  res.json({ success: true, count: list.length, favorites: list });
+});
+
+app.delete('/api/user/favorites/:id', (req, res) => {
+  const userKey = getUserKeyFromReq(req);
+  const { id } = req.params;
+
+  let list = userFavoritesStore.get(userKey) || [];
+  list = list.filter(f => f.id !== id);
+  userFavoritesStore.set(userKey, list);
+
+  res.json({ success: true, count: list.length, favorites: list });
+});
+
+// User Watch Progress Endpoints
+app.get('/api/user/progress', (req, res) => {
+  const userKey = getUserKeyFromReq(req);
+  const progressList = userProgressStore.get(userKey) || [];
+  res.json({ success: true, count: progressList.length, progress: progressList });
+});
+
+app.post('/api/user/progress', (req, res) => {
+  const userKey = getUserKeyFromReq(req);
+  const { progress } = req.body;
+  if (!progress || !progress.id) {
+    return res.status(400).json({ error: 'Item de progresso inválido' });
+  }
+
+  let list = userProgressStore.get(userKey) || [];
+  list = list.filter(p => p.id !== progress.id);
+  list.unshift(progress);
+  // Cap at 30 items
+  if (list.length > 30) list = list.slice(0, 30);
+  userProgressStore.set(userKey, list);
+
+  res.json({ success: true, count: list.length, progress: list });
+});
+
+app.delete('/api/user/progress/:id', (req, res) => {
+  const userKey = getUserKeyFromReq(req);
+  const { id } = req.params;
+
+  let list = userProgressStore.get(userKey) || [];
+  list = list.filter(p => p.id !== id);
+  userProgressStore.set(userKey, list);
+
+  res.json({ success: true, count: list.length, progress: list });
 });
 
 // 3. MERCADO PAGO PIX PAYMENT CREATION

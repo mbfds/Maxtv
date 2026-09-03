@@ -7,16 +7,21 @@ import {
   Tv, AlertTriangle, ExternalLink, FastForward, Rewind,
   Server, RefreshCw, Film, PictureInPicture, Camera, 
   Settings, SlidersHorizontal, Check, Info, WifiOff, 
-  HelpCircle, Activity
+  HelpCircle, Activity, Heart, Zap, Wrench
 } from 'lucide-react';
 import { Channel, VodItem, User } from '../types';
 import { checkStreamAvailability } from '../utils/streamChecker';
+import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
+import { watchProgressStorage } from '../services/watchProgressStorage';
+import { ChannelTroubleshootModal } from './ChannelTroubleshootModal';
 
 interface LivePlayerProps {
   item: Channel | VodItem;
   type: 'channel' | 'vod';
   isVip: boolean;
   currentUser?: User | null;
+  authToken?: string;
+  initialSeekTime?: number;
   onClose: () => void;
   onOpenCheckout: () => void;
   onOpenAuth?: () => void;
@@ -35,6 +40,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   type,
   isVip,
   currentUser,
+  authToken,
+  initialSeekTime,
   onClose,
   onOpenCheckout,
   onOpenAuth
@@ -77,9 +84,25 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [splashAction, setSplashAction] = useState<'play' | 'pause' | 'rewind' | 'forward' | null>(null);
 
+  // Favorites & Watch Progress states
+  const [isFav, setIsFav] = useState<boolean>(() => favoritesStorage.isFavorite(item.id, currentUser?.email));
+  const hasAppliedInitialSeekRef = useRef<boolean>(false);
+  const lastSavedProgressTimeRef = useRef<number>(0);
+  const [resumePrompt, setResumePrompt] = useState<{ time: number; formatted: string } | null>(null);
+
+  useEffect(() => {
+    const handleFavUpdate = () => {
+      setIsFav(favoritesStorage.isFavorite(item.id, currentUser?.email));
+    };
+    window.addEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
+    return () => window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
+  }, [item.id, currentUser?.email]);
+
   // Stream pre-flight HEAD health check state
   const [streamWarning, setStreamWarning] = useState<string | null>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState<boolean>(false);
+  const [showTroubleshootModal, setShowTroubleshootModal] = useState<boolean>(false);
+  const [reloadCounter, setReloadCounter] = useState<number>(0);
 
   // Free preview mode for VIP locked content so users can test streams
   const [previewMode, setPreviewMode] = useState<boolean>(false);
@@ -134,9 +157,16 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [forceProxy, setForceProxy] = useState<boolean | null>(null);
   const usingProxy = forceProxy !== null ? forceProxy : needsProxy;
 
-  const streamUrl = usingProxy 
-    ? `/api/proxy?url=${encodeURIComponent(rawUrl)}${currentSource?.referer ? `&referer=${encodeURIComponent(currentSource.referer)}` : ''}` 
-    : rawUrl;
+  const streamUrl = React.useMemo(() => {
+    let base = usingProxy 
+      ? `/api/proxy?url=${encodeURIComponent(rawUrl)}${currentSource?.referer ? `&referer=${encodeURIComponent(currentSource.referer)}` : ''}` 
+      : rawUrl;
+    if (reloadCounter > 0) {
+      const sep = base.includes('?') ? '&' : '?';
+      base += `${sep}_rt=${reloadCounter}`;
+    }
+    return base;
+  }, [usingProxy, rawUrl, currentSource, reloadCounter]);
 
   // Toast feedback helper
   const showToast = useCallback((msg: string) => {
@@ -147,7 +177,33 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 2400);
   }, []);
 
-  // Controls auto-hide helper
+  // Manual on-demand health check
+  const runManualHealthCheck = async () => {
+    setIsCheckingHealth(true);
+    showToast('Verificando status do canal em tempo real...');
+    try {
+      const res = await checkStreamAvailability(streamUrl, currentSource?.referer, 6000);
+      if (res.online && !res.isOffline) {
+        showToast(`Canal Online! Latência: ${res.latencyMs}ms`);
+        setStreamWarning(null);
+      } else {
+        showToast(`Sinal com alta latência (${res.latencyMs}ms). Tente alternar o servidor.`);
+        setStreamWarning(res.warningMessage || 'Sinal instável. Tente outro servidor.');
+      }
+    } catch {
+      showToast('Falha na conexão com o servidor.');
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
+
+  const handleForceReload = () => {
+    setReloadCounter(prev => prev + 1);
+    setHasError(false);
+    setIsLoading(true);
+    setStreamWarning(null);
+    showToast('Reiniciando transmissão com buffer limpo...');
+  };
   const resetControlsTimer = useCallback(() => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -158,7 +214,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 3500);
   }, [isPlaying, isLocked, activeMenu]);
 
-  // Pre-flight HEAD health check
+  // Pre-flight HEAD health check with auto-fallback
   useEffect(() => {
     if (isLocked || !rawUrl) return;
 
@@ -166,11 +222,25 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     setStreamWarning(null);
     setIsCheckingHealth(true);
 
-    checkStreamAvailability(streamUrl, currentSource?.referer, 3500)
+    checkStreamAvailability(streamUrl, currentSource?.referer, 6000)
       .then((res) => {
         if (!isMounted) return;
         setIsCheckingHealth(false);
+        // If video is already playing, never show connection warning
+        if (videoRef.current && videoRef.current.currentTime > 0) {
+          setStreamWarning(null);
+          return;
+        }
+
         if (res.isOffline || res.warningMessage) {
+          // If direct connection is failing or timing out and proxy is off, automatically try proxy
+          if (!usingProxy && res.isOffline) {
+            console.log('[LivePlayer] Direct stream slow/offline, activating proxy automatically...');
+            setForceProxy(true);
+            showToast('Conexão direta instável. Ativando Proxy Seguro...');
+            return;
+          }
+
           setStreamWarning(
             res.warningMessage || 'Aviso: O sinal deste servidor demorou a responder. Caso ocorra lentidão, tente alternar o servidor.'
           );
@@ -422,7 +492,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+      const time = videoRef.current.currentTime;
+      setCurrentTime(time);
       // Update buffer progress
       const video = videoRef.current;
       if (video.buffered.length > 0 && duration > 0) {
@@ -433,18 +504,86 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           // Ignore transient buffer query errors
         }
       }
+
+      // Automatically save watch progress for VOD every 4 seconds
+      if (type === 'vod' && time > 5) {
+        if (Math.abs(time - lastSavedProgressTimeRef.current) >= 4) {
+          lastSavedProgressTimeRef.current = time;
+          watchProgressStorage.saveProgress(
+            item as VodItem,
+            time,
+            video.duration || duration,
+            currentUser?.email,
+            authToken
+          );
+        }
+      }
     }
   };
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
-      setDuration(videoRef.current.duration || 0);
+      const dur = videoRef.current.duration || 0;
+      setDuration(dur);
       setIsLoading(false);
       setHasError(false);
       if (playbackRate !== 1) {
         videoRef.current.playbackRate = playbackRate;
       }
+
+      // Check initial seek or saved progress
+      if (!hasAppliedInitialSeekRef.current && type === 'vod') {
+        hasAppliedInitialSeekRef.current = true;
+        if (initialSeekTime && initialSeekTime > 5 && (dur === 0 || initialSeekTime < dur * 0.95)) {
+          videoRef.current.currentTime = initialSeekTime;
+          setCurrentTime(initialSeekTime);
+          showToast(`Retomado de ${formatTime(initialSeekTime)}`);
+        } else {
+          // Check saved progress from storage
+          const saved = watchProgressStorage.getItemProgress(item.id, currentUser?.email);
+          if (saved && saved.currentTime > 10 && saved.percent < 95) {
+            setResumePrompt({
+              time: saved.currentTime,
+              formatted: formatTime(saved.currentTime)
+            });
+          }
+        }
+      }
     }
+  };
+
+  // Save progress on close or unmount
+  const flushProgress = useCallback(() => {
+    if (videoRef.current && type === 'vod') {
+      const time = videoRef.current.currentTime;
+      const dur = videoRef.current.duration || duration;
+      if (time > 5) {
+        watchProgressStorage.saveProgress(
+          item as VodItem,
+          time,
+          dur,
+          currentUser?.email,
+          authToken
+        );
+      }
+    }
+  }, [type, item, duration, currentUser?.email, authToken]);
+
+  useEffect(() => {
+    return () => {
+      flushProgress();
+    };
+  }, [flushProgress]);
+
+  const handleClose = () => {
+    flushProgress();
+    onClose();
+  };
+
+  const toggleFavorite = () => {
+    const res = favoritesStorage.toggleFavorite(item, type, currentUser?.email, authToken);
+    setIsFav(res.isFav);
+    showToast(res.isFav ? 'Adicionado aos Favoritos' : 'Removido dos Favoritos');
   };
 
   // Player action controls
@@ -784,8 +923,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onWaiting={() => setIsLoading(true)}
-              onPlaying={() => { setIsLoading(false); setHasError(false); }}
-              onCanPlay={() => setIsLoading(false)}
+              onPlaying={() => { 
+                setIsLoading(false); 
+                setHasError(false); 
+                setStreamWarning(null); 
+              }}
+              onCanPlay={() => {
+                setIsLoading(false);
+                setStreamWarning(null);
+              }}
               onError={handleVideoError}
             />
 
@@ -810,7 +956,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
             {/* Friendly Stream Health / Offline Warning Banner (Pre-flight HEAD check) */}
             {streamWarning && !hasError && (
-              <div className="absolute top-16 sm:top-20 left-4 right-4 z-35 max-w-xl mx-auto bg-amber-500/15 border border-amber-500/40 backdrop-blur-md rounded-2xl p-3 flex items-start sm:items-center justify-between gap-3 text-amber-200 shadow-xl animate-fadeIn">
+              <div className="absolute top-16 sm:top-20 left-4 right-4 z-35 max-w-xl mx-auto bg-amber-500/15 border border-amber-500/40 backdrop-blur-md rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 shadow-xl animate-fadeIn">
                 <div className="flex items-start gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
                   <div className="text-xs">
@@ -820,13 +966,28 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     <span>{streamWarning}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={runManualHealthCheck}
+                    disabled={isCheckingHealth}
+                    className="text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/20 transition-colors cursor-pointer"
+                  >
+                    {isCheckingHealth ? 'Testando...' : 'Testar Sinal'}
+                  </button>
                   <button
                     type="button"
                     onClick={tryNextSource}
-                    className="text-[11px] font-semibold bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 px-2.5 py-1 rounded-full border border-amber-400/30 transition-colors cursor-pointer"
+                    className="text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-full shadow-sm transition-colors cursor-pointer"
                   >
                     Trocar Servidor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTroubleshootModal(true)}
+                    className="text-[11px] font-semibold bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 px-2.5 py-1 rounded-full border border-amber-400/30 transition-colors cursor-pointer"
+                  >
+                    Soluções
                   </button>
                   <button
                     type="button"
@@ -862,11 +1023,11 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 <p className="text-xs text-slate-400 max-w-md mb-5 font-normal">
                   {errorMessage || 'O link do servidor de origem está offline ou respondendo com lentidão. Tente alternar para o servidor redundante ou ativar o proxy.'}
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-lg">
                   <button
                     type="button"
                     onClick={tryNextSource}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Mudar para Outro Servidor ({currentSourceIndex + 1}/{sources.length})</span>
@@ -874,13 +1035,21 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <button
                     type="button"
                     onClick={() => { setForceProxy(!usingProxy); setHasError(false); setIsLoading(true); }}
-                    className="px-5 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
+                    className="px-4 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     {usingProxy ? 'Tentar Conexão Direta' : 'Ativar Proxy Anti-Bloqueio'}
                   </button>
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={() => setShowTroubleshootModal(true)}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/40 cursor-pointer transition-all"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Canal com Problema?</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClose}
                     className="px-4 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     Fechar
@@ -960,6 +1129,32 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   </div>
                 )}
 
+                {/* Channel Problem Troubleshooter Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowTroubleshootModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer backdrop-blur-md shadow-sm"
+                  title="Assistente de sinal e diagnóstico para canal com problema"
+                >
+                  <Activity className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Canal com problema?</span>
+                  <span className="sm:hidden">Ajuda</span>
+                </button>
+
+                {/* Favorite Toggle Button */}
+                <button
+                  type="button"
+                  onClick={toggleFavorite}
+                  className={`p-2.5 rounded-full border transition-all cursor-pointer backdrop-blur-md ${
+                    isFav 
+                      ? 'bg-red-600/30 text-red-400 border-red-500/50 hover:bg-red-600/40' 
+                      : 'bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border-white/10'
+                  }`}
+                  title={isFav ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
+                >
+                  <Heart className={`w-4 h-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} />
+                </button>
+
                 {/* Keyboard Shortcuts Help Button */}
                 <button
                   type="button"
@@ -972,7 +1167,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="p-2.5 rounded-full bg-slate-900/80 hover:bg-white/15 text-white border border-white/10 transition-all cursor-pointer backdrop-blur-md"
                   title="Fechar Player"
                 >
@@ -1098,6 +1293,39 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Resume Playback Prompt Banner */}
+            {resumePrompt && (
+              <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-md w-[90%] sm:w-auto bg-slate-900/95 border border-indigo-500/50 backdrop-blur-md px-4 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-center gap-2 text-xs text-white">
+                  <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>Você parou em <strong>{resumePrompt.formatted}</strong>. Retomar?</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (videoRef.current) {
+                        videoRef.current.currentTime = resumePrompt.time;
+                        setCurrentTime(resumePrompt.time);
+                        showToast(`Retomado de ${resumePrompt.formatted}`);
+                      }
+                      setResumePrompt(null);
+                    }}
+                    className="px-3.5 py-1 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition-all cursor-pointer"
+                  >
+                    Retomar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResumePrompt(null)}
+                    className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
+                  >
+                    Do Início
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1316,6 +1544,33 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           </>
         )}
       </div>
+
+      {/* Channel Trouble & Signal Recovery Assistant Modal */}
+      <ChannelTroubleshootModal
+        isOpen={showTroubleshootModal}
+        onClose={() => setShowTroubleshootModal(false)}
+        channelName={'name' in item ? item.name : item.title}
+        channelId={item.id}
+        streamUrl={streamUrl}
+        rawUrl={rawUrl}
+        sources={sources}
+        currentSourceIndex={currentSourceIndex}
+        onSelectSource={(idx) => {
+          setCurrentSourceIndex(idx);
+          setHasError(false);
+          setIsLoading(true);
+          setStreamWarning(null);
+        }}
+        usingProxy={usingProxy}
+        onToggleProxy={() => {
+          setForceProxy(!usingProxy);
+          setHasError(false);
+          setIsLoading(true);
+        }}
+        onForceReload={handleForceReload}
+        userEmail={currentUser?.email}
+        onShowToast={showToast}
+      />
     </div>
   );
 };
