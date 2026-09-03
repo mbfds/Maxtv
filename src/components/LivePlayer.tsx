@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
+import * as dashjs from 'dashjs';
 import { 
   Play, Pause, Volume2, Volume1, VolumeX, Maximize2, Minimize2, 
   RotateCcw, X, ShieldAlert, Sparkles, Crown, Radio, 
   Tv, AlertTriangle, ExternalLink, FastForward, Rewind,
   Server, RefreshCw, Film, PictureInPicture, Camera, 
-  Settings, SlidersHorizontal, Check, Info, WifiOff, 
-  HelpCircle, Activity, Heart, Zap, Wrench, Clock
+  Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
+  HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
+  Shuffle, Layers, Cpu
 } from 'lucide-react';
 import { Channel, VodItem, User } from '../types';
 import { checkStreamAvailability, reportChannelProblem } from '../utils/streamChecker';
@@ -50,6 +52,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<any>(null);
+  const dashPlayerRef = useRef<dashjs.MediaPlayerClass | null>(null);
+  const [compatibilityProtocol, setCompatibilityProtocol] = useState<'hls' | 'dash'>('hls');
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -116,43 +120,84 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [autoRetryCount, setAutoRetryCount] = useState<number>(0);
   const autoRetryCountRef = useRef<number>(0);
 
+  // Exponential backoff states for subsequent retries beyond the initial 3 attempts
+  const [connectionAttempts, setConnectionAttempts] = useState<number>(1);
+  const connectionAttemptsRef = useRef<number>(1);
+  const [backoffSecondsLeft, setBackoffSecondsLeft] = useState<number | null>(null);
+  const [isBackoffActive, setIsBackoffActive] = useState<boolean>(false);
+  const [isAutoRetryPaused, setIsAutoRetryPaused] = useState<boolean>(false);
+  const isAutoRetryPausedRef = useRef<boolean>(false);
+  const backoffTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Free preview mode for VIP locked content so users can test streams
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const isLocked = item.isVipOnly && !isVip && !previewMode;
 
-  // Build unified sources list
-  const sources: { name: string; url: string; referer?: string; quality?: string }[] = React.useMemo(() => {
+  // Build unified sources list with protocol metadata
+  const sources: { name: string; url: string; referer?: string; quality?: string; protocol?: 'hls' | 'dash' }[] = React.useMemo(() => {
     if (type === 'channel') {
-      return (item as Channel).sources.map((s, idx) => ({
-        name: `Servidor ${idx + 1} (${s.quality || '1080p'})`,
-        url: s.url,
-        referer: s.referer,
-        quality: s.quality || '1080p'
-      }));
+      return (item as Channel).sources.map((s, idx) => {
+        const isDashUrl = s.url.includes('.mpd');
+        return {
+          name: `Servidor ${idx + 1} (${isDashUrl ? 'DASH' : 'HLS'} ${s.quality || '1080p'})`,
+          url: s.url,
+          referer: s.referer,
+          quality: s.quality || '1080p',
+          protocol: isDashUrl ? 'dash' : 'hls'
+        };
+      });
     }
 
     const vod = item as VodItem;
     if (vod.sources && vod.sources.length > 0) {
-      return vod.sources.map(s => ({
-        name: s.name,
-        url: s.url,
-        quality: s.quality || '1080p'
-      }));
+      return vod.sources.map(s => {
+        const isDashUrl = s.url.includes('.mpd');
+        return {
+          name: s.name,
+          url: s.url,
+          quality: s.quality || '1080p',
+          protocol: isDashUrl ? 'dash' : 'hls'
+        };
+      });
     }
 
-    const list = [
-      { name: 'Servidor 1 - Alta Velocidade (CDN)', url: vod.streamUrl, quality: '1080p' }
+    const list: { name: string; url: string; quality?: string; protocol?: 'hls' | 'dash' }[] = [
+      { 
+        name: 'Servidor 1 - Alta Velocidade (CDN)', 
+        url: vod.streamUrl, 
+        quality: '1080p', 
+        protocol: vod.streamUrl.includes('.mpd') ? 'dash' : 'hls' 
+      }
     ];
     if (vod.backupStreamUrl) {
-      list.push({ name: 'Servidor 2 - HLS M3U8 (Akamai)', url: vod.backupStreamUrl, quality: '1080p' });
+      list.push({ 
+        name: 'Servidor 2 - HLS M3U8 (Akamai)', 
+        url: vod.backupStreamUrl, 
+        quality: '1080p', 
+        protocol: vod.backupStreamUrl.includes('.mpd') ? 'dash' : 'hls' 
+      });
     }
     return list;
   }, [item, type]);
 
   const currentSource = sources[currentSourceIndex] || sources[0];
-  const rawUrl = currentSource?.url || '';
 
-  // By default, IPTV channels, HTTP streams, and M3U8s route through /api/proxy
+  // Resolve rawUrl adapting protocol when Compatibility Mode is toggled
+  const rawUrl = React.useMemo(() => {
+    const base = currentSource?.url || '';
+    if (compatibilityProtocol === 'dash') {
+      if (base.includes('.mpd')) return base;
+      if (base.includes('index.m3u8')) return base.replace('index.m3u8', 'manifest.mpd');
+      if (base.includes('.m3u8')) return base.replace('.m3u8', '.mpd');
+      return base;
+    } else {
+      if (base.includes('manifest.mpd')) return base.replace('manifest.mpd', 'index.m3u8');
+      if (base.includes('.mpd')) return base.replace('.mpd', '.m3u8');
+      return base;
+    }
+  }, [currentSource, compatibilityProtocol]);
+
+  // By default, IPTV channels, HTTP streams, and M3U8/MPD route through /api/proxy
   const needsProxy = React.useMemo(() => {
     return (
       type === 'channel' ||
@@ -162,6 +207,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       rawUrl.includes('hubby.cx') ||
       rawUrl.includes('tjtor8411') ||
       rawUrl.includes('.ts') ||
+      rawUrl.includes('.mpd') ||
       (rawUrl.includes('.m3u8') && !rawUrl.includes('mux.dev'))
     );
   }, [type, rawUrl]);
@@ -314,9 +360,59 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
   };
 
+  // Lógica de Backoff Exponencial para auto-reconexão após as 3 tentativas iniciais
+  const startExponentialBackoff = useCallback(() => {
+    if (isAutoRetryPausedRef.current) return;
+
+    if (backoffTimerRef.current) {
+      clearInterval(backoffTimerRef.current);
+      backoffTimerRef.current = null;
+    }
+
+    // Calcula o intervalo de backoff exponencial com base nas tentativas além das 3 iniciais
+    const attemptsBeyond3 = Math.max(1, connectionAttemptsRef.current - 3);
+    // Escala progressiva: ~4s, ~7s, ~12s, ~20s, até o teto de 30s
+    const delaySeconds = Math.min(30, Math.round(4 * Math.pow(1.65, attemptsBeyond3 - 1)));
+
+    setBackoffSecondsLeft(delaySeconds);
+    setIsBackoffActive(true);
+
+    let remaining = delaySeconds;
+    backoffTimerRef.current = setInterval(() => {
+      remaining -= 1;
+      setBackoffSecondsLeft(remaining);
+
+      if (remaining <= 0) {
+        if (backoffTimerRef.current) {
+          clearInterval(backoffTimerRef.current);
+          backoffTimerRef.current = null;
+        }
+        setIsBackoffActive(false);
+        setBackoffSecondsLeft(null);
+
+        if (!isAutoRetryPausedRef.current) {
+          // Dispara nova tentativa automática com espaçamento exponencial
+          connectionAttemptsRef.current += 1;
+          setConnectionAttempts(connectionAttemptsRef.current);
+          setReloadCounter(c => c + 1);
+        }
+      }
+    }, 1000);
+  }, []);
+
   const handleForceReload = () => {
     autoRetryCountRef.current = 0;
     setAutoRetryCount(0);
+    if (backoffTimerRef.current) {
+      clearInterval(backoffTimerRef.current);
+      backoffTimerRef.current = null;
+    }
+    setBackoffSecondsLeft(null);
+    setIsBackoffActive(false);
+
+    connectionAttemptsRef.current += 1;
+    setConnectionAttempts(connectionAttemptsRef.current);
+
     if (canPlayTimeoutRef.current) {
       clearTimeout(canPlayTimeoutRef.current);
       canPlayTimeoutRef.current = null;
@@ -333,10 +429,88 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     showToast('Reinicializando player e tentando nova conexão...');
   };
 
-  // Reset auto-retry counters and errors on channel/item change
+  const toggleAutoRetryPause = () => {
+    if (isAutoRetryPaused) {
+      isAutoRetryPausedRef.current = false;
+      setIsAutoRetryPaused(false);
+      showToast('Reconexão automática retomada');
+      startExponentialBackoff();
+    } else {
+      isAutoRetryPausedRef.current = true;
+      setIsAutoRetryPaused(true);
+      if (backoffTimerRef.current) {
+        clearInterval(backoffTimerRef.current);
+        backoffTimerRef.current = null;
+      }
+      setBackoffSecondsLeft(null);
+      setIsBackoffActive(false);
+      showToast('Reconexão automática pausada');
+    }
+  };
+
+  // Alternar Modo de Compatibilidade (HLS vs DASH) oferecendo tentativa final de recuperação
+  const handleToggleCompatibilityMode = () => {
+    const nextProtocol: 'hls' | 'dash' = compatibilityProtocol === 'hls' ? 'dash' : 'hls';
+    setCompatibilityProtocol(nextProtocol);
+
+    // Se o player suportar múltiplas fontes, tenta trocar para a fonte do protocolo correspondente ou rotaciona
+    if (sources.length > 1) {
+      const matchIdx = sources.findIndex(s => 
+        nextProtocol === 'dash' 
+          ? (s.url.includes('.mpd') || s.protocol === 'dash' || s.name.toLowerCase().includes('dash'))
+          : (s.url.includes('.m3u8') || s.protocol === 'hls' || s.name.toLowerCase().includes('hls'))
+      );
+      if (matchIdx !== -1 && matchIdx !== currentSourceIndex) {
+        setCurrentSourceIndex(matchIdx);
+      } else {
+        // Rotaciona para o próximo servidor disponível
+        setCurrentSourceIndex(prev => (prev + 1) % sources.length);
+      }
+    }
+
+    // Limpa backoff e reseta erros
+    if (backoffTimerRef.current) {
+      clearInterval(backoffTimerRef.current);
+      backoffTimerRef.current = null;
+    }
+    setBackoffSecondsLeft(null);
+    setIsBackoffActive(false);
+    autoRetryCountRef.current = 0;
+    setAutoRetryCount(0);
+    connectionAttemptsRef.current += 1;
+    setConnectionAttempts(connectionAttemptsRef.current);
+
+    if (canPlayTimeoutRef.current) {
+      clearTimeout(canPlayTimeoutRef.current);
+      canPlayTimeoutRef.current = null;
+    }
+    hasCanPlayFiredRef.current = false;
+    setIsTimedOut(false);
+    setHasError(false);
+    setErrorMessage('');
+    setIsLoading(true);
+    setStreamWarning(null);
+    setIsConnectionUnstable(false);
+    setHasReportedError(false);
+    setReloadCounter(c => c + 1);
+
+    showToast(`Modo de Compatibilidade ativado: alternando para protocolo ${nextProtocol === 'dash' ? 'DASH (MPEG-DASH)' : 'HLS (HTTP Live Streaming)'}...`);
+  };
+
+  // Reset auto-retry counters, backoff timer and errors on channel/item change
   useEffect(() => {
     autoRetryCountRef.current = 0;
     setAutoRetryCount(0);
+    connectionAttemptsRef.current = 1;
+    setConnectionAttempts(1);
+    setCompatibilityProtocol('hls');
+    if (backoffTimerRef.current) {
+      clearInterval(backoffTimerRef.current);
+      backoffTimerRef.current = null;
+    }
+    setBackoffSecondsLeft(null);
+    setIsBackoffActive(false);
+    setIsAutoRetryPaused(false);
     setHasReportedError(false);
     setIsConnectionUnstable(false);
     setHasError(false);
@@ -405,6 +579,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           const nextAttempt = autoRetryCountRef.current + 1;
           autoRetryCountRef.current = nextAttempt;
           setAutoRetryCount(nextAttempt);
+          connectionAttemptsRef.current += 1;
+          setConnectionAttempts(connectionAttemptsRef.current);
           setIsConnectionUnstable(true);
           setIsLoading(true);
           setStreamWarning(`Link inativo identificado (HTTP HEAD). Tentando reconexão automática (${nextAttempt}/3)...`);
@@ -420,13 +596,14 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           }, 600);
           return;
         } else {
-          // Esgotou as 3 tentativas automáticas
+          // Esgotou as 3 tentativas automáticas iniciais - inicia backoff exponencial
           setIsLoading(false);
           setIsPlaying(false);
           setHasError(true);
           setIsTimedOut(true);
           setIsConnectionUnstable(true);
           setErrorMessage(`Link morto identificado instantaneamente via HTTP HEAD (${health.statusCode ? `Código HTTP ${health.statusCode}` : 'Servidor Inacessível'}) após 3 tentativas.`);
+          startExponentialBackoff();
           return;
         }
       }
@@ -465,6 +642,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             const nextAttempt = autoRetryCountRef.current + 1;
             autoRetryCountRef.current = nextAttempt;
             setAutoRetryCount(nextAttempt);
+            connectionAttemptsRef.current += 1;
+            setConnectionAttempts(connectionAttemptsRef.current);
             setIsConnectionUnstable(true);
             setIsLoading(true);
             setStreamWarning(`Tempo limite de 3,5s excedido. Tentando recarregar automaticamente (${nextAttempt}/3)...`);
@@ -475,7 +654,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
             setReloadCounter(c => c + 1);
           } else {
-            // Esgotou as 3 tentativas automáticas: exibe a mensagem definitiva de erro e o botão 'Reportar Erro'
+            // Esgotou as 3 tentativas automáticas: exibe a mensagem definitiva de erro, botão 'Reportar Erro' e inicia backoff exponencial
             setIsLoading(false);
             setIsPlaying(false);
             setHasError(true);
@@ -484,15 +663,77 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setErrorMessage(
               'A inicialização da transmissão excedeu o limite de 3,5 segundos após 3 tentativas automáticas consecutivas. O canal pode estar offline ou o servidor congestionado.'
             );
+            startExponentialBackoff();
           }
         }
       }, 3500);
 
-      // Proceder com a montagem do player Hls / Ts / Nativo
-      const isHls = streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8');
-      const isTs = (streamUrl.includes('.ts') || rawUrl.includes('.ts')) && !streamUrl.includes('.mp4');
+      // Proceder com a montagem do player Dash / Hls / Ts / Nativo
+      const isDash = compatibilityProtocol === 'dash' || streamUrl.includes('.mpd') || rawUrl.includes('.mpd');
+      const isHls = !isDash && (streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8') || compatibilityProtocol === 'hls');
+      const isTs = !isDash && !isHls && (streamUrl.includes('.ts') || rawUrl.includes('.ts')) && !streamUrl.includes('.mp4');
 
-      if (isHls && Hls.isSupported()) {
+      if (isDash) {
+        try {
+          const dashPlayer = dashjs.MediaPlayer().create();
+          dashPlayerRef.current = dashPlayer;
+          dashPlayer.initialize(video, streamUrl, true);
+
+          dashPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+            setIsLoading(false);
+            setHasError(false);
+            setIsConnectionUnstable(false);
+          });
+
+          dashPlayer.on(dashjs.MediaPlayer.events.CAN_PLAY, () => {
+            hasCanPlayFiredRef.current = true;
+            if (canPlayTimeoutRef.current) {
+              clearTimeout(canPlayTimeoutRef.current);
+              canPlayTimeoutRef.current = null;
+            }
+            if (backoffTimerRef.current) {
+              clearInterval(backoffTimerRef.current);
+              backoffTimerRef.current = null;
+            }
+            setIsBackoffActive(false);
+            setBackoffSecondsLeft(null);
+            autoRetryCountRef.current = 0;
+            setAutoRetryCount(0);
+            setIsLoading(false);
+            setHasError(false);
+            setIsTimedOut(false);
+            setStreamWarning(null);
+            setIsConnectionUnstable(false);
+          });
+
+          dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e: any) => {
+            console.warn('Dash.js error:', e);
+            if (!usingProxy) {
+              setForceProxy(true);
+            } else if (autoRetryCountRef.current < 3) {
+              const nextAttempt = autoRetryCountRef.current + 1;
+              autoRetryCountRef.current = nextAttempt;
+              setAutoRetryCount(nextAttempt);
+              connectionAttemptsRef.current += 1;
+              setConnectionAttempts(connectionAttemptsRef.current);
+              setIsConnectionUnstable(true);
+              setReloadCounter(c => c + 1);
+            } else if (sources.length > 1 && currentSourceIndex < sources.length - 1) {
+              setCurrentSourceIndex(prev => prev + 1);
+            } else {
+              setHasError(true);
+              setErrorMessage('Falha ao decodificar a transmissão via protocolo DASH. Tente alternar o Modo de Compatibilidade para HLS ou trocar de servidor.');
+              setIsLoading(false);
+              setIsConnectionUnstable(true);
+              startExponentialBackoff();
+            }
+          });
+        } catch (err) {
+          console.warn('Dashjs initialization failed:', err);
+          video.src = streamUrl;
+          video.play().catch(() => setIsPlaying(false));
+        }
+      } else if (isHls && Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: type === 'channel',
@@ -555,6 +796,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   const nextAttempt = autoRetryCountRef.current + 1;
                   autoRetryCountRef.current = nextAttempt;
                   setAutoRetryCount(nextAttempt);
+                  connectionAttemptsRef.current += 1;
+                  setConnectionAttempts(connectionAttemptsRef.current);
                   setIsConnectionUnstable(true);
                   setReloadCounter(c => c + 1);
                 } else if (currentSourceIndex < sources.length - 1) {
@@ -565,6 +808,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   setErrorMessage('Falha na conexão de rede com a transmissão após 3 tentativas automáticas.');
                   setIsLoading(false);
                   setIsConnectionUnstable(true);
+                  startExponentialBackoff();
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
@@ -577,6 +821,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   const nextAttempt = autoRetryCountRef.current + 1;
                   autoRetryCountRef.current = nextAttempt;
                   setAutoRetryCount(nextAttempt);
+                  connectionAttemptsRef.current += 1;
+                  setConnectionAttempts(connectionAttemptsRef.current);
                   setIsConnectionUnstable(true);
                   setReloadCounter(c => c + 1);
                 } else if (currentSourceIndex < sources.length - 1) {
@@ -586,6 +832,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   setErrorMessage('O formato desta transmissão não pôde ser decodificado após 3 tentativas.');
                   setIsLoading(false);
                   setIsConnectionUnstable(true);
+                  startExponentialBackoff();
                 }
                 break;
             }
@@ -621,6 +868,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               const nextAttempt = autoRetryCountRef.current + 1;
               autoRetryCountRef.current = nextAttempt;
               setAutoRetryCount(nextAttempt);
+              connectionAttemptsRef.current += 1;
+              setConnectionAttempts(connectionAttemptsRef.current);
               setIsConnectionUnstable(true);
               setReloadCounter(c => c + 1);
             } else if (currentSourceIndex < sources.length - 1) {
@@ -630,6 +879,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               setErrorMessage('Transmissão ao vivo instável ou sinal fora do ar após 3 tentativas.');
               setIsLoading(false);
               setIsConnectionUnstable(true);
+              startExponentialBackoff();
             }
           });
         } catch (err) {
@@ -653,10 +903,14 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             const nextAttempt = autoRetryCountRef.current + 1;
             autoRetryCountRef.current = nextAttempt;
             setAutoRetryCount(nextAttempt);
+            connectionAttemptsRef.current += 1;
+            setConnectionAttempts(connectionAttemptsRef.current);
             setIsConnectionUnstable(true);
             setReloadCounter(c => c + 1);
           } else {
             setIsPlaying(false);
+            setHasError(true);
+            startExponentialBackoff();
           }
         });
       }
@@ -678,8 +932,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         try { mpegtsRef.current.destroy(); } catch (e) {}
         mpegtsRef.current = null;
       }
+      if (dashPlayerRef.current) {
+        try {
+          dashPlayerRef.current.reset();
+          dashPlayerRef.current.destroy();
+        } catch (e) {}
+        dashPlayerRef.current = null;
+      }
     };
-  }, [streamUrl, rawUrl, isLocked, usingProxy, currentSourceIndex, type, sources.length, reloadCounter, checkChannelHealth]);
+  }, [streamUrl, rawUrl, isLocked, usingProxy, currentSourceIndex, type, sources.length, reloadCounter, checkChannelHealth, startExponentialBackoff, compatibilityProtocol]);
 
   // Fullscreen change listener
   useEffect(() => {
@@ -1150,11 +1411,33 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           </div>
         ) : (
           <>
-            {/* HTML5 Video Element */}
+            {/* Ambient Background Glow Layer with Smooth Visual Blur Transition */}
+            {('logo' in item && item.logo) || ('posterUrl' in item && item.posterUrl) ? (
+              <div 
+                className={`absolute inset-0 pointer-events-none transition-all duration-700 ease-out overflow-hidden ${
+                  hasError 
+                    ? 'opacity-40 filter blur-3xl scale-110' 
+                    : 'opacity-0 filter blur-none scale-100'
+                }`}
+              >
+                <img 
+                  src={'posterUrl' in item ? item.posterUrl : ('bannerUrl' in item ? item.bannerUrl : item.logo)} 
+                  alt="" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer" 
+                />
+              </div>
+            ) : null}
+
+            {/* HTML5 Video Element with Visual Blur Transition when Error Persists */}
             <video
               ref={videoRef}
               playsInline
-              className={`w-full h-full cursor-pointer bg-black ${getAspectClass()}`}
+              className={`w-full h-full cursor-pointer bg-black ${getAspectClass()} transition-all duration-700 ease-out ${
+                hasError 
+                  ? 'filter blur-xl brightness-[0.25] scale-[1.03] pointer-events-none' 
+                  : 'filter-none brightness-100 scale-100'
+              }`}
               onClick={togglePlay}
               onDoubleClick={toggleFullscreen}
               onEnded={() => setIsPlaying(false)}
@@ -1167,10 +1450,19 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   clearTimeout(canPlayTimeoutRef.current);
                   canPlayTimeoutRef.current = null;
                 }
+                if (backoffTimerRef.current) {
+                  clearInterval(backoffTimerRef.current);
+                  backoffTimerRef.current = null;
+                }
+                setIsBackoffActive(false);
+                setBackoffSecondsLeft(null);
+                autoRetryCountRef.current = 0;
+                setAutoRetryCount(0);
                 setIsLoading(false); 
                 setHasError(false); 
                 setIsTimedOut(false);
                 setStreamWarning(null); 
+                setIsConnectionUnstable(false);
               }}
               onCanPlay={() => {
                 hasCanPlayFiredRef.current = true;
@@ -1178,10 +1470,19 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   clearTimeout(canPlayTimeoutRef.current);
                   canPlayTimeoutRef.current = null;
                 }
+                if (backoffTimerRef.current) {
+                  clearInterval(backoffTimerRef.current);
+                  backoffTimerRef.current = null;
+                }
+                setIsBackoffActive(false);
+                setBackoffSecondsLeft(null);
+                autoRetryCountRef.current = 0;
+                setAutoRetryCount(0);
                 setIsLoading(false);
                 setHasError(false);
                 setIsTimedOut(false);
                 setStreamWarning(null);
+                setIsConnectionUnstable(false);
               }}
               onError={handleVideoError}
             />
@@ -1353,39 +1654,142 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </div>
             )}
 
-            {/* Offline / Timeout Error Screen */}
+            {/* Offline / Timeout Error Screen with Visual Blur Transition and Focus on Actions */}
             {hasError && (
-              <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-25">
-                <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-4 shadow-xl shadow-amber-500/10">
+              <div 
+                id="error-modal-overlay"
+                className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl flex flex-col items-center justify-center p-4 sm:p-6 text-center z-25 overflow-y-auto transition-all duration-700 ease-out animate-fadeIn"
+              >
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-3 shadow-2xl shadow-amber-500/20 ring-1 ring-amber-400/20">
                   {isTimedOut ? (
-                    <Clock className="w-8 h-8 text-amber-400 animate-pulse" />
+                    <Clock className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400 animate-pulse" />
                   ) : (
-                    <WifiOff className="w-8 h-8 text-amber-400" />
+                    <WifiOff className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400" />
                   )}
                 </div>
-                <h4 className="text-xl font-bold text-white mb-2 tracking-tight">
+                <h4 className="text-lg sm:text-xl font-bold text-white mb-1.5 tracking-tight">
                   {isTimedOut ? 'Tempo Limite de 3,5s Excedido' : 'Não foi possível iniciar a transmissão'}
                 </h4>
-                <p className="text-xs sm:text-sm text-slate-300 max-w-lg mb-6 font-normal leading-relaxed">
+                <p className="text-xs sm:text-sm text-slate-300 max-w-lg mb-3 font-normal leading-relaxed">
                   {errorMessage || 'O link do servidor de origem está offline ou demorou mais de 3,5 segundos para responder. Tente recarregar ou alternar para outro servidor.'}
                 </p>
 
-                <div className="flex flex-wrap items-center justify-center gap-3 max-w-xl">
+                {/* Status de Tentativas de Conexão & Backoff Exponencial */}
+                <div className="flex flex-wrap items-center justify-center gap-2 mb-3.5">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700/80 text-[11px] font-semibold text-slate-300">
+                    <Activity className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Tentativas de conexão: <strong className="text-white font-bold">{connectionAttempts}</strong></span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-[11px] font-semibold text-purple-300">
+                    <Layers className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Protocolo Atual: <strong className="text-white font-bold">{compatibilityProtocol.toUpperCase()}</strong></span>
+                  </div>
+
+                  {isBackoffActive && backoffSecondsLeft !== null && !isAutoRetryPaused && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-[11px] font-semibold text-indigo-300 animate-pulse">
+                      <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Próxima reconexão em <strong className="text-white font-bold">{backoffSecondsLeft}s</strong> (Backoff Exponencial)</span>
+                    </div>
+                  )}
+
+                  {isAutoRetryPaused && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-semibold text-amber-300">
+                      <PauseCircle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Reconexão automática pausada</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sugestões de Verificação para problemas locais */}
+                <div className="bg-slate-900/90 border border-slate-800/90 rounded-xl p-3.5 max-w-lg w-full text-left mb-4 shadow-lg">
+                  <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs mb-2.5">
+                    <Info className="w-4 h-4 shrink-0" />
+                    <span>Sugestões de Verificação (resolução de problemas locais):</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
+                      <Wifi className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
+                      <div>
+                        <strong className="text-white block font-medium">Verifique sua conexão Wi-Fi</strong>
+                        <span>Confirme se sua rede está ativa e sem quedas de sinal.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
+                      <ShieldOff className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+                      <div>
+                        <strong className="text-white block font-medium">Desconecte VPNs</strong>
+                        <span>VPNs ativas ou DNS restritivos podem bloquear transmissões ao vivo.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" />
+                      <div>
+                        <strong className="text-white block font-medium">Desative bloqueadores (AdBlock)</strong>
+                        <span>Extensões podem bloquear fragmentos .m3u8, .mpd ou .ts.</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
+                      <Server className="w-3.5 h-3.5 text-sky-400 mt-0.5 shrink-0" />
+                      <div>
+                        <strong className="text-white block font-medium">Troque de Servidor ou Proxy</strong>
+                        <span>Use os botões abaixo para testar rotas e proxies alternativos.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-xl">
                   {/* Botão Tentar Novamente */}
                   <button
                     type="button"
                     onClick={handleForceReload}
-                    className="flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 cursor-pointer transition-all active:scale-95"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 cursor-pointer transition-all active:scale-95"
                   >
                     <RefreshCw className="w-4 h-4" />
-                    <span>Tentar Novamente</span>
+                    <span>Tentar Novamente Agora</span>
+                  </button>
+
+                  {/* Botão Alternar Modo de Compatibilidade (HLS vs DASH) */}
+                  <button
+                    type="button"
+                    id="btn-toggle-compatibility"
+                    onClick={handleToggleCompatibilityMode}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-purple-600/40 to-indigo-600/40 hover:from-purple-600/60 hover:to-indigo-600/60 text-purple-200 border border-purple-500/50 text-xs font-bold shadow-lg shadow-purple-900/30 cursor-pointer transition-all active:scale-95"
+                    title="Alternar entre protocolos de transmissão (HLS vs DASH) para recuperação de stream"
+                  >
+                    <Shuffle className="w-4 h-4 text-purple-300" />
+                    <span>Alternar Modo de Compatibilidade ({compatibilityProtocol === 'hls' ? 'DASH' : 'HLS'})</span>
+                  </button>
+
+                  {/* Pausar / Retomar Backoff Exponencial */}
+                  <button
+                    type="button"
+                    onClick={toggleAutoRetryPause}
+                    className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                      isAutoRetryPaused 
+                        ? 'bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border-indigo-500/40' 
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/10'
+                    }`}
+                  >
+                    {isAutoRetryPaused ? (
+                      <>
+                        <PlayCircle className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Retomar Auto-Reconexão</span>
+                      </>
+                    ) : (
+                      <>
+                        <PauseCircle className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Pausar Auto-Reconexão</span>
+                      </>
+                    )}
                   </button>
 
                   {/* Botão Reportar Erro */}
                   <button
                     type="button"
                     onClick={() => handleReportError()}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-md ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-md ${
                       hasReportedError
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         : 'bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border-rose-500/50'
@@ -1398,7 +1802,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <button
                     type="button"
                     onClick={tryNextSource}
-                    className="flex items-center gap-2 px-4 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Trocar de Servidor ({currentSourceIndex + 1}/{sources.length})</span>
@@ -1407,7 +1811,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <button
                     type="button"
                     onClick={() => { setForceProxy(!usingProxy); setHasError(false); setIsLoading(true); }}
-                    className="px-4 py-3 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
+                    className="px-4 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     {usingProxy ? 'Tentar Conexão Direta' : 'Ativar Proxy Anti-Bloqueio'}
                   </button>
@@ -1415,7 +1819,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowTroubleshootModal(true)}
-                    className="flex items-center gap-1.5 px-4 py-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/40 cursor-pointer transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/40 cursor-pointer transition-all"
                   >
                     <Activity className="w-3.5 h-3.5 text-amber-400" />
                     <span>Canal com Problema?</span>
@@ -1424,7 +1828,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="px-4 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
+                    className="px-4 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     Fechar
                   </button>
