@@ -1,0 +1,6 @@
+{
+  "name": "Streaming Brasil",
+  "description": "Sistema de TV por streaming ao vivo e sob demanda (MAXTV) com catálogo de canais brasileiros, filmes e séries, assinaturas via Mercado Pago Pix e painel administrativo intuitivo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
