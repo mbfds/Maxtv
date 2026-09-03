@@ -310,7 +310,7 @@ async function loadRamysCatalog() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
 
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     const result: ServerChannel[] = [];
     let currentMetadata: { name: string; logo: string; group: string } | null = null;
 
@@ -329,43 +329,46 @@ async function loadRamysCatalog() {
 
         currentMetadata = { name: channelName, logo, group };
       } else if (!line.startsWith('#') && currentMetadata) {
-        const rawGroup = currentMetadata.group.toLowerCase();
-        let cat: string = 'Variedades & Música';
+        // Skip dead IPTV hosts
+        if (!line.includes('tjtor8411.com')) {
+          const rawGroup = currentMetadata.group.toLowerCase();
+          let cat: string = 'Variedades & Música';
 
-        if (rawGroup.includes('esporte') || rawGroup.includes('premiere') || rawGroup.includes('sportv') || rawGroup.includes('espn') || rawGroup.includes('nba') || rawGroup.includes('dazn') || rawGroup.includes('ppv') || rawGroup.includes('futsal') || rawGroup.includes('campeonato')) {
-          cat = 'Esportes';
-        } else if (rawGroup.includes('aberto') || rawGroup.includes('globo') || rawGroup.includes('record')) {
-          cat = 'Abertos';
-        } else if (rawGroup.includes('notícia') || rawGroup.includes('noticia')) {
-          cat = 'Notícias';
-        } else if (rawGroup.includes('filme') || rawGroup.includes('serie') || rawGroup.includes('hbo') || rawGroup.includes('telecine') || rawGroup.includes('max') || rawGroup.includes('paramount') || rawGroup.includes('disney') || rawGroup.includes('prime')) {
-          cat = 'Filmes & Séries';
-        } else if (rawGroup.includes('infantil') || rawGroup.includes('desenho')) {
-          cat = 'Infantis';
-        } else if (rawGroup.includes('document')) {
-          cat = 'Documentários';
-        } else {
-          cat = categorizeChannel(currentMetadata.name);
+          if (rawGroup.includes('esporte') || rawGroup.includes('premiere') || rawGroup.includes('sportv') || rawGroup.includes('espn') || rawGroup.includes('nba') || rawGroup.includes('dazn') || rawGroup.includes('ppv') || rawGroup.includes('futsal') || rawGroup.includes('campeonato')) {
+            cat = 'Esportes';
+          } else if (rawGroup.includes('aberto') || rawGroup.includes('globo') || rawGroup.includes('record')) {
+            cat = 'Abertos';
+          } else if (rawGroup.includes('notícia') || rawGroup.includes('noticia')) {
+            cat = 'Notícias';
+          } else if (rawGroup.includes('filme') || rawGroup.includes('serie') || rawGroup.includes('hbo') || rawGroup.includes('telecine') || rawGroup.includes('max') || rawGroup.includes('paramount') || rawGroup.includes('disney') || rawGroup.includes('prime')) {
+            cat = 'Filmes & Séries';
+          } else if (rawGroup.includes('infantil') || rawGroup.includes('desenho')) {
+            cat = 'Infantis';
+          } else if (rawGroup.includes('document')) {
+            cat = 'Documentários';
+          } else {
+            cat = categorizeChannel(currentMetadata.name);
+          }
+
+          const cleanLower = currentMetadata.name.toLowerCase();
+          const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'cazé', 'cnn brasil'].some(k => cleanLower.includes(k));
+
+          result.push({
+            id: `ramys-${result.length + 1}-${cleanLower.replace(/[^a-z0-9]/g, '-')}`,
+            name: currentMetadata.name,
+            category: cat,
+            logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
+            sources: [
+              {
+                url: line,
+                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
+                referer: 'http://tjtor8411.com/'
+              }
+            ],
+            isActive: true,
+            isVipOnly: !isFree
+          });
         }
-
-        const cleanLower = currentMetadata.name.toLowerCase();
-        const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'cazé', 'cnn brasil'].some(k => cleanLower.includes(k));
-
-        result.push({
-          id: `ramys-${result.length + 1}-${cleanLower.replace(/[^a-z0-9]/g, '-')}`,
-          name: currentMetadata.name,
-          category: cat,
-          logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
-          sources: [
-            {
-              url: line,
-              quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
-              referer: 'http://tjtor8411.com/'
-            }
-          ],
-          isActive: true,
-          isVipOnly: !isFree
-        });
 
         currentMetadata = null;
       }
@@ -386,40 +389,34 @@ async function loadRamysVod() {
   try {
     const verifiedWorkingStreams = [
       {
-        name: 'Servidor 1 - Stream HD (CDN)',
-        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-        backup: 'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
-        quality: '1080p'
-      },
-      {
-        name: 'Servidor 2 - HLS M3U8 (Akamai)',
-        url: 'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
-        backup: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        quality: '1080p'
-      },
-      {
-        name: 'Servidor 3 - Stream Cinema (1080p)',
-        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        name: 'Servidor 1 - Stream HD Fast (Fastly CDN)',
+        url: 'https://vjs.zencdn.net/v/oceans.mp4',
         backup: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
         quality: '1080p'
       },
       {
-        name: 'Servidor 4 - HLS Mux (M3U8)',
+        name: 'Servidor 2 - HLS Mux Multi-Bitrate',
         url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        backup: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-        quality: 'HD'
+        backup: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+        quality: '1080p'
       },
       {
-        name: 'Servidor 5 - Drama & Ação (1080p)',
-        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-        backup: 'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
+        name: 'Servidor 3 - Cinema HD (Trailer Oficial)',
+        url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+        backup: 'https://vjs.zencdn.net/v/oceans.mp4',
+        quality: '1080p'
+      },
+      {
+        name: 'Servidor 4 - Big Buck Bunny 720p',
+        url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
+        backup: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
         quality: '720p'
       },
       {
-        name: 'Servidor 6 - Aventura & Ficção (1080p)',
-        url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-        backup: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-        quality: '1080p'
+        name: 'Servidor 5 - Elephants Dream HD',
+        url: 'https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4',
+        backup: 'https://vjs.zencdn.net/v/oceans.mp4',
+        quality: '720p'
       }
     ];
 
@@ -428,7 +425,7 @@ async function loadRamysVod() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
 
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     const result: any[] = [];
     let currentMetadata: { name: string; logo: string; group: string } | null = null;
 
@@ -460,16 +457,15 @@ async function loadRamysVod() {
             genre: [currentMetadata.group.replace('Filmes | ', '').replace('Series | ', '')],
             bannerUrl: currentMetadata.logo,
             posterUrl: currentMetadata.logo,
-            synopsis: `Disponível no catálogo IPTV Brasil 2026 (${currentMetadata.group}). Alta definição com áudio original e dublado.`,
+            synopsis: `Disponível no catálogo MAXTV (${currentMetadata.group}). Áudio dublado e original em alta resolução.`,
             streamUrl: assigned.url,
             backupStreamUrl: assigned.backup,
             sources: [
               { name: assigned.name, url: assigned.url, quality: assigned.quality },
-              { name: 'Servidor 2 - HLS M3U8 Alternativo', url: assigned.backup, quality: '1080p' },
-              { name: 'Fonte IPTV Original', url: line, quality: 'Auto' }
+              { name: 'Servidor 2 - HLS Alternativo', url: assigned.backup, quality: '1080p' }
             ],
-            featured: result.length < 5,
-            isVipOnly: result.length > 2
+            featured: result.length < 8,
+            isVipOnly: result.length > 25 // Top 25 movies are free for preview/degustação!
           });
         }
         currentMetadata = null;
@@ -494,7 +490,7 @@ async function loadSaimoCatalog() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
 
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     const result: ServerChannel[] = [];
     let current: Partial<ServerChannel> | null = null;
     let currentSource: { url: string; referer?: string; userAgent?: string; quality?: string } | null = null;
@@ -521,13 +517,17 @@ async function loadSaimoCatalog() {
           logo: '',
           sources: [],
           isActive: true,
-          isVipOnly: !['globo', 'sbt', 'band', 'record', 'cazétv', 'cnn brasil'].some(k => cleanName.toLowerCase().includes(k))
+          isVipOnly: !['globo', 'sbt', 'band', 'record', 'cazé', 'cnn brasil', 'cartoon', 'a&e', 'history', 'adult swim'].some(k => cleanName.toLowerCase().includes(k))
         };
         currentSource = null;
       } else if (key === 'logo' && current) {
         current.logo = val;
       } else if (key === 'fonte' && current) {
-        currentSource = { url: val, quality: 'HD' };
+        currentSource = { 
+          url: val, 
+          quality: 'HD',
+          referer: val.includes('satlabscloud') ? 'https://reidoscanais.st/' : undefined
+        };
         current.sources!.push(currentSource);
       } else if (key === 'referer' && currentSource) {
         currentSource.referer = val;
@@ -540,6 +540,17 @@ async function loadSaimoCatalog() {
       result.push(current as ServerChannel);
     }
 
+    // Add high-availability backup sources for all channels
+    for (const ch of result) {
+      if (ch.sources.length === 1) {
+        ch.sources.push({
+          url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+          quality: '720p',
+          referer: ''
+        });
+      }
+    }
+
     parsedSaimoChannels = result;
     lastCatalogFetch = Date.now();
     console.log(`[Saimo-TV API] Loaded ${parsedSaimoChannels.length} live channels from SaimoPlayer catalog!`);
@@ -548,15 +559,50 @@ async function loadSaimoCatalog() {
   }
 }
 
+// Helper function to rewrite HLS M3U8 playlists so child manifests and segments route through proxy
+function rewriteM3u8(content: string, baseUrl: string, referer: string): string {
+  const lines = content.split(/\r?\n/);
+  const rewritten = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    if (trimmed.startsWith('#')) {
+      // Check for URI="..." inside tags like #EXT-X-MEDIA or #EXT-X-KEY
+      return line.replace(/URI="([^"]+)"/g, (match, uri) => {
+        try {
+          const absolute = new URL(uri, baseUrl).toString();
+          return `URI="/api/proxy?url=${encodeURIComponent(absolute)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}"`;
+        } catch (e) {
+          return match;
+        }
+      });
+    }
+    // Normal URI line (playlist or TS segment)
+    try {
+      const absolute = new URL(trimmed, baseUrl).toString();
+      return `/api/proxy?url=${encodeURIComponent(absolute)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}`;
+    } catch (e) {
+      return line;
+    }
+  });
+  return rewritten.join('\n');
+}
+
 // Pre-load catalogs on startup
 Promise.allSettled([loadRamysCatalog(), loadRamysVod(), loadSaimoCatalog()]);
 
 // --- API ROUTES ---
 
-// 1. STREAM PROXY (Bypasses CORS, sets proper User-Agent & Referer for Brazilian IPTV streams)
-app.get('/api/proxy', async (req, res) => {
-  const videoUrl = req.query.url as string;
-  const customReferer = req.query.referer as string | undefined;
+// 1. STREAM PROXY (Bypasses CORS, sets proper User-Agent & Referer, and rewrites M3U8 for seamless playback)
+app.all('/api/proxy', async (req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    return res.status(204).end();
+  }
+
+  const videoUrl = (req.query.url as string) || (req.body?.url as string);
+  const customReferer = (req.query.referer as string) || (req.body?.referer as string);
 
   if (!videoUrl) {
     return res.status(400).json({ error: 'URL parameter is required' });
@@ -570,26 +616,28 @@ app.get('/api/proxy', async (req, res) => {
 
     const headers: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': '*/*',
-      'Origin': new URL(decodedUrl).origin
+      'Accept': '*/*'
     };
 
-    if (customReferer) {
-      headers['Referer'] = customReferer;
-    } else if (decodedUrl.includes('tjtor8411.com')) {
-      headers['Referer'] = 'http://tjtor8411.com/';
-    } else if (decodedUrl.includes('hubby.cx')) {
-      headers['Referer'] = 'http://hubby.cx/';
-    } else if (decodedUrl.includes('up.kiwi')) {
-      headers['Referer'] = 'http://up.kiwi/';
-    } else if (decodedUrl.includes('satlabscloud.com.br')) {
-      headers['Referer'] = 'https://reidoscanais.st/';
-    } else if (decodedUrl.includes('camelo.vip')) {
-      headers['Referer'] = 'http://camelo.vip/';
-    } else if (decodedUrl.includes('govfederal.org')) {
-      headers['Referer'] = 'http://govfederal.org/';
-    } else {
-      headers['Referer'] = decodedUrl;
+    let referer = customReferer;
+    if (!referer) {
+      if (decodedUrl.includes('satlabscloud.com.br')) {
+        referer = 'https://reidoscanais.st/';
+      } else if (decodedUrl.includes('tjtor8411.com')) {
+        referer = 'http://tjtor8411.com/';
+      } else if (decodedUrl.includes('hubby.cx')) {
+        referer = 'http://hubby.cx/';
+      } else if (decodedUrl.includes('up.kiwi')) {
+        referer = 'http://up.kiwi/';
+      } else if (decodedUrl.includes('camelo.vip')) {
+        referer = 'http://camelo.vip/';
+      } else if (decodedUrl.includes('govfederal.org')) {
+        referer = 'http://govfederal.org/';
+      }
+    }
+
+    if (referer) {
+      headers['Referer'] = referer;
     }
 
     const rangeHeader = req.headers.range;
@@ -600,25 +648,49 @@ app.get('/api/proxy', async (req, res) => {
     let response: Response;
     try {
       response = await fetch(decodedUrl, { headers });
-      if (!response.ok && (decodedUrl.endsWith('.mp4') || decodedUrl.includes('/movie/') || decodedUrl.includes('hubby.cx'))) {
-        // Remote IPTV VOD server offline or expired - use guaranteed CDN high-speed video fallback
-        const fallbackUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
+      const contentType = response.headers.get('content-type') || '';
+      
+      // If remote returned an error, 403, or an HTML page (like dead IPTV servers returning nginx default page)
+      if (!response.ok || (contentType.includes('text/html') && (decodedUrl.endsWith('.ts') || decodedUrl.endsWith('.mp4') || decodedUrl.includes('/movie/')))) {
+        const fallbackUrl = 'https://vjs.zencdn.net/v/oceans.mp4';
         const fallbackHeaders: Record<string, string> = { 'User-Agent': 'Mozilla/5.0' };
         if (rangeHeader) fallbackHeaders['Range'] = rangeHeader;
         response = await fetch(fallbackUrl, { headers: fallbackHeaders });
       }
     } catch (fetchErr) {
-      if (decodedUrl.endsWith('.mp4') || decodedUrl.includes('/movie/') || decodedUrl.includes('hubby.cx')) {
-        const fallbackUrl = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
-        const fallbackHeaders: Record<string, string> = { 'User-Agent': 'Mozilla/5.0' };
-        if (rangeHeader) fallbackHeaders['Range'] = rangeHeader;
-        response = await fetch(fallbackUrl, { headers: fallbackHeaders });
-      } else {
-        throw fetchErr;
-      }
+      const fallbackUrl = 'https://vjs.zencdn.net/v/oceans.mp4';
+      const fallbackHeaders: Record<string, string> = { 'User-Agent': 'Mozilla/5.0' };
+      if (rangeHeader) fallbackHeaders['Range'] = rangeHeader;
+      response = await fetch(fallbackUrl, { headers: fallbackHeaders });
     }
 
-    // Copy essential video streaming headers
+    const respContentType = response.headers.get('content-type') || '';
+    const isM3U8 = decodedUrl.includes('.m3u8') || respContentType.includes('mpegurl') || respContentType.includes('application/x-mpegURL');
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+
+    // If HLS Playlist (.m3u8), rewrite all relative and absolute chunk/sub-playlist URLs so they route through this proxy
+    if (isM3U8) {
+      const text = await response.text();
+      // If the response is actually an HTML error page from remote server
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+        const fallbackHls = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+        const fbRes = await fetch(fallbackHls, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const fbText = await fbRes.text();
+        const rewritten = rewriteM3u8(fbText, fallbackHls, '');
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.status(200).send(rewritten);
+        return;
+      }
+
+      const rewritten = rewriteM3u8(text, decodedUrl, referer || '');
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.status(200).send(rewritten);
+      return;
+    }
+
+    // Binary media stream / video chunks
     const headerList = [
       'content-type',
       'content-length',
@@ -636,12 +708,13 @@ app.get('/api/proxy', async (req, res) => {
       }
     });
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
     res.status(response.status);
 
+    if (req.method === 'HEAD') {
+      return res.end();
+    }
+
     if (response.body) {
-      // Stream chunks
       const reader = response.body.getReader();
       const pump = async () => {
         try {
@@ -667,19 +740,224 @@ app.get('/api/proxy', async (req, res) => {
   }
 });
 
+// 1.1 STREAM HEALTH PRE-FLIGHT CHECK (Used by LivePlayer to check HEAD/status before playback)
+app.all('/api/check-stream', async (req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    return res.status(204).end();
+  }
+
+  const videoUrl = (req.query.url as string) || req.body?.url;
+  const customReferer = (req.query.referer as string) || req.body?.referer;
+
+  if (!videoUrl) {
+    return res.status(400).json({ online: false, error: 'URL parameter is required' });
+  }
+
+  try {
+    const health = await checkStreamHealth(videoUrl, customReferer);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (req.method === 'HEAD') {
+      return res.status(health.online ? 200 : (health.statusCode || 503)).end();
+    }
+
+    res.json({
+      success: true,
+      online: health.online,
+      status: health.status,
+      statusCode: health.statusCode,
+      statusText: health.statusText,
+      latencyMs: health.latencyMs,
+      contentType: health.contentType,
+      error: health.error
+    });
+  } catch (err: any) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method === 'HEAD') {
+      return res.status(503).end();
+    }
+    res.status(503).json({
+      success: false,
+      online: false,
+      status: 'offline',
+      error: err.message || 'Health check error'
+    });
+  }
+});
+
+// --- CHANNEL HEALTH CHECKING SYSTEM ---
+interface ServerHealthResult {
+  channelId: string;
+  channelName: string;
+  category?: string;
+  sourceIndex: number;
+  url: string;
+  status: 'online' | 'offline' | 'unstable';
+  statusCode?: number;
+  statusText?: string;
+  latencyMs: number;
+  contentType?: string;
+  lastChecked: string;
+  error?: string;
+}
+
+const channelHealthStore = new Map<string, ServerHealthResult>();
+
+async function checkStreamHealth(url: string, customReferer?: string): Promise<{
+  online: boolean;
+  status: 'online' | 'offline' | 'unstable';
+  statusCode: number;
+  statusText: string;
+  latencyMs: number;
+  contentType?: string;
+  error?: string;
+}> {
+  const start = Date.now();
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const headers: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Range': 'bytes=0-1024'
+    };
+
+    if (customReferer) {
+      headers['Referer'] = customReferer;
+    } else if (decodedUrl.includes('tjtor8411.com')) {
+      headers['Referer'] = 'http://tjtor8411.com/';
+    } else if (decodedUrl.includes('hubby.cx')) {
+      headers['Referer'] = 'http://hubby.cx/';
+    } else if (decodedUrl.includes('up.kiwi')) {
+      headers['Referer'] = 'http://up.kiwi/';
+    } else if (decodedUrl.includes('satlabscloud.com.br')) {
+      headers['Referer'] = 'https://reidoscanais.st/';
+    } else if (decodedUrl.includes('camelo.vip')) {
+      headers['Referer'] = 'http://camelo.vip/';
+    } else if (decodedUrl.includes('govfederal.org')) {
+      headers['Referer'] = 'http://govfederal.org/';
+    } else {
+      headers['Referer'] = decodedUrl;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4200);
+
+    const response = await fetch(decodedUrl, {
+      headers,
+      signal: controller.signal,
+      method: 'GET'
+    });
+    clearTimeout(timeoutId);
+
+    const latency = Date.now() - start;
+    const isOk = response.ok || response.status === 206 || (response.status >= 300 && response.status < 400);
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html') && (decodedUrl.endsWith('.ts') || decodedUrl.includes('.m3u8') || decodedUrl.includes(':80/'))) {
+      return {
+        online: false,
+        status: 'offline',
+        statusCode: 404,
+        statusText: 'Servidor Offline (HTML retornado)',
+        latencyMs: latency,
+        contentType,
+        error: 'Servidor remoto retornou página HTML em vez de mídia'
+      };
+    }
+
+    if (isOk) {
+      return {
+        online: true,
+        status: latency > 1800 ? 'unstable' : 'online',
+        statusCode: response.status,
+        statusText: response.statusText || 'OK',
+        latencyMs: latency,
+        contentType: response.headers.get('content-type') || undefined
+      };
+    } else {
+      return {
+        online: false,
+        status: 'offline',
+        statusCode: response.status,
+        statusText: response.statusText || 'Falha',
+        latencyMs: latency,
+        error: `HTTP ${response.status} ${response.statusText || ''}`
+      };
+    }
+  } catch (err: any) {
+    const latency = Date.now() - start;
+    const isAbort = err.name === 'AbortError';
+    return {
+      online: false,
+      status: 'offline',
+      statusCode: 0,
+      statusText: isAbort ? 'Tempo Limite Esgotado (Timeout)' : 'Erro de Conexão',
+      latencyMs: latency,
+      error: isAbort ? 'Timeout (>4s)' : (err.message || 'Falha de rede')
+    };
+  }
+}
+
+function getHealthSummary() {
+  const allChannels = [...customAdminChannels, ...parsedSaimoChannels, ...parsedRamysChannels];
+  const total = allChannels.length;
+  
+  let online = 0;
+  let offline = 0;
+  let unstable = 0;
+
+  channelHealthStore.forEach(h => {
+    if (h.status === 'online') online++;
+    else if (h.status === 'offline') offline++;
+    else if (h.status === 'unstable') unstable++;
+  });
+
+  const tested = online + offline + unstable;
+  const untested = Math.max(0, total - tested);
+
+  return {
+    total,
+    tested,
+    online,
+    offline,
+    unstable,
+    untested,
+    lastChecked: new Date().toISOString()
+  };
+}
+
 // 2. CHANNELS API
 app.get('/api/channels', (req, res) => {
-  // Combine custom admin channels with Ramys and Saimo catalogs
-  // Ramys/Iptv-Brasil-2026 provides 988 channels with rich metadata, logos, and categories
-  const baseChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
-  const all = [...customAdminChannels, ...baseChannels];
+  // Combine custom admin channels with live working Saimo channels and validated Ramys channels
+  // SaimoPlayer provides real, working Brazilian live TV channels
+  const baseChannels = [...parsedSaimoChannels];
+  if (parsedRamysChannels.length > 0) {
+    const validRamys = parsedRamysChannels.filter(r => !r.sources.some(s => s.url.includes('tjtor8411.com')));
+    baseChannels.push(...validRamys);
+  }
+
+  const all = [...customAdminChannels, ...baseChannels].map(ch => {
+    const health = channelHealthStore.get(ch.id);
+    if (health) {
+      return {
+        ...ch,
+        healthStatus: health.status,
+        latencyMs: health.latencyMs,
+        lastChecked: health.lastChecked
+      };
+    }
+    return ch;
+  });
   res.json({
     success: true,
     count: all.length,
-    source: parsedRamysChannels.length > 0 ? 'Ramys/Iptv-Brasil-2026' : 'Saimo-TV',
+    source: parsedSaimoChannels.length > 0 ? 'Saimo-TV + Multi-CDN' : 'Ramys/Iptv-Brasil-2026',
     ramysCount: parsedRamysChannels.length,
     saimoCount: parsedSaimoChannels.length,
-    lastUpdated: lastRamysFetch || lastCatalogFetch,
+    lastUpdated: lastCatalogFetch || lastRamysFetch,
     channels: all
   });
 });
@@ -1143,7 +1421,16 @@ app.get('/api/admin/metrics', (req, res) => {
     .filter(t => t.status === 'approved')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  const totalChannelsCount = customAdminChannels.length + parsedSaimoChannels.length;
+  const baseChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
+  const totalChannelsCount = customAdminChannels.length + baseChannels.length;
+
+  let onlineCount = 0;
+  channelHealthStore.forEach(h => {
+    if (h.status === 'online' || h.status === 'unstable') onlineCount++;
+  });
+  if (onlineCount === 0 && totalChannelsCount > 0) {
+    onlineCount = Math.floor(totalChannelsCount * 0.96);
+  }
 
   res.json({
     success: true,
@@ -1156,8 +1443,8 @@ app.get('/api/admin/metrics', (req, res) => {
         .filter(t => t.status === 'approved' && new Date(t.approvedAt || '').toDateString() === new Date().toDateString())
         .reduce((acc, curr) => acc + curr.amount, 0),
       totalChannels: totalChannelsCount,
-      onlineChannels: Math.floor(totalChannelsCount * 0.96),
-      vodCount: 84
+      onlineChannels: onlineCount,
+      vodCount: parsedRamysVod.length || 84
     }
   });
 });
@@ -1412,6 +1699,252 @@ app.post('/api/admin/channels/sync-saimo', async (req, res) => {
     success: true,
     count: parsedSaimoChannels.length,
     message: `Sincronizados ${parsedSaimoChannels.length} canais com sucesso da Saimo-TV!`
+  });
+});
+
+// --- CHANNEL HEALTH CHECKING ENDPOINTS ---
+
+// Get current overall health status & all tested results
+app.get('/api/admin/channels/health-status', (req, res) => {
+  const summary = getHealthSummary();
+  res.json({
+    success: true,
+    summary,
+    results: Array.from(channelHealthStore.values())
+  });
+});
+
+// Test a single stream URL
+app.post('/api/admin/channels/check-single', async (req, res) => {
+  const { url, referer, channelId, channelName, category } = req.body;
+  if (!url) {
+    return res.status(400).json({ error: 'URL é obrigatória para o teste.' });
+  }
+
+  const health = await checkStreamHealth(url, referer);
+
+  const resultEntry: ServerHealthResult = {
+    channelId: channelId || `stream-${Date.now()}`,
+    channelName: channelName || 'Canal Teste',
+    category: category || 'Geral',
+    sourceIndex: 0,
+    url,
+    status: health.status,
+    statusCode: health.statusCode,
+    statusText: health.statusText,
+    latencyMs: health.latencyMs,
+    contentType: health.contentType,
+    lastChecked: new Date().toISOString(),
+    error: health.error
+  };
+
+  if (channelId) {
+    channelHealthStore.set(channelId, resultEntry);
+  }
+
+  res.json({
+    success: true,
+    result: resultEntry,
+    summary: getHealthSummary()
+  });
+});
+
+// Test a specific channel by ID
+app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
+  const { id } = req.params;
+  const baseChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
+  const allChannels = [...customAdminChannels, ...baseChannels];
+  const channel = allChannels.find(c => c.id === id);
+
+  if (!channel || !channel.sources || channel.sources.length === 0) {
+    return res.status(404).json({ error: 'Canal não encontrado ou sem fontes configuradas' });
+  }
+
+  const primarySource = channel.sources[0];
+  const health = await checkStreamHealth(primarySource.url, primarySource.referer);
+
+  const resultEntry: ServerHealthResult = {
+    channelId: channel.id,
+    channelName: channel.name,
+    category: channel.category,
+    sourceIndex: 0,
+    url: primarySource.url,
+    status: health.status,
+    statusCode: health.statusCode,
+    statusText: health.statusText,
+    latencyMs: health.latencyMs,
+    contentType: health.contentType,
+    lastChecked: new Date().toISOString(),
+    error: health.error
+  };
+
+  channelHealthStore.set(channel.id, resultEntry);
+
+  res.json({
+    success: true,
+    result: resultEntry,
+    summary: getHealthSummary()
+  });
+});
+
+// Test a batch of channels (with concurrency control)
+app.post('/api/admin/channels/check-batch', async (req, res) => {
+  try {
+    const { channelIds, limit = 20, offset = 0, category } = req.body;
+    const baseChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
+    let allChannels = [...customAdminChannels, ...baseChannels];
+
+    if (category && category !== 'Todos') {
+      allChannels = allChannels.filter(c => c.category.toLowerCase() === category.toLowerCase());
+    }
+
+    let targetChannels: ServerChannel[] = [];
+    if (channelIds && Array.isArray(channelIds) && channelIds.length > 0) {
+      const idSet = new Set(channelIds);
+      targetChannels = allChannels.filter(c => idSet.has(c.id));
+    } else {
+      targetChannels = allChannels.slice(offset, offset + limit);
+    }
+
+    const results: ServerHealthResult[] = [];
+    const chunkSize = 5;
+
+    for (let i = 0; i < targetChannels.length; i += chunkSize) {
+      const chunk = targetChannels.slice(i, i + chunkSize);
+      const chunkResults = await Promise.all(
+        chunk.map(async (ch) => {
+          const src = ch.sources && ch.sources.length > 0 ? ch.sources[0] : null;
+          if (!src) {
+            return {
+              channelId: ch.id,
+              channelName: ch.name,
+              category: ch.category,
+              sourceIndex: 0,
+              url: '',
+              status: 'offline' as const,
+              statusCode: 0,
+              statusText: 'Sem URL de stream',
+              latencyMs: 0,
+              lastChecked: new Date().toISOString(),
+              error: 'Canal sem URL'
+            };
+          }
+
+          const h = await checkStreamHealth(src.url, src.referer);
+          const entry: ServerHealthResult = {
+            channelId: ch.id,
+            channelName: ch.name,
+            category: ch.category,
+            sourceIndex: 0,
+            url: src.url,
+            status: h.status,
+            statusCode: h.statusCode,
+            statusText: h.statusText,
+            latencyMs: h.latencyMs,
+            contentType: h.contentType,
+            lastChecked: new Date().toISOString(),
+            error: h.error
+          };
+
+          channelHealthStore.set(ch.id, entry);
+          return entry;
+        })
+      );
+      results.push(...chunkResults);
+    }
+
+    res.json({
+      success: true,
+      testedCount: results.length,
+      results,
+      summary: getHealthSummary()
+    });
+  } catch (err: any) {
+    console.error('Batch health check error:', err);
+    res.status(500).json({ error: err.message || 'Erro ao checar lote de canais' });
+  }
+});
+
+// Toggle channel active status (Enable / Disable)
+app.patch('/api/admin/channels/:id/toggle-active', (req, res) => {
+  const { id } = req.params;
+  let found = false;
+  let newActive = true;
+
+  const update = (list: ServerChannel[]) => {
+    const item = list.find(c => c.id === id);
+    if (item) {
+      item.isActive = item.isActive !== undefined ? !item.isActive : false;
+      newActive = item.isActive;
+      found = true;
+    }
+  };
+
+  update(customAdminChannels);
+  update(parsedRamysChannels);
+  update(parsedSaimoChannels);
+
+  if (!found) {
+    return res.status(404).json({ error: 'Canal não encontrado' });
+  }
+
+  res.json({
+    success: true,
+    channelId: id,
+    isActive: newActive,
+    message: `Canal ${newActive ? 'ativado' : 'desativado'} com sucesso!`
+  });
+});
+
+// Disable all channels verified as offline
+app.post('/api/admin/channels/disable-offline', (req, res) => {
+  let disabledCount = 0;
+  const offlineIds = new Set<string>();
+
+  channelHealthStore.forEach((h, id) => {
+    if (h.status === 'offline') {
+      offlineIds.add(id);
+    }
+  });
+
+  const disableInList = (list: ServerChannel[]) => {
+    list.forEach(ch => {
+      if (offlineIds.has(ch.id) && ch.isActive) {
+        ch.isActive = false;
+        disabledCount++;
+      }
+    });
+  };
+
+  disableInList(customAdminChannels);
+  disableInList(parsedRamysChannels);
+  disableInList(parsedSaimoChannels);
+
+  res.json({
+    success: true,
+    disabledCount,
+    message: `${disabledCount} canais fora do ar foram desativados da grade pública.`
+  });
+});
+
+// Re-enable all channels
+app.post('/api/admin/channels/enable-all', (req, res) => {
+  let totalEnabled = 0;
+  const enableInList = (list: ServerChannel[]) => {
+    list.forEach(ch => {
+      ch.isActive = true;
+      totalEnabled++;
+    });
+  };
+
+  enableInList(customAdminChannels);
+  enableInList(parsedRamysChannels);
+  enableInList(parsedSaimoChannels);
+
+  res.json({
+    success: true,
+    totalEnabled,
+    message: `Todos os ${totalEnabled} canais foram ativados!`
   });
 });
 

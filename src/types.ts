@@ -27,6 +27,9 @@ export interface Channel {
   isVipOnly?: boolean;
   epgNow?: string;
   epgNext?: string;
+  healthStatus?: 'online' | 'offline' | 'unstable' | 'untested';
+  latencyMs?: number;
+  lastChecked?: string;
 }
 
 export interface VodSource {
@@ -165,3 +168,29 @@ export interface VipGrant {
   grantedAt: string;
   grantedBy: string;
 }
+
+export interface ChannelHealthResult {
+  channelId: string;
+  channelName: string;
+  category?: string;
+  sourceIndex: number;
+  url: string;
+  status: 'online' | 'offline' | 'unstable';
+  statusCode?: number;
+  statusText?: string;
+  latencyMs: number;
+  contentType?: string;
+  lastChecked: string;
+  error?: string;
+}
+
+export interface ChannelHealthSummary {
+  total: number;
+  tested: number;
+  online: number;
+  offline: number;
+  unstable: number;
+  untested: number;
+  lastChecked?: string;
+}
+

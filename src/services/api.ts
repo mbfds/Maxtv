@@ -1,4 +1,4 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary } from '../types';
 
 export const api = {
   // Channels
@@ -186,6 +186,85 @@ export const api = {
       body: JSON.stringify(settings),
     });
     if (!res.ok) throw new Error('Falha ao salvar configurações');
+    return await res.json();
+  },
+
+  // --- Channel Health Check API ---
+  async getChannelHealthStatus(): Promise<{ success: boolean; summary: ChannelHealthSummary; results: ChannelHealthResult[] }> {
+    try {
+      const res = await fetch('/api/admin/channels/health-status');
+      if (!res.ok) throw new Error('Falha ao obter status de saúde dos canais');
+      return await res.json();
+    } catch (err) {
+      console.warn('API getChannelHealthStatus error:', err);
+      return {
+        success: false,
+        summary: { total: 0, tested: 0, online: 0, offline: 0, unstable: 0, untested: 0 },
+        results: []
+      };
+    }
+  },
+
+  async checkSingleStream(payload: {
+    url: string;
+    referer?: string;
+    channelId?: string;
+    channelName?: string;
+    category?: string;
+  }): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
+    const res = await fetch('/api/admin/channels/check-single', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Falha ao verificar stream do canal');
+    return await res.json();
+  },
+
+  async checkChannelHealth(channelId: string): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
+    const res = await fetch(`/api/admin/channels/check-channel/${channelId}`, {
+      method: 'POST'
+    });
+    if (!res.ok) throw new Error('Falha ao verificar canal');
+    return await res.json();
+  },
+
+  async checkBatchChannels(payload: {
+    channelIds?: string[];
+    limit?: number;
+    offset?: number;
+    category?: string;
+  }): Promise<{ success: boolean; testedCount: number; results: ChannelHealthResult[]; summary: ChannelHealthSummary }> {
+    const res = await fetch('/api/admin/channels/check-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Falha ao verificar lote de canais');
+    return await res.json();
+  },
+
+  async toggleChannelActive(channelId: string): Promise<{ success: boolean; channelId: string; isActive: boolean; message: string }> {
+    const res = await fetch(`/api/admin/channels/${channelId}/toggle-active`, {
+      method: 'PATCH'
+    });
+    if (!res.ok) throw new Error('Falha ao alternar status do canal');
+    return await res.json();
+  },
+
+  async disableOfflineChannels(): Promise<{ success: boolean; disabledCount: number; message: string }> {
+    const res = await fetch('/api/admin/channels/disable-offline', {
+      method: 'POST'
+    });
+    if (!res.ok) throw new Error('Falha ao desativar canais offline');
+    return await res.json();
+  },
+
+  async enableAllChannels(): Promise<{ success: boolean; totalEnabled: number; message: string }> {
+    const res = await fetch('/api/admin/channels/enable-all', {
+      method: 'POST'
+    });
+    if (!res.ok) throw new Error('Falha ao reativar todos os canais');
     return await res.json();
   },
 

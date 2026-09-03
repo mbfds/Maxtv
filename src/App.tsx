@@ -228,22 +228,22 @@ export default function App() {
   // Determine VIP Status
   const isVip = (currentUser?.vipStatus === 'active') || (currentSubscriber?.status === 'active');
 
-  // Trigger media playback with Auth Check for VOD / VIP
+  // Trigger media playback with immediate access for free content
   const handlePlayMedia = (item: Channel | VodItem, type: 'channel' | 'vod') => {
-    // If not logged in, prompt authentication so the user is authenticated before watching!
-    if (!currentUser) {
-      setPendingMediaAfterAuth({ item, type });
-      setAuthModalConfig({
-        title: `Entrar para Assistir: ${'title' in item ? item.title : item.name}`,
-        subtitle: 'Faça login na sua conta ou use o Acesso Rápido para começar a reprodução imediata sem travar.',
-        mode: 'login'
-      });
-      setIsAuthModalOpen(true);
+    // Free channels and free movies play immediately!
+    if (!item.isVipOnly || currentUser) {
+      setActiveMedia({ item, type });
       return;
     }
 
-    // User is logged in -> start media player
-    setActiveMedia({ item, type });
+    // Item is VIP only and user is not logged in yet
+    setPendingMediaAfterAuth({ item, type });
+    setAuthModalConfig({
+      title: `Conteúdo VIP: ${'title' in item ? item.title : item.name}`,
+      subtitle: 'Faça login na sua conta VIP ou acesse para começar a reprodução.',
+      mode: 'login'
+    });
+    setIsAuthModalOpen(true);
   };
 
   // Featured items for Hero Banner

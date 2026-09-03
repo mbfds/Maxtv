@@ -4,17 +4,19 @@ import {
   Plus, Check, X, Shield, Search, AlertCircle, Play, 
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
-  Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight
+  Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
+  Activity
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant } from '../types';
 import { api } from '../services/api';
+import { ChannelHealthChecker } from './ChannelHealthChecker';
 
 interface AdminPanelProps {
   onClose: () => void;
   onPreviewChannel: (channel: Channel) => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channels' | 'transactions' | 'settings';
+type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channels' | 'transactions' | 'settings';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -458,6 +460,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
 
             <button
               type="button"
+              onClick={() => setActiveTab('channel-health')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'channel-health'
+                  ? 'bg-gradient-to-r from-emerald-600 to-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                <span>Verificador de Sinais</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 animate-pulse">
+                Diagnóstico
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('channels')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'channels'
@@ -596,16 +616,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   </p>
                 </div>
 
-                <div className="p-5 rounded-3xl bg-slate-900 border border-white/10 relative overflow-hidden">
+                <div 
+                  onClick={() => setActiveTab('channel-health')}
+                  className="p-5 rounded-3xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 transition-all cursor-pointer relative overflow-hidden group"
+                >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-400">Grade de Canais</span>
-                    <Tv className="w-5 h-5 text-sky-400" />
+                    <span className="text-xs font-medium text-slate-400">Grade & Sinal</span>
+                    <div className="flex items-center gap-1 text-emerald-400">
+                      <Activity className="w-4 h-4 group-hover:animate-pulse" />
+                    </div>
                   </div>
-                  <div className="text-2xl font-black text-white mt-2">
-                    {channels.length}
+                  <div className="text-2xl font-black text-white mt-2 flex items-baseline gap-2">
+                    <span>{channels.length}</span>
+                    <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Verificar
+                    </span>
                   </div>
-                  <p className="text-[11px] text-sky-400 mt-1 font-medium">
-                    IPTV Brasil 2026 + Saimo
+                  <p className="text-[11px] text-slate-400 mt-1 font-medium group-hover:text-emerald-300 transition-colors flex items-center justify-between">
+                    <span>Clique p/ testar quais funcionam</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 group-hover:translate-x-0.5 transition-all" />
                   </p>
                 </div>
 
@@ -1125,6 +1155,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             </div>
           )}
 
+          {/* TAB 4.5: VERIFICADOR DE SAÚDE DOS CANAIS */}
+          {activeTab === 'channel-health' && (
+            <ChannelHealthChecker
+              channels={channels}
+              onPreviewChannel={onPreviewChannel}
+              onRefreshChannels={loadData}
+            />
+          )}
+
           {/* TAB 5: GRADE DE CANAIS */}
           {activeTab === 'channels' && (
             <div className="space-y-6">
@@ -1141,6 +1180,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('channel-health')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Verificar Sinais dos Canais</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleSyncRamys}
