@@ -144,9 +144,61 @@ export const api = {
     return await res.json();
   },
 
+  async updateChannel(id: string, data: { name?: string; category?: string; logo?: string; streamUrl?: string; referer?: string; isVipOnly?: boolean }): Promise<{ success: boolean; channel: Channel; message?: string }> {
+    const res = await fetch(`/api/admin/channels/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Falha ao atualizar canal');
+    return await res.json();
+  },
+
   async deleteChannel(id: string): Promise<{ success: boolean }> {
     const res = await fetch(`/api/admin/channels/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Falha ao remover canal');
+    return await res.json();
+  },
+
+  // --- Channel Problem Reports API ---
+  async getChannelReports(): Promise<{ success: boolean; total: number; reports: any[] }> {
+    try {
+      const res = await fetch('/api/channels/reports');
+      if (!res.ok) throw new Error('Falha ao obter relatórios');
+      return await res.json();
+    } catch (err) {
+      console.warn('API getChannelReports error:', err);
+      return { success: false, total: 0, reports: [] };
+    }
+  },
+
+  async reportChannelProblem(payload: {
+    channelId: string;
+    channelName: string;
+    sourceUrl?: string;
+    reason?: string;
+    userEmail?: string;
+    latencyMs?: number;
+    status?: string;
+  }): Promise<{ success: boolean; message: string; report?: any }> {
+    const res = await fetch('/api/channels/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Falha ao reportar erro do canal');
+    return await res.json();
+  },
+
+  async deleteChannelReport(id: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`/api/channels/reports/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Falha ao excluir relatório');
+    return await res.json();
+  },
+
+  async clearChannelReports(): Promise<{ success: boolean; message: string }> {
+    const res = await fetch('/api/channels/reports/clear', { method: 'POST' });
+    if (!res.ok) throw new Error('Falha ao limpar relatórios');
     return await res.json();
   },
 

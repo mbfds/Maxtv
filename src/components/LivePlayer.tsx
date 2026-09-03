@@ -7,10 +7,10 @@ import {
   Tv, AlertTriangle, ExternalLink, FastForward, Rewind,
   Server, RefreshCw, Film, PictureInPicture, Camera, 
   Settings, SlidersHorizontal, Check, Info, WifiOff, 
-  HelpCircle, Activity, Heart, Zap, Wrench
+  HelpCircle, Activity, Heart, Zap, Wrench, Clock
 } from 'lucide-react';
 import { Channel, VodItem, User } from '../types';
-import { checkStreamAvailability } from '../utils/streamChecker';
+import { checkStreamAvailability, reportChannelProblem } from '../utils/streamChecker';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
 import { watchProgressStorage } from '../services/watchProgressStorage';
 import { ChannelTroubleshootModal } from './ChannelTroubleshootModal';
@@ -104,6 +104,18 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [showTroubleshootModal, setShowTroubleshootModal] = useState<boolean>(false);
   const [reloadCounter, setReloadCounter] = useState<number>(0);
 
+  // Rigorous 3.5s timeout and channel health indicators
+  const canPlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasCanPlayFiredRef = useRef<boolean>(false);
+  const [isTimedOut, setIsTimedOut] = useState<boolean>(false);
+  const [isConnectionUnstable, setIsConnectionUnstable] = useState<boolean>(false);
+  const [connectionLatency, setConnectionLatency] = useState<number>(0);
+  const [hasReportedError, setHasReportedError] = useState<boolean>(false);
+
+  // Auto-retry counter (up to 3 times after 3.5s timeout or dead link before definitive error and Reportar Erro button)
+  const [autoRetryCount, setAutoRetryCount] = useState<number>(0);
+  const autoRetryCountRef = useRef<number>(0);
+
   // Free preview mode for VIP locked content so users can test streams
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const isLocked = item.isVipOnly && !isVip && !previewMode;
@@ -177,33 +189,161 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 2400);
   }, []);
 
-  // Manual on-demand health check
-  const runManualHealthCheck = async () => {
+  /**
+   * Função checkChannelHealth: valida o status HTTP do stream usando fetch com o método HEAD
+   * antes mesmo de carregar o vídeo, para identificar links mortos instantaneamente.
+   * Se a conexão exceder 3,5 segundos ou retornar status HTTP >= 400, indica instabilidade/erro.
+   */
+  const checkChannelHealth = useCallback(async (customUrl?: string): Promise<{ 
+    online: boolean; 
+    isUnstable: boolean; 
+    latencyMs: number; 
+    statusCode?: number; 
+    isDead: boolean;
+  }> => {
+    const targetUrl = customUrl || rawUrl || streamUrl;
+    if (!targetUrl || isLocked) return { online: false, isUnstable: false, latencyMs: 0, isDead: false };
+
     setIsCheckingHealth(true);
-    showToast('Verificando status do canal em tempo real...');
+    const startTime = performance.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
     try {
-      const res = await checkStreamAvailability(streamUrl, currentSource?.referer, 6000);
-      if (res.online && !res.isOffline) {
-        showToast(`Canal Online! Latência: ${res.latencyMs}ms`);
-        setStreamWarning(null);
-      } else {
-        showToast(`Sinal com alta latência (${res.latencyMs}ms). Tente alternar o servidor.`);
-        setStreamWarning(res.warningMessage || 'Sinal instável. Tente outro servidor.');
+      // 1. Valida o status HTTP usando fetch com método HEAD via /api/check-stream
+      const checkEndpoint = `/api/check-stream?url=${encodeURIComponent(targetUrl)}${currentSource?.referer ? `&referer=${encodeURIComponent(currentSource.referer)}` : ''}`;
+      let res: Response | null = null;
+      try {
+        res = await fetch(checkEndpoint, {
+          method: 'HEAD',
+          signal: controller.signal,
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+      } catch (err: any) {
+        // Fallback para fetch direto se proxy local não responder
+        try {
+          res = await fetch(targetUrl, {
+            method: 'HEAD',
+            signal: controller.signal,
+            mode: 'no-cors'
+          });
+        } catch {
+          throw err;
+        }
       }
-    } catch {
-      showToast('Falha na conexão com o servidor.');
+
+      clearTimeout(timeoutId);
+      const latency = Math.round(performance.now() - startTime);
+      const statusCode = res?.status;
+
+      // Status HTTP >= 400 identifica link morto instantaneamente
+      const isDead = statusCode !== undefined && statusCode >= 400;
+      const isOnline = !isDead && (res?.ok || res?.type === 'opaque' || (statusCode !== undefined && statusCode < 400));
+      const isUnstable = latency > 3500 || !isOnline;
+
+      setConnectionLatency(latency);
+
+      if (isDead) {
+        console.warn(`[checkChannelHealth] Link morto identificado instantaneamente via HEAD (${statusCode}) em ${latency}ms`);
+        setIsConnectionUnstable(true);
+        setStreamWarning(`Link morto detectado via HTTP HEAD (${statusCode}). O servidor recusou a conexão.`);
+        return { online: false, isUnstable: true, latencyMs: latency, statusCode, isDead: true };
+      }
+
+      if (isUnstable) {
+        setIsConnectionUnstable(true);
+        setStreamWarning(`Latência de resposta: ${latency}ms (acima de 3,5s). Conexão instável.`);
+        return { online: isOnline, isUnstable: true, latencyMs: latency, statusCode, isDead: false };
+      }
+
+      setIsConnectionUnstable(false);
+      setStreamWarning(null);
+      return { online: true, isUnstable: false, latencyMs: latency, statusCode, isDead: false };
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const latency = Math.round(performance.now() - startTime);
+      console.warn(`[checkChannelHealth] Falha ou timeout HEAD (${latency}ms):`, err);
+      setIsConnectionUnstable(true);
+      setConnectionLatency(latency >= 3500 ? latency : 3500);
+      setStreamWarning('Sinal instável: tempo de resposta da conexão HEAD excedeu 3,5 segundos.');
+      return { online: false, isUnstable: true, latencyMs: latency, isDead: true };
     } finally {
       setIsCheckingHealth(false);
+    }
+  }, [rawUrl, streamUrl, isLocked, currentSource]);
+
+  // Botão Reportar Erro: registra o status do canal no log administrativo para verificação rápida da grade
+  const handleReportError = async (customReason?: string) => {
+    try {
+      const channelName = 'name' in item ? item.name : item.title;
+      const defaultReason = isTimedOut
+        ? 'Timeout de 3,5s na inicialização do vídeo (evento canplay não disparou)'
+        : isConnectionUnstable
+          ? `Conexão Instável (latência de resposta ${connectionLatency > 0 ? `${connectionLatency}ms` : '> 3,5s'})`
+          : 'Sinal não carrega ou link inativo';
+      const reason = customReason || defaultReason;
+
+      await reportChannelProblem({
+        channelId: item.id,
+        channelName,
+        sourceUrl: rawUrl || streamUrl,
+        reason,
+        userEmail: currentUser?.email || 'assinante'
+      });
+
+      setHasReportedError(true);
+      showToast('Erro registrado no log administrativo! Nossos técnicos foram alertados.');
+    } catch (err) {
+      showToast('Erro reportado ao sistema!');
+    }
+  };
+
+  // Reportar canal como offline quando a conexão exceder 3,5 segundos
+  const handleReportOffline = () => {
+    handleReportError('Canal reportado como OFFLINE pelo usuário (Conexão excedeu 3,5s)');
+  };
+
+  // Manual on-demand health check
+  const runManualHealthCheck = async () => {
+    showToast('Executando diagnóstico de conexão do sinal (limite 3,5s)...');
+    const res = await checkChannelHealth();
+    if (res.online && !res.isUnstable) {
+      showToast(`Canal Online e Estável! Latência: ${res.latencyMs}ms`);
+    } else {
+      showToast(`Conexão Instável (${res.latencyMs}ms). Tente forçar recarregamento ou alternar servidor.`);
     }
   };
 
   const handleForceReload = () => {
-    setReloadCounter(prev => prev + 1);
+    autoRetryCountRef.current = 0;
+    setAutoRetryCount(0);
+    if (canPlayTimeoutRef.current) {
+      clearTimeout(canPlayTimeoutRef.current);
+      canPlayTimeoutRef.current = null;
+    }
+    hasCanPlayFiredRef.current = false;
+    setIsTimedOut(false);
     setHasError(false);
+    setErrorMessage('');
     setIsLoading(true);
     setStreamWarning(null);
-    showToast('Reiniciando transmissão com buffer limpo...');
+    setIsConnectionUnstable(false);
+    setHasReportedError(false);
+    setReloadCounter(prev => prev + 1);
+    showToast('Reinicializando player e tentando nova conexão...');
   };
+
+  // Reset auto-retry counters and errors on channel/item change
+  useEffect(() => {
+    autoRetryCountRef.current = 0;
+    setAutoRetryCount(0);
+    setHasReportedError(false);
+    setIsConnectionUnstable(false);
+    setHasError(false);
+    setIsTimedOut(false);
+    setErrorMessage('');
+  }, [item.id]);
+
   const resetControlsTimer = useCallback(() => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -214,48 +354,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 3500);
   }, [isPlaying, isLocked, activeMenu]);
 
-  // Pre-flight HEAD health check with auto-fallback
-  useEffect(() => {
-    if (isLocked || !rawUrl) return;
-
-    let isMounted = true;
-    setStreamWarning(null);
-    setIsCheckingHealth(true);
-
-    checkStreamAvailability(streamUrl, currentSource?.referer, 6000)
-      .then((res) => {
-        if (!isMounted) return;
-        setIsCheckingHealth(false);
-        // If video is already playing, never show connection warning
-        if (videoRef.current && videoRef.current.currentTime > 0) {
-          setStreamWarning(null);
-          return;
-        }
-
-        if (res.isOffline || res.warningMessage) {
-          // If direct connection is failing or timing out and proxy is off, automatically try proxy
-          if (!usingProxy && res.isOffline) {
-            console.log('[LivePlayer] Direct stream slow/offline, activating proxy automatically...');
-            setForceProxy(true);
-            showToast('Conexão direta instável. Ativando Proxy Seguro...');
-            return;
-          }
-
-          setStreamWarning(
-            res.warningMessage || 'Aviso: O sinal deste servidor demorou a responder. Caso ocorra lentidão, tente alternar o servidor.'
-          );
-        }
-      })
-      .catch(() => {
-        if (isMounted) setIsCheckingHealth(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [streamUrl, isLocked, currentSource]);
-
-  // Main video loader with comprehensive Hls.js & fallbacks
+  // Main video loader with pre-flight HEAD check & 3.5s timeout with up to 3 automatic retries
   useEffect(() => {
     if (isLocked) {
       setIsLoading(false);
@@ -265,191 +364,322 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     const video = videoRef.current;
     if (!video || !rawUrl) return;
 
+    let isCancelled = false;
+
+    // Reset errors and loading
     setHasError(false);
     setErrorMessage('');
     setIsLoading(true);
     setQualities([]);
+    setIsTimedOut(false);
+    hasCanPlayFiredRef.current = false;
 
-    // Destroy existing Hls and mpegts instances if any
+    // Clear previous timeout
+    if (canPlayTimeoutRef.current) {
+      clearTimeout(canPlayTimeoutRef.current);
+      canPlayTimeoutRef.current = null;
+    }
+
+    // Destroy existing Hls/mpegts instances
     if (hlsRef.current) {
-      hlsRef.current.destroy();
+      try { hlsRef.current.destroy(); } catch (e) {}
       hlsRef.current = null;
     }
     if (mpegtsRef.current) {
-      mpegtsRef.current.destroy();
+      try { mpegtsRef.current.destroy(); } catch (e) {}
       mpegtsRef.current = null;
     }
 
-    const isHls = streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8');
-    const isTs = (streamUrl.includes('.ts') || rawUrl.includes('.ts')) && !streamUrl.includes('.mp4');
+    const loadStream = async () => {
+      // 1. Valida o status HTTP do stream usando fetch com método HEAD antes mesmo de carregar o vídeo
+      const health = await checkChannelHealth(rawUrl);
 
-    // 1. HLS.JS (Full compatibility for M3U8 across modern browsers)
-    if (isHls && Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: type === 'channel',
-        backBufferLength: 90,
-        maxBufferLength: 30,
-        maxMaxBufferLength: 60,
-        maxBufferSize: 60 * 1000 * 1000,
-        manifestLoadingTimeOut: 12000,
-        manifestLoadingMaxRetry: 4,
-        fragLoadingTimeOut: 14000,
-        fragLoadingMaxRetry: 5,
-        levelLoadingTimeOut: 12000,
-      });
+      if (isCancelled) return;
 
-      hlsRef.current = hls;
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
+      // Se identificar link morto instantaneamente
+      if (health.isDead) {
+        console.warn(`[LivePlayer] Link morto identificado antes do carregamento do vídeo.`);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-        setIsLoading(false);
-        
-        // Extract available quality levels
-        if (hls.levels && hls.levels.length > 0) {
-          const detectedQualities: QualityOption[] = [
-            { index: -1, label: 'Automática (Auto)' }
-          ];
-          hls.levels.forEach((lvl, idx) => {
-            const height = lvl.height;
-            const label = height ? `${height}p` : lvl.bitrate ? `${Math.round(lvl.bitrate / 1000)}k` : `Opção ${idx + 1}`;
-            detectedQualities.push({
-              index: idx,
-              label,
-              bitrate: lvl.bitrate
-            });
-          });
-          setQualities(detectedQualities);
-        }
+        // Se ainda não esgotou as 3 tentativas automáticas
+        if (autoRetryCountRef.current < 3) {
+          const nextAttempt = autoRetryCountRef.current + 1;
+          autoRetryCountRef.current = nextAttempt;
+          setAutoRetryCount(nextAttempt);
+          setIsConnectionUnstable(true);
+          setIsLoading(true);
+          setStreamWarning(`Link inativo identificado (HTTP HEAD). Tentando reconexão automática (${nextAttempt}/3)...`);
 
-        video.play().catch(() => {
+          if (!usingProxy && nextAttempt === 2) {
+            setForceProxy(true);
+          }
+
+          setTimeout(() => {
+            if (!isCancelled) {
+              setReloadCounter(c => c + 1);
+            }
+          }, 600);
+          return;
+        } else {
+          // Esgotou as 3 tentativas automáticas
+          setIsLoading(false);
           setIsPlaying(false);
-        });
-      });
-
-      hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-        const currentLevel = hls.levels[data.level];
-        if (currentLevel) {
-          console.log(`HLS switched to level: ${currentLevel.height}p`);
+          setHasError(true);
+          setIsTimedOut(true);
+          setIsConnectionUnstable(true);
+          setErrorMessage(`Link morto identificado instantaneamente via HTTP HEAD (${health.statusCode ? `Código HTTP ${health.statusCode}` : 'Servidor Inacessível'}) após 3 tentativas.`);
+          return;
         }
-      });
+      }
 
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        console.warn('HLS.js event error:', data);
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              if (!usingProxy) {
-                console.log('Network error on direct stream. Switching to internal proxy...');
-                setForceProxy(true);
-              } else if (currentSourceIndex < sources.length - 1) {
-                console.log('Switching to next source in catalog...');
-                setCurrentSourceIndex(prev => prev + 1);
-              } else {
-                setHasError(true);
-                setErrorMessage('Falha na conexão de rede com a transmissão. Experimente alternar para outro servidor.');
-                setIsLoading(false);
-              }
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log('HLS Media error encountered, attempting recovery...');
-              hls.recoverMediaError();
-              break;
-            default:
-              hls.destroy();
-              if (currentSourceIndex < sources.length - 1) {
-                setCurrentSourceIndex(prev => prev + 1);
-              } else {
-                setHasError(true);
-                setErrorMessage('O formato desta transmissão não pôde ser decodificado. Selecione o servidor alternativo.');
-                setIsLoading(false);
-              }
-              break;
+      // Se sinal respondeu ou não for link morto, inicia timeout assíncrono rigoroso de 3,5 segundos
+      canPlayTimeoutRef.current = setTimeout(() => {
+        if (!hasCanPlayFiredRef.current && !isCancelled) {
+          console.warn(`[LivePlayer] Timeout de 3,5s: evento canplay não disparou dentro do limite (tentativa ${autoRetryCountRef.current + 1}/3)`);
+
+          // Interromper a tentativa imediatamente
+          if (hlsRef.current) {
+            try {
+              hlsRef.current.stopLoad();
+              hlsRef.current.destroy();
+              hlsRef.current = null;
+            } catch (e) {}
+          }
+          if (mpegtsRef.current) {
+            try {
+              mpegtsRef.current.unload();
+              mpegtsRef.current.detachMediaElement();
+              mpegtsRef.current.destroy();
+              mpegtsRef.current = null;
+            } catch (e) {}
+          }
+          if (video) {
+            try {
+              video.pause();
+              video.removeAttribute('src');
+              video.load();
+            } catch (e) {}
+          }
+
+          if (autoRetryCountRef.current < 3) {
+            // Tenta automaticamente recarregar o stream do canal até 3 vezes!
+            const nextAttempt = autoRetryCountRef.current + 1;
+            autoRetryCountRef.current = nextAttempt;
+            setAutoRetryCount(nextAttempt);
+            setIsConnectionUnstable(true);
+            setIsLoading(true);
+            setStreamWarning(`Tempo limite de 3,5s excedido. Tentando recarregar automaticamente (${nextAttempt}/3)...`);
+
+            if (!usingProxy && nextAttempt === 2) {
+              setForceProxy(true);
+            }
+
+            setReloadCounter(c => c + 1);
+          } else {
+            // Esgotou as 3 tentativas automáticas: exibe a mensagem definitiva de erro e o botão 'Reportar Erro'
+            setIsLoading(false);
+            setIsPlaying(false);
+            setHasError(true);
+            setIsTimedOut(true);
+            setIsConnectionUnstable(true);
+            setErrorMessage(
+              'A inicialização da transmissão excedeu o limite de 3,5 segundos após 3 tentativas automáticas consecutivas. O canal pode estar offline ou o servidor congestionado.'
+            );
           }
         }
-      });
-    } else if (isTs && typeof window !== 'undefined' && mpegts.isSupported()) {
-      // 2. MPEGTS.JS (Raw MPEG-TS Streams)
-      try {
-        const player = mpegts.createPlayer({
-          type: 'mse',
-          isLive: type === 'channel',
-          url: streamUrl,
-        }, {
+      }, 3500);
+
+      // Proceder com a montagem do player Hls / Ts / Nativo
+      const isHls = streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8');
+      const isTs = (streamUrl.includes('.ts') || rawUrl.includes('.ts')) && !streamUrl.includes('.mp4');
+
+      if (isHls && Hls.isSupported()) {
+        const hls = new Hls({
           enableWorker: true,
-          lazyLoadMaxDuration: 30,
-          seekType: 'range'
+          lowLatencyMode: type === 'channel',
+          backBufferLength: 90,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          maxBufferSize: 60 * 1000 * 1000,
+          manifestLoadingTimeOut: 12000,
+          manifestLoadingMaxRetry: 4,
+          fragLoadingTimeOut: 14000,
+          fragLoadingMaxRetry: 5,
+          levelLoadingTimeOut: 12000,
         });
 
-        mpegtsRef.current = player;
-        player.attachMediaElement(video);
-        player.load();
-        const playPromise = player.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => {
+        hlsRef.current = hls;
+        hls.loadSource(streamUrl);
+        hls.attachMedia(video);
+
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+          setIsLoading(false);
+          
+          // Extract available quality levels
+          if (hls.levels && hls.levels.length > 0) {
+            const detectedQualities: QualityOption[] = [
+              { index: -1, label: 'Automática (Auto)' }
+            ];
+            hls.levels.forEach((lvl, idx) => {
+              const height = lvl.height;
+              const label = height ? `${height}p` : lvl.bitrate ? `${Math.round(lvl.bitrate / 1000)}k` : `Opção ${idx + 1}`;
+              detectedQualities.push({
+                index: idx,
+                label,
+                bitrate: lvl.bitrate
+              });
+            });
+            setQualities(detectedQualities);
+          }
+
+          video.play().catch(() => {
             setIsPlaying(false);
           });
-        }
+        });
 
-        player.on(mpegts.Events.ERROR, (errorType: any, errorDetail: any) => {
-          console.warn('mpegts error:', errorType, errorDetail);
-          if (!usingProxy) {
-            setForceProxy(true);
-          } else if (currentSourceIndex < sources.length - 1) {
-            setCurrentSourceIndex(prev => prev + 1);
-          } else {
-            setHasError(true);
-            setErrorMessage('Transmissão ao vivo instável ou sinal fora do ar temporariamente.');
-            setIsLoading(false);
+        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+          const currentLevel = hls.levels[data.level];
+          if (currentLevel) {
+            console.log(`HLS switched to level: ${currentLevel.height}p`);
           }
         });
-      } catch (err) {
-        console.warn('mpegts init failed, falling back to direct video tag:', err);
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.warn('HLS.js event error:', data);
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                if (!usingProxy) {
+                  console.log('Network error on direct stream. Switching to internal proxy...');
+                  setForceProxy(true);
+                } else if (autoRetryCountRef.current < 3) {
+                  const nextAttempt = autoRetryCountRef.current + 1;
+                  autoRetryCountRef.current = nextAttempt;
+                  setAutoRetryCount(nextAttempt);
+                  setIsConnectionUnstable(true);
+                  setReloadCounter(c => c + 1);
+                } else if (currentSourceIndex < sources.length - 1) {
+                  console.log('Switching to next source in catalog...');
+                  setCurrentSourceIndex(prev => prev + 1);
+                } else {
+                  setHasError(true);
+                  setErrorMessage('Falha na conexão de rede com a transmissão após 3 tentativas automáticas.');
+                  setIsLoading(false);
+                  setIsConnectionUnstable(true);
+                }
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.log('HLS Media error encountered, attempting recovery...');
+                hls.recoverMediaError();
+                break;
+              default:
+                hls.destroy();
+                if (autoRetryCountRef.current < 3) {
+                  const nextAttempt = autoRetryCountRef.current + 1;
+                  autoRetryCountRef.current = nextAttempt;
+                  setAutoRetryCount(nextAttempt);
+                  setIsConnectionUnstable(true);
+                  setReloadCounter(c => c + 1);
+                } else if (currentSourceIndex < sources.length - 1) {
+                  setCurrentSourceIndex(prev => prev + 1);
+                } else {
+                  setHasError(true);
+                  setErrorMessage('O formato desta transmissão não pôde ser decodificado após 3 tentativas.');
+                  setIsLoading(false);
+                  setIsConnectionUnstable(true);
+                }
+                break;
+            }
+          }
+        });
+      } else if (isTs && typeof window !== 'undefined' && mpegts.isSupported()) {
+        try {
+          const player = mpegts.createPlayer({
+            type: 'mse',
+            isLive: type === 'channel',
+            url: streamUrl,
+          }, {
+            enableWorker: true,
+            lazyLoadMaxDuration: 30,
+            seekType: 'range'
+          });
+
+          mpegtsRef.current = player;
+          player.attachMediaElement(video);
+          player.load();
+          const playPromise = player.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => {
+              setIsPlaying(false);
+            });
+          }
+
+          player.on(mpegts.Events.ERROR, (errorType: any, errorDetail: any) => {
+            console.warn('mpegts error:', errorType, errorDetail);
+            if (!usingProxy) {
+              setForceProxy(true);
+            } else if (autoRetryCountRef.current < 3) {
+              const nextAttempt = autoRetryCountRef.current + 1;
+              autoRetryCountRef.current = nextAttempt;
+              setAutoRetryCount(nextAttempt);
+              setIsConnectionUnstable(true);
+              setReloadCounter(c => c + 1);
+            } else if (currentSourceIndex < sources.length - 1) {
+              setCurrentSourceIndex(prev => prev + 1);
+            } else {
+              setHasError(true);
+              setErrorMessage('Transmissão ao vivo instável ou sinal fora do ar após 3 tentativas.');
+              setIsLoading(false);
+              setIsConnectionUnstable(true);
+            }
+          });
+        } catch (err) {
+          console.warn('mpegts init failed, falling back to direct video tag:', err);
+          video.src = streamUrl;
+          video.play().catch(() => setIsPlaying(false));
+        }
+      } else if (video.canPlayType('application/vnd.apple.mpegurl') && isHls) {
         video.src = streamUrl;
         video.play().catch(() => setIsPlaying(false));
+      } else {
+        video.src = streamUrl;
+        video.play().then(() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+        }).catch((err) => {
+          console.warn('Direct video play error:', err);
+          if (!usingProxy && rawUrl.startsWith('http://')) {
+            setForceProxy(true);
+          } else if (autoRetryCountRef.current < 3) {
+            const nextAttempt = autoRetryCountRef.current + 1;
+            autoRetryCountRef.current = nextAttempt;
+            setAutoRetryCount(nextAttempt);
+            setIsConnectionUnstable(true);
+            setReloadCounter(c => c + 1);
+          } else {
+            setIsPlaying(false);
+          }
+        });
       }
-    } else if (video.canPlayType('application/vnd.apple.mpegurl') && isHls) {
-      // 3. NATIVE HLS (Safari / iOS)
-      video.src = streamUrl;
-      video.play().catch(() => setIsPlaying(false));
-    } else {
-      // 4. DIRECT MP4 / WEBM / VIDEO TAG
-      video.src = streamUrl;
-      video.play().then(() => {
-        setIsPlaying(true);
-        setIsLoading(false);
-      }).catch((err) => {
-        console.warn('Direct video play error:', err);
-        if (!usingProxy && rawUrl.startsWith('http://')) {
-          setForceProxy(true);
-        } else {
-          setIsPlaying(false);
-        }
-      });
-    }
+    };
 
-    // Safety watchdog: If video is still loading after 4.5 seconds and hasn't started, offer proxy or fallback
-    const watchdogTimer = setTimeout(() => {
-      if (video.readyState < 2 && !video.currentTime) {
-        if (!usingProxy && rawUrl.startsWith('http://')) {
-          setForceProxy(true);
-        }
-      }
-    }, 4500);
+    loadStream();
 
     return () => {
-      clearTimeout(watchdogTimer);
+      isCancelled = true;
+      if (canPlayTimeoutRef.current) {
+        clearTimeout(canPlayTimeoutRef.current);
+        canPlayTimeoutRef.current = null;
+      }
       if (hlsRef.current) {
-        hlsRef.current.destroy();
+        try { hlsRef.current.destroy(); } catch (e) {}
         hlsRef.current = null;
       }
       if (mpegtsRef.current) {
-        mpegtsRef.current.destroy();
+        try { mpegtsRef.current.destroy(); } catch (e) {}
         mpegtsRef.current = null;
       }
     };
-  }, [streamUrl, rawUrl, isLocked, usingProxy, currentSourceIndex, type, sources.length]);
+  }, [streamUrl, rawUrl, isLocked, usingProxy, currentSourceIndex, type, sources.length, reloadCounter, checkChannelHealth]);
 
   // Fullscreen change listener
   useEffect(() => {
@@ -480,13 +710,20 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     if (!usingProxy) {
       console.log('Retrying via server proxy...');
       setForceProxy(true);
+    } else if (autoRetryCountRef.current < 3) {
+      const nextAttempt = autoRetryCountRef.current + 1;
+      autoRetryCountRef.current = nextAttempt;
+      setAutoRetryCount(nextAttempt);
+      setIsConnectionUnstable(true);
+      setReloadCounter(c => c + 1);
     } else if (currentSourceIndex < sources.length - 1) {
       console.log('Switching to next source index...');
       setCurrentSourceIndex(prev => prev + 1);
     } else {
       setHasError(true);
-      setErrorMessage('Não foi possível reproduzir esta fonte. Tente outro servidor abaixo.');
+      setErrorMessage('Não foi possível reproduzir esta transmissão após 3 tentativas automáticas.');
       setIsLoading(false);
+      setIsConnectionUnstable(true);
     }
   };
 
@@ -851,6 +1088,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn">
       {/* Container */}
       <div 
+        id="player-container"
         ref={containerRef}
         onMouseMove={resetControlsTimer}
         onMouseEnter={resetControlsTimer}
@@ -924,12 +1162,25 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               onLoadedMetadata={handleLoadedMetadata}
               onWaiting={() => setIsLoading(true)}
               onPlaying={() => { 
+                hasCanPlayFiredRef.current = true;
+                if (canPlayTimeoutRef.current) {
+                  clearTimeout(canPlayTimeoutRef.current);
+                  canPlayTimeoutRef.current = null;
+                }
                 setIsLoading(false); 
                 setHasError(false); 
+                setIsTimedOut(false);
                 setStreamWarning(null); 
               }}
               onCanPlay={() => {
+                hasCanPlayFiredRef.current = true;
+                if (canPlayTimeoutRef.current) {
+                  clearTimeout(canPlayTimeoutRef.current);
+                  canPlayTimeoutRef.current = null;
+                }
                 setIsLoading(false);
+                setHasError(false);
+                setIsTimedOut(false);
                 setStreamWarning(null);
               }}
               onError={handleVideoError}
@@ -954,8 +1205,99 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </div>
             )}
 
-            {/* Friendly Stream Health / Offline Warning Banner (Pre-flight HEAD check) */}
-            {streamWarning && !hasError && (
+            {/* Overlay Estilizado de Conexão Instável com Animação de Fade-In e Botão 'Tentar Novamente' Centralizado em Destaque */}
+            {isConnectionUnstable && !hasError && (
+              <div 
+                id="unstable-connection-overlay"
+                className="absolute inset-0 z-35 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fadeIn select-none"
+              >
+                {/* Ícone de Alerta em Destaque */}
+                <div className="relative mb-3.5">
+                  <div className="absolute -inset-3 bg-amber-500/25 rounded-full blur-xl animate-pulse" />
+                  <div className="relative w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/20">
+                    <AlertTriangle className="w-8 h-8 animate-bounce" />
+                  </div>
+                </div>
+
+                {/* Título e Badge de Latência */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h4 className="text-xl font-bold text-white tracking-tight">
+                    Conexão Instável
+                  </h4>
+                  <span className="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    {connectionLatency > 0 ? `${connectionLatency}ms (> 3,5s)` : '> 3,5s'}
+                  </span>
+                </div>
+
+                {/* Mensagem Explicativa */}
+                <p className="text-xs sm:text-sm text-slate-300 max-w-md mb-3 leading-relaxed">
+                  {streamWarning || 'A resposta do sinal demorou mais de 3,5 segundos para carregar o vídeo. O canal pode estar com instabilidade temporária no servidor de origem.'}
+                </p>
+
+                {/* Indicador de Tentativa Automática (se em andamento) */}
+                {autoRetryCount > 0 && autoRetryCount <= 3 && (
+                  <div className="flex items-center gap-2 mb-4 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs font-semibold">
+                    <div className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                    <span>Tentando reconectar automaticamente ({autoRetryCount}/3)...</span>
+                  </div>
+                )}
+
+                {/* Botão 'Tentar Novamente' em DESTAQUE CENTRALIZADO sobre o vídeo */}
+                <div className="flex flex-col items-center gap-3 w-full max-w-md mt-1">
+                  <button
+                    type="button"
+                    id="btn-retry-unstable"
+                    onClick={handleForceReload}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold text-sm shadow-2xl shadow-amber-500/40 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Tentar Novamente</span>
+                  </button>
+
+                  {/* Ações Secundárias */}
+                  <div className="flex items-center justify-center gap-2 flex-wrap mt-1">
+                    {sources.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={tryNextSource}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 border border-indigo-500/40 text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Alternar Servidor ({currentSourceIndex + 1}/{sources.length})</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => { setForceProxy(!usingProxy); setReloadCounter(c => c + 1); }}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <span>{usingProxy ? 'Conexão Direta' : 'Ativar Proxy'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleReportOffline}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Reportar Offline</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsConnectionUnstable(false)}
+                      className="px-3 py-2 text-slate-400 hover:text-slate-200 text-xs transition-colors cursor-pointer"
+                    >
+                      Aguardar Sinal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Friendly Stream Health / Warning Banner */}
+            {streamWarning && !isConnectionUnstable && !hasError && (
               <div className="absolute top-16 sm:top-20 left-4 right-4 z-35 max-w-xl mx-auto bg-amber-500/15 border border-amber-500/40 backdrop-blur-md rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 shadow-xl animate-fadeIn">
                 <div className="flex items-start gap-2.5">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
@@ -1006,51 +1348,83 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
                 <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-3 shadow-lg" />
                 <span className="text-xs font-semibold text-slate-200 bg-slate-900/80 px-3 py-1 rounded-full border border-white/10">
-                  {isCheckingHealth ? 'Testando disponibilidade do sinal...' : 'Carregando vídeo...'}
+                  {isCheckingHealth ? 'Testando disponibilidade do sinal...' : 'Carregando transmissão...'}
                 </span>
               </div>
             )}
 
-            {/* Offline Error Screen */}
+            {/* Offline / Timeout Error Screen */}
             {hasError && (
               <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-25">
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-3">
-                  <WifiOff className="w-7 h-7 text-amber-400" />
+                <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-4 shadow-xl shadow-amber-500/10">
+                  {isTimedOut ? (
+                    <Clock className="w-8 h-8 text-amber-400 animate-pulse" />
+                  ) : (
+                    <WifiOff className="w-8 h-8 text-amber-400" />
+                  )}
                 </div>
-                <h4 className="text-lg font-bold text-white mb-1">
-                  Não foi possível iniciar a transmissão
+                <h4 className="text-xl font-bold text-white mb-2 tracking-tight">
+                  {isTimedOut ? 'Tempo Limite de 3,5s Excedido' : 'Não foi possível iniciar a transmissão'}
                 </h4>
-                <p className="text-xs text-slate-400 max-w-md mb-5 font-normal">
-                  {errorMessage || 'O link do servidor de origem está offline ou respondendo com lentidão. Tente alternar para o servidor redundante ou ativar o proxy.'}
+                <p className="text-xs sm:text-sm text-slate-300 max-w-lg mb-6 font-normal leading-relaxed">
+                  {errorMessage || 'O link do servidor de origem está offline ou demorou mais de 3,5 segundos para responder. Tente recarregar ou alternar para outro servidor.'}
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-lg">
+
+                <div className="flex flex-wrap items-center justify-center gap-3 max-w-xl">
+                  {/* Botão Tentar Novamente */}
+                  <button
+                    type="button"
+                    onClick={handleForceReload}
+                    className="flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 cursor-pointer transition-all active:scale-95"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Tentar Novamente</span>
+                  </button>
+
+                  {/* Botão Reportar Erro */}
+                  <button
+                    type="button"
+                    onClick={() => handleReportError()}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-md ${
+                      hasReportedError
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border-rose-500/50'
+                    }`}
+                  >
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    <span>{hasReportedError ? 'Erro Reportado no Log ✓' : 'Reportar Erro'}</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={tryNextSource}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
+                    className="flex items-center gap-2 px-4 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Mudar para Outro Servidor ({currentSourceIndex + 1}/{sources.length})</span>
+                    <span>Trocar de Servidor ({currentSourceIndex + 1}/{sources.length})</span>
                   </button>
+
                   <button
                     type="button"
                     onClick={() => { setForceProxy(!usingProxy); setHasError(false); setIsLoading(true); }}
-                    className="px-4 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
+                    className="px-4 py-3 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     {usingProxy ? 'Tentar Conexão Direta' : 'Ativar Proxy Anti-Bloqueio'}
                   </button>
+
                   <button
                     type="button"
                     onClick={() => setShowTroubleshootModal(true)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/40 cursor-pointer transition-all"
+                    className="flex items-center gap-1.5 px-4 py-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/40 cursor-pointer transition-all"
                   >
                     <Activity className="w-3.5 h-3.5 text-amber-400" />
                     <span>Canal com Problema?</span>
                   </button>
+
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="px-4 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
+                    className="px-4 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     Fechar
                   </button>
@@ -1139,6 +1513,22 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <Activity className="w-3.5 h-3.5 text-amber-400" />
                   <span className="hidden sm:inline">Canal com problema?</span>
                   <span className="sm:hidden">Ajuda</span>
+                </button>
+
+                {/* Botão Reportar Erro (Requisito 2) */}
+                <button
+                  type="button"
+                  onClick={() => handleReportError()}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer backdrop-blur-md shadow-sm ${
+                    hasReportedError
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/30'
+                  }`}
+                  title="Reportar link inativo ou erro no canal para o log administrativo"
+                >
+                  <AlertTriangle className={`w-3.5 h-3.5 ${hasReportedError ? 'text-emerald-400' : 'text-rose-400'}`} />
+                  <span className="hidden sm:inline">{hasReportedError ? 'Erro Reportado ✓' : 'Reportar Erro'}</span>
+                  <span className="sm:hidden">{hasReportedError ? '✓' : 'Reportar'}</span>
                 </button>
 
                 {/* Favorite Toggle Button */}

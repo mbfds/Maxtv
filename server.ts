@@ -798,30 +798,34 @@ interface ChannelReport {
   reason: string;
   timestamp: string;
   userEmail: string;
+  latencyMs?: number;
+  status?: string;
 }
 
-const channelReports: ChannelReport[] = [];
+let channelReports: ChannelReport[] = [];
 
 app.post('/api/channels/report', (req, res) => {
-  const { channelId, channelName, sourceUrl, reason, userEmail } = req.body || {};
+  const { channelId, channelName, sourceUrl, reason, userEmail, latencyMs, status } = req.body || {};
   const report: ChannelReport = {
-    id: `rep-${Date.now()}`,
+    id: `rep-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     channelId: channelId || 'desconhecido',
     channelName: channelName || 'Canal',
     sourceUrl: sourceUrl || '',
     reason: reason || 'Sinal não carrega ou demora para responder',
     timestamp: new Date().toISOString(),
-    userEmail: userEmail || 'anônimo'
+    userEmail: userEmail || 'anônimo',
+    latencyMs: typeof latencyMs === 'number' ? latencyMs : undefined,
+    status: status || 'offline'
   };
 
   channelReports.unshift(report);
   if (channelReports.length > 200) channelReports.pop();
 
-  console.log(`[ALERTA DE TRANSMISSÃO] Canal "${report.channelName}" reportado por ${report.userEmail}: ${report.reason}`);
+  console.log(`[ALERTA DE TRANSMISSÃO] Canal "${report.channelName}" reportado por ${report.userEmail}: ${report.reason} (${report.sourceUrl})`);
 
   res.json({
     success: true,
-    message: 'Relatório recebido com sucesso! Nossa equipe técnica foi alertada.',
+    message: 'Relatório recebido com sucesso! O status do canal foi registrado no log administrativo.',
     report
   });
 });
@@ -832,6 +836,17 @@ app.get('/api/channels/reports', (req, res) => {
     total: channelReports.length,
     reports: channelReports
   });
+});
+
+app.delete('/api/channels/reports/:id', (req, res) => {
+  const { id } = req.params;
+  channelReports = channelReports.filter(r => r.id !== id);
+  res.json({ success: true, message: 'Relatório removido com sucesso' });
+});
+
+app.post('/api/channels/reports/clear', (req, res) => {
+  channelReports = [];
+  res.json({ success: true, message: 'Todos os relatórios foram limpos' });
 });
 
 // --- CHANNEL HEALTH CHECKING SYSTEM ---
@@ -1833,6 +1848,70 @@ app.post('/api/admin/channels', (req, res) => {
 
   customAdminChannels.unshift(newChannel);
   res.json({ success: true, channel: newChannel });
+});
+
+app.put('/api/admin/channels/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, category, logo, streamUrl, referer, isVipOnly, isActive } = req.body;
+
+  let found = false;
+  const updateList = (list: ServerChannel[]) => {
+    return list.map(c => {
+      if (c.id === id) {
+        found = true;
+        const updatedSources = [...(c.sources || [])];
+        if (streamUrl) {
+          if (updatedSources.length > 0) {
+            updatedSources[0] = {
+              ...updatedSources[0],
+              url: streamUrl,
+              referer: referer !== undefined ? referer : updatedSources[0].referer
+            };
+          } else {
+            updatedSources.push({
+              url: streamUrl,
+              referer: referer || undefined,
+              quality: '1080p'
+            });
+          }
+        }
+        return {
+          ...c,
+          name: name || c.name,
+          category: category || c.category,
+          logo: logo || c.logo,
+          sources: updatedSources,
+          isVipOnly: isVipOnly !== undefined ? Boolean(isVipOnly) : c.isVipOnly,
+          isActive: isActive !== undefined ? Boolean(isActive) : c.isActive
+        };
+      }
+      return c;
+    });
+  };
+
+  customAdminChannels = updateList(customAdminChannels);
+  parsedRamysChannels = updateList(parsedRamysChannels);
+  parsedSaimoChannels = updateList(parsedSaimoChannels);
+
+  if (!found && streamUrl) {
+    // If not found in lists, add it to customAdminChannels
+    const newCh: ServerChannel = {
+      id,
+      name: name || 'Canal Atualizado',
+      category: category || 'Abertos',
+      logo: logo || '',
+      sources: [{ url: streamUrl, referer: referer || undefined, quality: '1080p' }],
+      isCustom: true,
+      isActive: true,
+      isVipOnly: Boolean(isVipOnly)
+    };
+    customAdminChannels.unshift(newCh);
+    return res.json({ success: true, channel: newCh, message: 'Canal adicionado e atualizado com sucesso!' });
+  }
+
+  const allChannels = [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
+  const updatedChannel = allChannels.find(c => c.id === id);
+  res.json({ success: true, channel: updatedChannel, message: 'Canal atualizado na grade com sucesso!' });
 });
 
 app.delete('/api/admin/channels/:id', (req, res) => {

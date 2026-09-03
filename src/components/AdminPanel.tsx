@@ -5,9 +5,9 @@ import {
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
-  Activity, Film
+  Activity, Film, WifiOff
 } from 'lucide-react';
-import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant } from '../types';
+import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport } from '../types';
 import { api } from '../services/api';
 import { ChannelHealthChecker } from './ChannelHealthChecker';
 
@@ -16,7 +16,7 @@ interface AdminPanelProps {
   onPreviewChannel: (channel: Channel) => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channels' | 'transactions' | 'settings';
+type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'channels' | 'transactions' | 'settings';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -25,6 +25,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   const [grantsHistory, setGrantsHistory] = useState<VipGrant[]>([]);
   const [transactions, setTransactions] = useState<PixTransaction[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelReports, setChannelReports] = useState<ChannelReport[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -56,13 +57,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [mRes, sRes, gRes, tRes, cRes, setRes] = await Promise.all([
+      const [mRes, sRes, gRes, tRes, cRes, setRes, rRes] = await Promise.all([
         api.getAdminMetrics(),
         api.getSubscribers(),
         api.getGrantsHistory(),
         api.getTransactions(),
         api.getChannels(),
-        api.getSettings()
+        api.getSettings(),
+        api.getChannelReports()
       ]);
 
       if (mRes.success) setMetrics(mRes.metrics);
@@ -71,6 +73,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       if (tRes.success) setTransactions(tRes.transactions);
       if (cRes.channels) setChannels(cRes.channels);
       if (setRes.success) setSettings(setRes.settings);
+      if (rRes.success && rRes.reports) setChannelReports(rRes.reports);
     } catch (err) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -81,6 +84,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      const res = await api.deleteChannelReport(reportId);
+      if (res.success) {
+        setChannelReports(prev => prev.filter(r => r.id !== reportId));
+        showFeedback('Relatório removido do log com sucesso!');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleClearReports = async () => {
+    if (!confirm('Deseja limpar todos os relatórios de erros do log administrativo?')) return;
+    try {
+      const res = await api.clearChannelReports();
+      if (res.success) {
+        setChannelReports([]);
+        showFeedback('Log de relatórios limpo com sucesso!');
+      }
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
 
   const showFeedback = (msg: string) => {
     setActionFeedback(msg);
@@ -491,6 +519,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 animate-pulse">
                 Diagnóstico
+              </span>
+            </button>
+
+            {/* RELATÓRIOS DE CANAIS COM PROBLEMA / LINKS INATIVOS */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('channel-reports')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'channel-reports'
+                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className={`w-4 h-4 ${channelReports.length > 0 ? 'text-rose-400' : 'text-slate-400'}`} />
+                <span>Links Inativos / Erros</span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                channelReports.length > 0 
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse' 
+                  : 'bg-white/10 text-slate-400'
+              }`}>
+                {channelReports.length}
               </span>
             </button>
 
@@ -1180,6 +1231,206 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               onPreviewChannel={onPreviewChannel}
               onRefreshChannels={loadData}
             />
+          )}
+
+          {/* TAB 4.8: RELATÓRIOS DE CANAIS COM PROBLEMA & LINKS INATIVOS */}
+          {activeTab === 'channel-reports' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-rose-400" />
+                      <span>Relatórios de Problemas & Links Inativos</span>
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                      {channelReports.length} {channelReports.length === 1 ? 'relatório' : 'relatórios'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Histórico de links inativos e conexões lentas (&gt; 3,5s) reportados diretamente pelos usuários no player.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('channel-health')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Abrir Verificador de Sinais</span>
+                  </button>
+
+                  {channelReports.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearReports}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-500/40 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Limpar Todos os Relatórios</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Stat Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-400">Total de Relatórios</span>
+                    <p className="text-2xl font-bold text-white mt-1">{channelReports.length}</p>
+                  </div>
+                  <AlertCircle className="w-8 h-8 text-rose-400/50" />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-400">Excedeu Limite de 3,5s</span>
+                    <p className="text-2xl font-bold text-amber-400 mt-1">
+                      {channelReports.filter(r => r.status === 'slow_connection' || (r.latencyMs && r.latencyMs >= 3500) || r.reason.toLowerCase().includes('3,5')).length}
+                    </p>
+                  </div>
+                  <Clock className="w-8 h-8 text-amber-400/50" />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-400">Canais Offline / Inativos</span>
+                    <p className="text-2xl font-bold text-rose-400 mt-1">
+                      {channelReports.filter(r => r.status === 'offline' || r.status === 'error').length}
+                    </p>
+                  </div>
+                  <WifiOff className="w-8 h-8 text-rose-400/50" />
+                </div>
+              </div>
+
+              {/* Reports Table or Empty State */}
+              {channelReports.length === 0 ? (
+                <div className="p-12 rounded-3xl bg-slate-900 border border-white/10 text-center flex flex-col items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mb-3">
+                    <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <h4 className="text-base font-bold text-white mb-1">Nenhum Link Inativo Reportado</h4>
+                  <p className="text-xs text-slate-400 max-w-md">
+                    Nenhum usuário reportou falhas recentemente. Todos os canais monitorados estão operando normalmente.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900 shadow-sm">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] font-semibold tracking-wider border-b border-white/10">
+                      <tr>
+                        <th className="p-4">Canal</th>
+                        <th className="p-4">Status / Diagnóstico</th>
+                        <th className="p-4">Motivo do Usuário</th>
+                        <th className="p-4">Latência</th>
+                        <th className="p-4">Data / Usuário</th>
+                        <th className="p-4 text-right">Ações Rápidas</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {channelReports.map(report => {
+                        const targetChannel = channels.find(c => c.id === report.channelId);
+                        return (
+                          <tr key={report.id} className="hover:bg-white/5 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                {targetChannel?.logo ? (
+                                  <img 
+                                    src={targetChannel.logo} 
+                                    alt={report.channelName} 
+                                    className="w-8 h-8 rounded-lg object-contain bg-slate-950 p-1 border border-white/10" 
+                                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                                    <Tv className="w-4 h-4" />
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="font-bold text-white block">{report.channelName}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono truncate max-w-xs block">
+                                    {report.sourceUrl || targetChannel?.sources[0]?.url || 'URL não informada'}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              {report.status === 'offline' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-rose-950 text-rose-300 border border-rose-500/40">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  Canal Offline
+                                </span>
+                              ) : report.status === 'slow_connection' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/40">
+                                  <Clock className="w-3 h-3 text-amber-400" />
+                                  Lento (&gt; 3,5s)
+                                </span>
+                              ) : report.status === 'unstable' ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/40">
+                                  <WifiOff className="w-3 h-3 text-amber-400" />
+                                  Sinal Instável
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-rose-950 text-rose-300 border border-rose-500/40">
+                                  Erro no Stream
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="p-4 text-slate-300 max-w-xs">
+                              <span className="line-clamp-2">{report.reason}</span>
+                            </td>
+
+                            <td className="p-4 font-mono">
+                              {report.latencyMs ? (
+                                <span className={`font-semibold ${report.latencyMs >= 3500 ? 'text-amber-400' : 'text-slate-300'}`}>
+                                  {report.latencyMs}ms
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
+                            </td>
+
+                            <td className="p-4">
+                              <span className="text-slate-300 block">{new Date(report.timestamp).toLocaleString('pt-BR')}</span>
+                              <span className="text-[10px] text-slate-500 block">{report.userEmail}</span>
+                            </td>
+
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {targetChannel && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onPreviewChannel(targetChannel)}
+                                    className="p-2 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 transition-all cursor-pointer"
+                                    title="Testar este canal no player"
+                                  >
+                                    <Play className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteReport(report.id)}
+                                  className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-white/10 transition-all cursor-pointer"
+                                  title="Remover este relatório"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           )}
 
           {/* TAB 5: GRADE DE CANAIS */}

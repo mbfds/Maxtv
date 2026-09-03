@@ -234,3 +234,15 @@ export interface FavoriteItem {
   streamUrl?: string;
 }
 
+export interface ChannelReport {
+  id: string;
+  channelId: string;
+  channelName: string;
+  sourceUrl: string;
+  reason: string;
+  timestamp: string;
+  userEmail: string;
+  latencyMs?: number;
+  status?: string;
+}
+

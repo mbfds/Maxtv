@@ -54,6 +54,30 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
   const [inlinePreviewChannel, setInlinePreviewChannel] = useState<Channel | null>(null);
   const [inlineIsMuted, setInlineIsMuted] = useState<boolean>(true);
   const [inlinePlayerStatus, setInlinePlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
+  const [inlineErrorMessage, setInlineErrorMessage] = useState<string>('');
+  const [inlineRetryCount, setInlineRetryCount] = useState<number>(0);
+  const inlineTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inlineCanPlayFiredRef = useRef<boolean>(false);
+
+  // Strict 3.5s timeout for inline preview video initialization
+  useEffect(() => {
+    if (!inlinePreviewChannel) return;
+    setInlinePlayerStatus('loading');
+    setInlineErrorMessage('');
+    inlineCanPlayFiredRef.current = false;
+    if (inlineTimeoutRef.current) clearTimeout(inlineTimeoutRef.current);
+
+    inlineTimeoutRef.current = setTimeout(() => {
+      if (!inlineCanPlayFiredRef.current) {
+        setInlinePlayerStatus('error');
+        setInlineErrorMessage('Conexão excedeu 3,5s: evento canplay não disparou.');
+      }
+    }, 3500);
+
+    return () => {
+      if (inlineTimeoutRef.current) clearTimeout(inlineTimeoutRef.current);
+    };
+  }, [inlinePreviewChannel, inlineRetryCount]);
 
   // Action toast/feedback
   const [feedback, setFeedback] = useState<string>('');
@@ -528,28 +552,51 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
             {/* Video container */}
             <div className="w-full lg:w-96 aspect-video bg-black rounded-xl overflow-hidden relative shadow-lg border border-white/10 shrink-0">
               <video
-                key={inlinePreviewChannel.id}
+                key={`${inlinePreviewChannel.id}-${inlineRetryCount}`}
                 src={inlinePreviewChannel.sources[0]?.url ? `/api/proxy?url=${encodeURIComponent(inlinePreviewChannel.sources[0].url)}&referer=${encodeURIComponent(inlinePreviewChannel.sources[0].referer || '')}` : ''}
                 autoPlay
                 muted={inlineIsMuted}
                 playsInline
-                onLoadedData={() => setInlinePlayerStatus('playing')}
-                onError={() => setInlinePlayerStatus('error')}
+                onCanPlay={() => {
+                  inlineCanPlayFiredRef.current = true;
+                  if (inlineTimeoutRef.current) clearTimeout(inlineTimeoutRef.current);
+                  setInlinePlayerStatus('playing');
+                }}
+                onLoadedData={() => {
+                  inlineCanPlayFiredRef.current = true;
+                  if (inlineTimeoutRef.current) clearTimeout(inlineTimeoutRef.current);
+                  setInlinePlayerStatus('playing');
+                }}
+                onError={() => {
+                  if (inlineTimeoutRef.current) clearTimeout(inlineTimeoutRef.current);
+                  setInlinePlayerStatus('error');
+                  setInlineErrorMessage('Stream Offline ou Bloqueado');
+                }}
                 className="w-full h-full object-contain"
               />
 
               {inlinePlayerStatus === 'loading' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-2">
                   <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin" />
-                  <span className="text-xs text-slate-300">Carregando sinal do canal...</span>
+                  <span className="text-xs text-slate-300">Carregando sinal (limite 3,5s)...</span>
                 </div>
               )}
 
               {inlinePlayerStatus === 'error' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-950/90 text-rose-200 p-3 text-center gap-1.5">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-950/95 text-rose-200 p-4 text-center gap-2">
                   <AlertTriangle className="w-6 h-6 text-rose-400" />
-                  <span className="text-xs font-bold">Stream Offline ou Bloqueado</span>
-                  <span className="text-[10px] text-rose-300">O servidor não respondeu aos dados de vídeo</span>
+                  <span className="text-xs font-bold">{inlineErrorMessage || 'Stream Offline ou Bloqueado'}</span>
+                  <span className="text-[10px] text-rose-300 max-w-xs">
+                    O servidor não respondeu dentro do limite de 3,5 segundos ou a transmissão está inacessível.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setInlineRetryCount(c => c + 1)}
+                    className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Tentar Novamente</span>
+                  </button>
                 </div>
               )}
 
