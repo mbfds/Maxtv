@@ -1,6 +1,6 @@
-import React from 'react';
-import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User } from 'lucide-react';
-import { Subscriber } from '../types';
+import React, { useState } from 'react';
+import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound } from 'lucide-react';
+import { Subscriber, User } from '../types';
 
 interface HeaderProps {
   currentTab: 'live' | 'movies' | 'series' | 'plans' | 'admin';
@@ -8,7 +8,10 @@ interface HeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   currentSubscriber: Subscriber | null;
+  currentUser: User | null;
   onOpenCheckout: () => void;
+  onOpenAuth: () => void;
+  onLogout: () => void;
   totalChannelsCount: number;
 }
 
@@ -18,10 +21,14 @@ export const Header: React.FC<HeaderProps> = ({
   searchQuery,
   setSearchQuery,
   currentSubscriber,
+  currentUser,
   onOpenCheckout,
+  onOpenAuth,
+  onLogout,
   totalChannelsCount
 }) => {
-  const isVip = currentSubscriber?.status === 'active';
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const isVip = currentSubscriber?.status === 'active' || currentUser?.vipStatus === 'active';
 
   return (
     <header className="sticky top-0 z-40 w-full bg-slate-950/80 backdrop-blur-md border-b border-white/5 transition-all">
@@ -55,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setCurrentTab('live')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               currentTab === 'live'
                 ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
@@ -68,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setCurrentTab('movies')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               currentTab === 'movies'
                 ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
@@ -81,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setCurrentTab('series')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               currentTab === 'series'
                 ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
@@ -94,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setCurrentTab('plans')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               currentTab === 'plans'
                 ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
                 : 'text-slate-400 hover:text-indigo-400 hover:bg-white/5 border border-transparent'
@@ -107,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={() => setCurrentTab('admin')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               currentTab === 'admin'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-500'
                 : 'text-slate-400 hover:text-indigo-400 hover:bg-white/5 border border-transparent'
@@ -118,10 +125,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </nav>
 
-        {/* Right side: Search, VIP status, Checkout Trigger */}
-        <div className="flex items-center gap-3">
+        {/* Right side: Search, VIP status, User Profile, Checkout Trigger */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
           {/* Search bar */}
-          <div className="relative hidden sm:flex items-center bg-slate-900 border border-white/10 rounded-full px-4 py-2 w-52 lg:w-72">
+          <div className="relative hidden lg:flex items-center bg-slate-900 border border-white/10 rounded-full px-4 py-2 w-52 xl:w-64">
             <Search className="w-4 h-4 text-slate-500 shrink-0" />
             <input
               type="text"
@@ -132,31 +139,109 @@ export const Header: React.FC<HeaderProps> = ({
             />
           </div>
 
-          {/* Subscription / VIP Badge */}
+          {/* User Auth / Profile Badge */}
+          {currentUser ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-200 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm transition-all cursor-pointer"
+              >
+                <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-[11px]">
+                  {currentUser.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:flex flex-col text-left">
+                  <span className="leading-tight font-bold text-white max-w-[110px] truncate">
+                    {currentUser.name}
+                  </span>
+                  <span className={`text-[10px] ${isVip ? 'text-green-400 font-medium' : 'text-slate-400'}`}>
+                    {isVip ? 'VIP Ativo' : 'Conta Grátis'}
+                  </span>
+                </div>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl shadow-black p-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3 py-2 border-b border-white/10 mb-1">
+                    <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
+                    <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+                    {isVip && currentUser.expiresAt && (
+                      <p className="text-[10px] text-green-400 mt-1 font-semibold">
+                        Vencimento: {new Date(currentUser.expiresAt).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+
+                  {!isVip && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowUserMenu(false); onOpenCheckout(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-950/40 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <span>Virar Assinante VIP</span>
+                    </button>
+                  )}
+
+                  {currentUser.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowUserMenu(false); setCurrentTab('admin'); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-950/40 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <Shield className="w-4 h-4 text-indigo-400" />
+                      <span>Painel do Administrador</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); onLogout(); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/40 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4 text-red-400" />
+                    <span>Sair da Conta</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/10 text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-full shadow-sm transition-all cursor-pointer"
+            >
+              <UserIcon className="w-4 h-4 text-indigo-400" />
+              <span>Entrar</span>
+            </button>
+          )}
+
+          {/* Subscription / VIP Badge / Checkout */}
           {isVip ? (
-            <div className="flex items-center gap-2.5 bg-slate-900 border border-white/10 text-slate-200 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-sm">
+            <div className="hidden sm:flex items-center gap-2 bg-slate-900 border border-white/10 text-slate-200 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-sm">
               <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
               <div className="flex flex-col text-left">
-                <span className="leading-tight font-bold text-white">MAXTV VIP Ativo</span>
-                <span className="text-[10px] text-slate-400">Acesso Completo</span>
+                <span className="leading-tight font-bold text-white">MAXTV VIP</span>
+                <span className="text-[10px] text-slate-400">Totalmente Liberado</span>
               </div>
             </div>
           ) : (
             <button
               type="button"
               onClick={onOpenCheckout}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-full shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              className="flex items-center gap-1.5 sm:gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm px-3 sm:px-4 py-2 rounded-full shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
             >
               <Crown className="w-4 h-4" />
-              <span>Assinar com Pix</span>
+              <span>Assinar Pix</span>
             </button>
           )}
 
-          {/* Quick Admin Toggle for Mobile / Small Screens */}
+          {/* Quick Admin Toggle */}
           <button
             type="button"
             onClick={() => setCurrentTab(currentTab === 'admin' ? 'live' : 'admin')}
-            className={`p-2 rounded-xl border transition-all ${
+            className={`p-2 rounded-xl border transition-all cursor-pointer ${
               currentTab === 'admin'
                 ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
                 : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
@@ -173,7 +258,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setCurrentTab('live')}
-          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors ${
+          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
             currentTab === 'live' ? 'text-indigo-400 font-bold' : 'text-slate-400'
           }`}
         >
@@ -183,7 +268,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setCurrentTab('movies')}
-          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors ${
+          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
             currentTab === 'movies' ? 'text-indigo-400 font-bold' : 'text-slate-400'
           }`}
         >
@@ -193,7 +278,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setCurrentTab('series')}
-          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors ${
+          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
             currentTab === 'series' ? 'text-indigo-400 font-bold' : 'text-slate-400'
           }`}
         >
@@ -203,7 +288,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setCurrentTab('plans')}
-          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors ${
+          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
             currentTab === 'plans' ? 'text-indigo-400 font-bold' : 'text-slate-400'
           }`}
         >
@@ -213,7 +298,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={() => setCurrentTab('admin')}
-          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors ${
+          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
             currentTab === 'admin' ? 'text-indigo-400 font-bold' : 'text-slate-400'
           }`}
         >

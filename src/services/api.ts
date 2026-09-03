@@ -188,4 +188,55 @@ export const api = {
     if (!res.ok) throw new Error('Falha ao salvar configurações');
     return await res.json();
   },
+
+  // Authentication
+  async register(data: { name: string; email: string; password: string; cpf?: string }): Promise<{ success: boolean; user: any; token: string; message?: string }> {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Erro no cadastro' }));
+      throw new Error(err.error || 'Erro ao realizar cadastro');
+    }
+    return await res.json();
+  },
+
+  async login(data: { email: string; password: string }): Promise<{ success: boolean; user: any; token: string; message?: string }> {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Erro no login' }));
+      throw new Error(err.error || 'Erro ao realizar login');
+    }
+    return await res.json();
+  },
+
+  async getMe(token?: string, email?: string): Promise<{ success: boolean; user: any }> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const url = email ? `/api/auth/me?email=${encodeURIComponent(email)}` : '/api/auth/me';
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error('Sessão expirada ou não autenticado');
+    return await res.json();
+  },
+
+  async logout(): Promise<{ success: boolean }> {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    return await res.json();
+  },
+
+  async demoLogin(type: 'vip' | 'admin' | 'free' | 'carlos'): Promise<{ success: boolean; user: any; token: string; message?: string }> {
+    const res = await fetch('/api/auth/demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type }),
+    });
+    if (!res.ok) throw new Error('Falha no login de teste');
+    return await res.json();
+  },
 };

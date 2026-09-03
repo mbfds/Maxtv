@@ -29,6 +29,13 @@ export interface Channel {
   epgNext?: string;
 }
 
+export interface VodSource {
+  name: string;
+  url: string;
+  quality?: string;
+  type?: 'hls' | 'mp4';
+}
+
 export interface VodItem {
   id: string;
   title: string;
@@ -41,6 +48,9 @@ export interface VodItem {
   posterUrl: string;
   synopsis: string;
   streamUrl: string;
+  backupStreamUrl?: string;
+  sources?: VodSource[];
+  trailerUrl?: string;
   featured?: boolean;
   isVipOnly?: boolean;
   seasons?: {
@@ -52,6 +62,28 @@ export interface VodItem {
       streamUrl: string;
     }[];
   }[];
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  cpf?: string;
+  role: 'user' | 'admin';
+  vipStatus: 'active' | 'pending' | 'expired' | 'free';
+  planId?: string;
+  planName?: string;
+  expiresAt?: string;
+  startDate?: string;
+  createdAt: string;
+  subscriberId?: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  user: User;
+  token: string;
+  message?: string;
 }
 
 export interface SubscriptionPlan {
