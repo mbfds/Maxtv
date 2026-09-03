@@ -9,13 +9,24 @@ import {
   Server, RefreshCw, Film, PictureInPicture, Camera, 
   Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
   HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
-  Shuffle, Layers, Cpu
+  Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText
 } from 'lucide-react';
-import { Channel, VodItem, User } from '../types';
+import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { checkStreamAvailability, reportChannelProblem } from '../utils/streamChecker';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
 import { watchProgressStorage } from '../services/watchProgressStorage';
 import { ChannelTroubleshootModal } from './ChannelTroubleshootModal';
+import {
+  SubtitleCue,
+  SubtitleStyleConfig,
+  getStoredSubtitleConfig,
+  saveStoredSubtitleConfig,
+  getActiveCues,
+  loadSubtitleFromFile,
+  loadSubtitleFromUrl,
+  parseSubtitleText,
+  createVttBlobUrl
+} from '../utils/subtitleParser';
 
 interface LivePlayerProps {
   item: Channel | VodItem;
@@ -27,6 +38,19 @@ interface LivePlayerProps {
   onClose: () => void;
   onOpenCheckout: () => void;
   onOpenAuth?: () => void;
+}
+
+export interface SubtitleTrackOption {
+  id: string;
+  label: string;
+  language: string;
+  isCustom?: boolean;
+  isDefaultPreset?: boolean;
+  isHls?: boolean;
+  hlsIndex?: number;
+  cues?: SubtitleCue[];
+  blobUrl?: string;
+  sourceUrl?: string;
 }
 
 interface QualityOption {
@@ -81,7 +105,17 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>('contain');
   const [qualities, setQualities] = useState<QualityOption[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
-  const [activeMenu, setActiveMenu] = useState<'settings' | 'sources' | 'help' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'settings' | 'sources' | 'help' | 'subtitles' | null>(null);
+
+  // Subtitles (.vtt / .srt) State
+  const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<SubtitleTrackOption[]>([]);
+  const [selectedSubtitleTrackId, setSelectedSubtitleTrackId] = useState<string | null>(null);
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyleConfig>(getStoredSubtitleConfig);
+  const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
+  const [urlInput, setUrlInput] = useState<string>('');
+  const [isLoadingUrl, setIsLoadingUrl] = useState<boolean>(false);
+  const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
+  const subtitleFileInputRef = useRef<HTMLInputElement>(null);
 
   // UI feedback & controls visibility
   const [showControls, setShowControls] = useState<boolean>(true);
@@ -101,6 +135,46 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     window.addEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
     return () => window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavUpdate);
   }, [item.id, currentUser?.email]);
+
+  // Load initial subtitle tracks for VOD (preset samples or metadata subtitles)
+  useEffect(() => {
+    const defaultTracks: SubtitleTrackOption[] = [];
+    if (type === 'vod') {
+      const vod = item as VodItem;
+      if (vod.subtitles && vod.subtitles.length > 0) {
+        vod.subtitles.forEach((sub, idx) => {
+          defaultTracks.push({
+            id: sub.id || `vod-sub-${idx}`,
+            label: sub.label,
+            language: sub.language,
+            isDefaultPreset: true,
+            sourceUrl: sub.url,
+            cues: sub.content ? parseSubtitleText(sub.content) : undefined,
+            blobUrl: sub.content ? createVttBlobUrl(sub.content) : undefined
+          });
+        });
+      }
+
+      // Add built-in sample subtitles for quick testing and preview
+      defaultTracks.push({
+        id: 'sample-pt',
+        label: 'Português (Brasil) - Amostra WebVTT',
+        language: 'pt-BR',
+        isDefaultPreset: true,
+        sourceUrl: '/subtitles/sample-pt.vtt'
+      });
+      defaultTracks.push({
+        id: 'sample-en',
+        label: 'English (US) - Sample WebVTT',
+        language: 'en-US',
+        isDefaultPreset: true,
+        sourceUrl: '/subtitles/sample-en.vtt'
+      });
+    }
+
+    setAvailableSubtitleTracks(defaultTracks);
+    setSelectedSubtitleTrackId(null);
+  }, [item.id, type]);
 
   // Stream pre-flight HEAD health check state
   const [streamWarning, setStreamWarning] = useState<string | null>(null);
@@ -783,9 +857,40 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setQualities(detectedQualities);
           }
 
+          // Detect embedded HLS subtitle tracks if available
+          if (hls.subtitleTracks && hls.subtitleTracks.length > 0) {
+            const hlsTracks: SubtitleTrackOption[] = hls.subtitleTracks.map((st, idx) => ({
+              id: `hls-sub-${idx}`,
+              label: st.name || (st.lang ? `Embarcada (${st.lang.toUpperCase()})` : `Faixa ${idx + 1}`),
+              language: st.lang || 'und',
+              isHls: true,
+              hlsIndex: idx
+            }));
+            setAvailableSubtitleTracks(prev => {
+              const nonHls = prev.filter(p => !p.isHls);
+              return [...hlsTracks, ...nonHls];
+            });
+          }
+
           video.play().catch(() => {
             setIsPlaying(false);
           });
+        });
+
+        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (event, data) => {
+          if (data.subtitleTracks && data.subtitleTracks.length > 0) {
+            const hlsTracks: SubtitleTrackOption[] = data.subtitleTracks.map((st, idx) => ({
+              id: `hls-sub-${idx}`,
+              label: st.name || (st.lang ? `Embarcada (${st.lang.toUpperCase()})` : `Faixa ${idx + 1}`),
+              language: st.lang || 'und',
+              isHls: true,
+              hlsIndex: idx
+            }));
+            setAvailableSubtitleTracks(prev => {
+              const nonHls = prev.filter(p => !p.isHls);
+              return [...hlsTracks, ...nonHls];
+            });
+          }
         });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
@@ -1285,6 +1390,237 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     setStreamWarning(null);
   };
 
+  // Subtitle Selection and Management Methods
+  const handleSelectSubtitleTrack = async (trackId: string | null) => {
+    if (!trackId) {
+      setSelectedSubtitleTrackId(null);
+      if (hlsRef.current) hlsRef.current.subtitleTrack = -1;
+      showToast('Legendas desativadas');
+      return;
+    }
+
+    const track = availableSubtitleTracks.find(t => t.id === trackId);
+    if (!track) return;
+
+    if (track.isHls && typeof track.hlsIndex === 'number') {
+      if (hlsRef.current) hlsRef.current.subtitleTrack = track.hlsIndex;
+      setSelectedSubtitleTrackId(trackId);
+      showToast(`Legenda ativada: ${track.label}`);
+      return;
+    }
+
+    // Disable embedded HLS track if custom/preset track is chosen
+    if (hlsRef.current) hlsRef.current.subtitleTrack = -1;
+
+    // Lazy load cues if not yet fetched
+    if ((!track.cues || track.cues.length === 0) && track.sourceUrl) {
+      try {
+        showToast('Baixando faixa de legenda .vtt...');
+        const loaded = await loadSubtitleFromUrl(track.sourceUrl, track.label);
+        setAvailableSubtitleTracks(prev => prev.map(t => {
+          if (t.id === trackId) {
+            return {
+              ...t,
+              cues: loaded.cues,
+              blobUrl: loaded.blobUrl
+            };
+          }
+          return t;
+        }));
+        setSelectedSubtitleTrackId(trackId);
+        showToast(`Legenda "${track.label}" ativada!`);
+      } catch (err: any) {
+        showToast(`Falha ao carregar legenda: ${err.message || 'Erro de rede'}`);
+      }
+    } else {
+      setSelectedSubtitleTrackId(trackId);
+      showToast(`Legenda "${track.label}" ativada!`);
+    }
+  };
+
+  const processSubtitleFile = async (file: File) => {
+    try {
+      showToast('Carregando arquivo de legenda...');
+      const result = await loadSubtitleFromFile(file);
+      if (result.cues.length === 0) {
+        showToast('Nenhuma fala de legenda válida encontrada no arquivo (.vtt/.srt).');
+        return;
+      }
+      const newTrack: SubtitleTrackOption = {
+        id: `custom-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        label: result.label,
+        language: 'pt',
+        isCustom: true,
+        cues: result.cues,
+        blobUrl: result.blobUrl
+      };
+
+      setAvailableSubtitleTracks(prev => [newTrack, ...prev]);
+      setSelectedSubtitleTrackId(newTrack.id);
+      if (hlsRef.current) hlsRef.current.subtitleTrack = -1;
+      showToast(`Legenda "${result.label}" carregada com sucesso!`);
+    } catch (err: any) {
+      showToast(`Erro ao carregar legenda: ${err.message}`);
+    }
+  };
+
+  const handleSubtitleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processSubtitleFile(file);
+    e.target.value = '';
+  };
+
+  const handleLoadSubtitleUrl = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    try {
+      setIsLoadingUrl(true);
+      showToast('Carregando legenda por link...');
+      const result = await loadSubtitleFromUrl(trimmed);
+      if (result.cues.length === 0) {
+        showToast('Nenhum trecho de legenda foi detectado no endereço informado.');
+        return;
+      }
+      const newTrack: SubtitleTrackOption = {
+        id: `custom-url-${Date.now()}`,
+        label: `${result.label} (Web)`,
+        language: 'pt',
+        isCustom: true,
+        sourceUrl: trimmed,
+        cues: result.cues,
+        blobUrl: result.blobUrl
+      };
+
+      setAvailableSubtitleTracks(prev => [newTrack, ...prev]);
+      setSelectedSubtitleTrackId(newTrack.id);
+      if (hlsRef.current) hlsRef.current.subtitleTrack = -1;
+      setUrlInput('');
+      setShowUrlInput(false);
+      showToast(`Legenda remota carregada com sucesso!`);
+    } catch (err: any) {
+      showToast(`Erro ao baixar legenda da web: ${err.message}`);
+    } finally {
+      setIsLoadingUrl(false);
+    }
+  };
+
+  const handleRemoveCustomTrack = (trackId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAvailableSubtitleTracks(prev => prev.filter(t => t.id !== trackId));
+    if (selectedSubtitleTrackId === trackId) {
+      setSelectedSubtitleTrackId(null);
+    }
+    showToast('Faixa de legenda removida');
+  };
+
+  const adjustSubtitleOffset = (delta: number) => {
+    setSubtitleStyle(prev => {
+      const updated = {
+        ...prev,
+        offsetSeconds: Number((prev.offsetSeconds + delta).toFixed(1))
+      };
+      saveStoredSubtitleConfig(updated);
+      return updated;
+    });
+    const nextOffset = Number((subtitleStyle.offsetSeconds + delta).toFixed(1));
+    showToast(`Sincronização: ${nextOffset > 0 ? `+${nextOffset}` : nextOffset}s`);
+  };
+
+  const resetSubtitleOffset = () => {
+    setSubtitleStyle(prev => {
+      const updated = { ...prev, offsetSeconds: 0 };
+      saveStoredSubtitleConfig(updated);
+      return updated;
+    });
+    showToast('Sincronização redefinida para 0.0s');
+  };
+
+  const updateSubtitleConfig = (partial: Partial<SubtitleStyleConfig>) => {
+    setSubtitleStyle(prev => {
+      const updated = { ...prev, ...partial };
+      saveStoredSubtitleConfig(updated);
+      return updated;
+    });
+  };
+
+  const getSubtitleFontSize = () => {
+    switch (subtitleStyle.fontSize) {
+      case 'small': return isFullscreen ? '18px' : '15px';
+      case 'medium': return isFullscreen ? '24px' : '19px';
+      case 'large': return isFullscreen ? '30px' : '24px';
+      case 'extralarge': return isFullscreen ? '38px' : '30px';
+      default: return '19px';
+    }
+  };
+
+  const getSubtitleClasses = () => {
+    let classes = '';
+    if (subtitleStyle.fontColor === 'yellow') classes += ' text-yellow-300';
+    else if (subtitleStyle.fontColor === 'cyan') classes += ' text-cyan-300';
+    else classes += ' text-white';
+
+    if (subtitleStyle.backgroundMode === 'translucent') {
+      classes += ' bg-black/80 backdrop-blur-[2px] px-3.5 py-1 rounded-lg shadow-xl border border-white/10';
+    } else if (subtitleStyle.backgroundMode === 'solid') {
+      classes += ' bg-black px-3.5 py-1 rounded-lg shadow-2xl';
+    } else {
+      classes += ' px-2 py-0.5 rounded';
+    }
+    return classes;
+  };
+
+  const getSubtitleInlineStyles = (): React.CSSProperties => {
+    if (subtitleStyle.backgroundMode === 'outline') {
+      return {
+        textShadow: '0 0 4px #000, 2px 2px 3px #000, -2px -2px 3px #000, 2px -2px 3px #000, -2px 2px 3px #000'
+      };
+    }
+    return {
+      textShadow: '0 1px 3px rgba(0,0,0,0.85)'
+    };
+  };
+
+  // Drag & Drop handlers for subtitle files (.vtt / .srt)
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingFile) setIsDraggingFile(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingFile(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith('.vtt') || lower.endsWith('.srt') || file.type.includes('vtt') || file.type.includes('text')) {
+        await processSubtitleFile(file);
+      } else {
+        showToast('Formato não suportado. Por favor, arraste um arquivo .vtt ou .srt');
+      }
+    }
+  };
+
+  // Memoized active subtitle track and active cues
+  const activeSubtitleTrack = React.useMemo(() => {
+    if (!selectedSubtitleTrackId) return null;
+    return availableSubtitleTracks.find(t => t.id === selectedSubtitleTrackId) || null;
+  }, [selectedSubtitleTrackId, availableSubtitleTracks]);
+
+  const activeSubtitleCues = React.useMemo(() => {
+    if (!activeSubtitleTrack || !activeSubtitleTrack.cues || activeSubtitleTrack.cues.length === 0) return [];
+    return getActiveCues(activeSubtitleTrack.cues, currentTime, subtitleStyle.offsetSeconds);
+  }, [activeSubtitleTrack, currentTime, subtitleStyle.offsetSeconds]);
+
   // Keyboard shortcuts listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1318,6 +1654,11 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         case 'c':
           e.preventDefault();
           captureScreenshot();
+          resetControlsTimer();
+          break;
+        case 'l':
+          e.preventDefault();
+          setActiveMenu(prev => prev === 'subtitles' ? null : 'subtitles');
           resetControlsTimer();
           break;
         case 'arrowup':
@@ -1380,8 +1721,30 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         ref={containerRef}
         onMouseMove={resetControlsTimer}
         onMouseEnter={resetControlsTimer}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         className="relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none"
       >
+        {/* Hidden File Input for Subtitles (.vtt / .srt) */}
+        <input
+          type="file"
+          ref={subtitleFileInputRef}
+          onChange={handleSubtitleFileInput}
+          accept=".vtt,.srt,text/vtt,text/plain"
+          className="hidden"
+        />
+
+        {/* Drag & Drop Subtitle File Overlay */}
+        {isDraggingFile && (
+          <div className="absolute inset-0 z-50 bg-indigo-950/90 border-2 border-dashed border-indigo-400 rounded-3xl flex flex-col items-center justify-center p-6 text-center backdrop-blur-md pointer-events-none animate-fadeIn">
+            <div className="p-4 rounded-full bg-indigo-600/30 text-indigo-300 mb-3 animate-bounce">
+              <Upload className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Solte o arquivo de legenda aqui</h3>
+            <p className="text-xs text-indigo-200">Suporta arquivos WebVTT (.vtt) e SubRip (.srt)</p>
+          </div>
+        )}
         {/* VIP Lock Screen */}
         {isLocked ? (
           <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-20">
@@ -1512,7 +1875,46 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 setIsConnectionUnstable(false);
               }}
               onError={handleVideoError}
-            />
+            >
+              {activeSubtitleTrack?.blobUrl && (
+                <track
+                  kind="subtitles"
+                  src={activeSubtitleTrack.blobUrl}
+                  srcLang={activeSubtitleTrack.language || 'pt'}
+                  label={activeSubtitleTrack.label}
+                  default
+                />
+              )}
+            </video>
+
+            {/* Subtitle Cue Overlay (High-contrast, customizable styling and offset sync) */}
+            {activeSubtitleTrack && activeSubtitleCues.length > 0 && (
+              <div 
+                className={`absolute inset-x-0 z-25 pointer-events-none flex flex-col items-center justify-end px-4 text-center select-none transition-all duration-200 ${
+                  showControls ? 'bottom-24 sm:bottom-28' : 'bottom-10 sm:bottom-12'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-1.5 max-w-[92%] sm:max-w-[80%]">
+                  {activeSubtitleCues.map((cue, idx) => (
+                    <span
+                      key={cue.id || idx}
+                      className={`inline-block font-sans font-semibold leading-snug tracking-normal transition-opacity duration-150 ${getSubtitleClasses()}`}
+                      style={{
+                        fontSize: getSubtitleFontSize(),
+                        ...getSubtitleInlineStyles()
+                      }}
+                    >
+                      {cue.text.split('\n').map((line, lIdx) => (
+                        <React.Fragment key={lIdx}>
+                          {line}
+                          {lIdx < cue.text.split('\n').length - 1 && <br />}
+                        </React.Fragment>
+                      ))}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Central Play/Pause/Skip Ripple Splash Animation */}
             {splashAction && (
@@ -2021,6 +2423,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <div className="flex justify-between items-center"><span className="text-slate-400">C</span><span className="font-semibold text-white">Capturar Imagem</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">↑ / ↓</span><span className="font-semibold text-white">Volume ±10%</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">← / →</span><span className="font-semibold text-white">Avançar / Voltar 10s</span></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-400">L</span><span className="font-semibold text-white">Legendas (.vtt)</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">Duplo Clique</span><span className="font-semibold text-white">Alternar Tela Cheia</span></div>
                 </div>
               </div>
@@ -2040,6 +2443,26 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     className="text-slate-400 hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Subtitles shortcut */}
+                <div className="mb-3">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Legendas & Faixas
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenu('subtitles')}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/30 text-xs font-semibold text-purple-300 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Subtitles className="w-4 h-4 text-purple-400" />
+                      <span>Legendas (.vtt)</span>
+                    </span>
+                    <span className="text-[10px] text-purple-300/90 font-mono bg-purple-500/25 px-2 py-0.5 rounded-md">
+                      {selectedSubtitleTrackId ? 'Ativada' : 'Desativada'}
+                    </span>
                   </button>
                 </div>
 
@@ -2111,6 +2534,271 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                           {currentQuality === q.index && <Check className="w-3.5 h-3.5 text-indigo-400" />}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Subtitles Menu Popup */}
+            {activeMenu === 'subtitles' && (
+              <div className="absolute bottom-20 right-6 sm:right-16 z-45 w-80 sm:w-96 max-h-[82vh] overflow-y-auto bg-slate-900/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Subtitles className="w-4 h-4 text-purple-400" />
+                    Legendas (.vtt / .srt)
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => setActiveMenu(null)}
+                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Section 1: Faixas de Legendas Disponíveis */}
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Faixas Disponíveis
+                  </span>
+                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                    {/* Desativada */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectSubtitleTrack(null)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                        selectedSubtitleTrackId === null
+                          ? 'bg-purple-950/60 border border-purple-500/40 text-purple-300 font-semibold'
+                          : 'text-slate-300 hover:bg-white/5'
+                      }`}
+                    >
+                      <span>Desativada (Sem legenda)</span>
+                      {selectedSubtitleTrackId === null && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                    </button>
+
+                    {/* Lista de faixas */}
+                    {availableSubtitleTracks.map((track) => (
+                      <div
+                        key={track.id}
+                        onClick={() => handleSelectSubtitleTrack(track.id)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer group ${
+                          selectedSubtitleTrackId === track.id
+                            ? 'bg-purple-950/60 border border-purple-500/40 text-purple-300 font-semibold'
+                            : 'text-slate-300 hover:bg-white/5'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate pr-2">
+                          <span className="truncate">{track.label}</span>
+                          {track.isCustom && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                              Personalizada
+                            </span>
+                          )}
+                          {track.isHls && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                              Embarcada
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {selectedSubtitleTrackId === track.id && (
+                            <Check className="w-3.5 h-3.5 text-purple-400" />
+                          )}
+                          {track.isCustom && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveCustomTrack(track.id, e)}
+                              className="p-1 rounded text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                              title="Remover faixa personalizada"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section 2: Carregar Nova Legenda */}
+                <div className="pt-2 border-t border-white/10">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2">
+                    Carregar Nova Legenda
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => subtitleFileInputRef.current?.click()}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Arquivo .vtt</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUrlInput(!showUrlInput)}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-white/10 transition-all cursor-pointer"
+                    >
+                      <Link className="w-3.5 h-3.5" />
+                      <span>Inserir Link</span>
+                    </button>
+                  </div>
+
+                  {showUrlInput && (
+                    <div className="mt-2.5 space-y-2 animate-fadeIn bg-slate-950/70 p-2.5 rounded-xl border border-white/10">
+                      <input
+                        type="url"
+                        placeholder="https://exemplo.com/legenda.vtt"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleLoadSubtitleUrl(); }}
+                        className="w-full bg-slate-900 text-xs text-white rounded-lg px-3 py-2 border border-purple-500/40 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleLoadSubtitleUrl}
+                        disabled={isLoadingUrl || !urlInput.trim()}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        {isLoadingUrl ? 'Baixando...' : 'Carregar da URL'}
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    Dica: Arraste e solte um arquivo .vtt ou .srt diretamente sobre o vídeo!
+                  </p>
+                </div>
+
+                {/* Section 3: Sincronização / Delay (Offset) */}
+                {selectedSubtitleTrackId && (
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Ajuste de Sincronia
+                      </span>
+                      <span className="text-xs font-mono font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-md">
+                        {subtitleStyle.offsetSeconds > 0 ? `+${subtitleStyle.offsetSeconds.toFixed(1)}s` : `${subtitleStyle.offsetSeconds.toFixed(1)}s`}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => adjustSubtitleOffset(-1)}
+                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                        title="Adiantar 1 segundo"
+                      >
+                        -1.0s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => adjustSubtitleOffset(-0.5)}
+                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                        title="Adiantar 0.5 segundo"
+                      >
+                        -0.5s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetSubtitleOffset}
+                        className="px-2 py-1 rounded bg-black/60 hover:bg-white/10 text-[10px] font-mono text-slate-400 border border-white/10 transition-colors cursor-pointer"
+                        title="Zerar sincronização"
+                      >
+                        0.0s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => adjustSubtitleOffset(0.5)}
+                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                        title="Atrasar 0.5 segundo"
+                      >
+                        +0.5s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => adjustSubtitleOffset(1)}
+                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
+                        title="Atrasar 1 segundo"
+                      >
+                        +1.0s
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 4: Aparência das Legendas */}
+                {selectedSubtitleTrackId && (
+                  <div className="pt-2 border-t border-white/10 space-y-2.5">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Aparência Visual
+                    </span>
+
+                    {/* Tamanho da Fonte */}
+                    <div className="flex items-center justify-between text-xs text-slate-300">
+                      <span className="text-slate-400 text-[11px]">Tamanho:</span>
+                      <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                        {(['small', 'medium', 'large', 'extralarge'] as const).map(size => (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={() => updateSubtitleConfig({ fontSize: size })}
+                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-lg transition-all cursor-pointer ${
+                              subtitleStyle.fontSize === size
+                                ? 'bg-purple-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {size === 'small' ? 'P' : size === 'medium' ? 'M' : size === 'large' ? 'G' : 'GG'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Fundo */}
+                    <div className="flex items-center justify-between text-xs text-slate-300">
+                      <span className="text-slate-400 text-[11px]">Estilo:</span>
+                      <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                        {[
+                          { id: 'translucent', label: 'Translúcido' },
+                          { id: 'solid', label: 'Sólido' },
+                          { id: 'outline', label: 'Contorno' }
+                        ].map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => updateSubtitleConfig({ backgroundMode: m.id as any })}
+                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-lg transition-all cursor-pointer ${
+                              subtitleStyle.backgroundMode === m.id
+                                ? 'bg-purple-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Cor da Fonte */}
+                    <div className="flex items-center justify-between text-xs text-slate-300">
+                      <span className="text-slate-400 text-[11px]">Cor do Texto:</span>
+                      <div className="flex gap-2">
+                        {[
+                          { id: 'white', bg: 'bg-white', label: 'Branco' },
+                          { id: 'yellow', bg: 'bg-yellow-300', label: 'Amarelo' },
+                          { id: 'cyan', bg: 'bg-cyan-300', label: 'Ciano' }
+                        ].map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => updateSubtitleConfig({ fontColor: c.id as any })}
+                            className={`w-6 h-6 rounded-full ${c.bg} transition-all border-2 cursor-pointer ${
+                              subtitleStyle.fontColor === c.id ? 'border-purple-500 scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100'
+                            }`}
+                            title={c.label}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2336,6 +3024,25 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     title="Modo Picture-in-Picture (P)"
                   >
                     <PictureInPicture className="w-4 h-4" />
+                  </button>
+
+                  {/* Subtitles Menu Toggle (WebVTT / Closed Captions) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenu(activeMenu === 'subtitles' ? null : 'subtitles')}
+                    className={`p-2 rounded-full transition-colors cursor-pointer relative ${
+                      activeMenu === 'subtitles' || selectedSubtitleTrackId
+                        ? 'text-purple-400 bg-white/15'
+                        : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Legendas (.vtt) (L)"
+                  >
+                    <Subtitles className="w-4 h-4" />
+                    {selectedSubtitleTrackId && (
+                      <span className="absolute -top-0.5 -right-0.5 px-1 py-0.2 bg-purple-600 text-[8px] font-bold text-white rounded-full ring-1 ring-black">
+                        CC
+                      </span>
+                    )}
                   </button>
 
                   {/* Settings Menu Toggle (Speed, Quality, Aspect Ratio) */}

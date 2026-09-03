@@ -32,6 +32,16 @@ export interface Channel {
   lastChecked?: string;
 }
 
+export interface SubtitleTrack {
+  id: string;
+  label: string;
+  language: string;
+  url?: string;
+  content?: string;
+  isDefault?: boolean;
+  kind?: 'subtitles' | 'captions';
+}
+
 export interface VodSource {
   name: string;
   url: string;
@@ -53,6 +63,7 @@ export interface VodItem {
   streamUrl: string;
   backupStreamUrl?: string;
   sources?: VodSource[];
+  subtitles?: SubtitleTrack[];
   trailerUrl?: string;
   featured?: boolean;
   isVipOnly?: boolean;
