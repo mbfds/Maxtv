@@ -102,8 +102,8 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
             setSummary(res.summary);
           }
         }
-      } catch (err) {
-        console.warn('Failed to load initial channel health:', err);
+      } catch {
+        // Ignored in production
       }
     };
     fetchExistingHealth();
@@ -255,8 +255,8 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
             return next;
           });
         }
-      } catch (err) {
-        console.warn('Batch chunk check failed:', err);
+      } catch {
+        // Chunk error handled gracefully
       }
 
       completed += chunk.length;

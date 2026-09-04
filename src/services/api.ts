@@ -7,8 +7,7 @@ export const api = {
       const res = await fetch('/api/channels');
       if (!res.ok) throw new Error('Falha ao carregar canais');
       return await res.json();
-    } catch (err) {
-      console.warn('API getChannels error, using local fallback:', err);
+    } catch {
       return { channels: [], count: 0 };
     }
   },
@@ -166,8 +165,7 @@ export const api = {
       const res = await fetch('/api/channels/reports');
       if (!res.ok) throw new Error('Falha ao obter relatórios');
       return await res.json();
-    } catch (err) {
-      console.warn('API getChannelReports error:', err);
+    } catch {
       return { success: false, total: 0, reports: [] };
     }
   },
@@ -230,8 +228,7 @@ export const api = {
       const res = await fetch('/api/vod');
       if (!res.ok) throw new Error('Falha ao obter catálogo VOD');
       return await res.json();
-    } catch (err) {
-      console.warn('API getVodCatalog error:', err);
+    } catch {
       return { success: false, count: 0, items: [] };
     }
   },
@@ -258,8 +255,7 @@ export const api = {
       const res = await fetch('/api/admin/channels/health-status');
       if (!res.ok) throw new Error('Falha ao obter status de saúde dos canais');
       return await res.json();
-    } catch (err) {
-      console.warn('API getChannelHealthStatus error:', err);
+    } catch {
       return {
         success: false,
         summary: { total: 0, tested: 0, online: 0, offline: 0, unstable: 0, untested: 0 },
@@ -372,13 +368,40 @@ export const api = {
     return await res.json();
   },
 
-  async demoLogin(type: 'vip' | 'admin' | 'free' | 'carlos'): Promise<{ success: boolean; user: any; token: string; message?: string }> {
-    const res = await fetch('/api/auth/demo', {
+  async sessionHeartbeat(payload: {
+    sessionId: string;
+    mediaId: string;
+    mediaType: 'channel' | 'vod';
+    isVip: boolean;
+    deltaSeconds: number;
+    userEmail?: string;
+    adblockDetected?: boolean;
+    resetCycle?: boolean;
+  }): Promise<{
+    success: boolean;
+    totalWatchSeconds: number;
+    isLimitExceeded: boolean;
+    remainingSeconds?: number;
+    adblockBlocked?: boolean;
+  }> {
+    const res = await fetch('/api/session/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type }),
+      body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('Falha no login de teste');
+    if (!res.ok) throw new Error('Falha no heartbeat de sessão');
     return await res.json();
+  },
+
+  async checkAdShield(): Promise<boolean> {
+    try {
+      const res = await fetch('/api/ads/telemetry', {
+        method: 'GET',
+        cache: 'no-store'
+      });
+      return res.ok;
+    } catch {
+      return false; // Request was blocked by AdBlocker
+    }
   },
 };

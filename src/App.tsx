@@ -117,8 +117,8 @@ export default function App() {
           });
         }
       }
-    } catch (err) {
-      console.warn('Session sync check error:', err);
+    } catch {
+      // Ignored in production
     }
   }, [authToken, currentUser?.email]);
 
@@ -130,8 +130,8 @@ export default function App() {
         if (res.channels && res.channels.length > 0) {
           setChannels(res.channels);
         }
-      } catch (err) {
-        console.warn('Failed to load channels from backend:', err);
+      } catch {
+        // Fallback to initial channels
       }
     };
 
@@ -145,8 +145,8 @@ export default function App() {
             return [...prev, ...newItems];
           });
         }
-      } catch (err) {
-        console.warn('Failed to load VOD from backend:', err);
+      } catch {
+        // Fallback to initial VOD
       }
     };
 
@@ -293,22 +293,10 @@ export default function App() {
   // Determine VIP Status
   const isVip = (currentUser?.vipStatus === 'active') || (currentSubscriber?.status === 'active');
 
-  // Trigger media playback with immediate access for free content
+  // Trigger media playback with immediate access for free and guest 5-min preview
   const handlePlayMedia = (item: Channel | VodItem, type: 'channel' | 'vod', initialTime?: number) => {
-    // Free channels and free movies play immediately!
-    if (!item.isVipOnly || currentUser) {
-      setActiveMedia({ item, type, initialSeekTime: initialTime });
-      return;
-    }
-
-    // Item is VIP only and user is not logged in yet
-    setPendingMediaAfterAuth({ item, type, initialSeekTime: initialTime });
-    setAuthModalConfig({
-      title: `Conteúdo VIP: ${'title' in item ? item.title : item.name}`,
-      subtitle: 'Faça login na sua conta VIP ou acesse para começar a reprodução.',
-      mode: 'login'
-    });
-    setIsAuthModalOpen(true);
+    // Both channels and movies play immediately; non-VIP users receive 5 minutes free preview before restart
+    setActiveMedia({ item, type, initialSeekTime: initialTime });
   };
 
   const handlePlayVodWithSeek = (vod: VodItem, initialTime?: number) => {

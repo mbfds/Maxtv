@@ -12,6 +12,7 @@ import {
   Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText
 } from 'lucide-react';
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
+import { api } from '../services/api';
 import { checkStreamAvailability, reportChannelProblem } from '../utils/streamChecker';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
 import { watchProgressStorage } from '../services/watchProgressStorage';
@@ -203,12 +204,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const isAutoRetryPausedRef = useRef<boolean>(false);
   const backoffTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Free preview mode for VIP locked content so users can test streams
-  const [previewMode, setPreviewMode] = useState<boolean>(false);
-  const isLocked = item.isVipOnly && !isVip && !previewMode;
+  // Production session tracking & 5-minute guest preview limit
+  const [sessionId] = useState<string>(() => `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+  const [guestWatchSeconds, setGuestWatchSeconds] = useState<number>(0);
+  const [isFiveMinLimitReached, setIsFiveMinLimitReached] = useState<boolean>(false);
+  const [isAdblockDetected, setIsAdblockDetected] = useState<boolean>(false);
+  const isLocked = false; // Todos os usuários acessam com direito aos 5 minutos de degustação
 
   // Build unified sources list with protocol metadata
-  const sources: { name: string; url: string; referer?: string; quality?: string; protocol?: 'hls' | 'dash' }[] = React.useMemo(() => {
+  const sources: { name: string; url: string; referer?: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4' }[] = React.useMemo(() => {
     if (type === 'channel') {
       return (item as Channel).sources.map((s, idx) => {
         const isDashUrl = s.url.includes('.mpd');
@@ -226,29 +230,30 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     if (vod.sources && vod.sources.length > 0) {
       return vod.sources.map(s => {
         const isDashUrl = s.url.includes('.mpd');
+        const isHlsUrl = s.url.includes('.m3u8');
         return {
           name: s.name,
           url: s.url,
           quality: s.quality || '1080p',
-          protocol: isDashUrl ? 'dash' : 'hls'
+          protocol: isDashUrl ? 'dash' : (isHlsUrl ? 'hls' : 'mp4')
         };
       });
     }
 
-    const list: { name: string; url: string; quality?: string; protocol?: 'hls' | 'dash' }[] = [
+    const list: { name: string; url: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4' }[] = [
       { 
         name: 'Servidor 1 - Alta Velocidade (CDN)', 
         url: vod.streamUrl, 
         quality: '1080p', 
-        protocol: vod.streamUrl.includes('.mpd') ? 'dash' : 'hls' 
+        protocol: vod.streamUrl.includes('.mpd') ? 'dash' : (vod.streamUrl.includes('.m3u8') ? 'hls' : 'mp4') 
       }
     ];
     if (vod.backupStreamUrl) {
       list.push({ 
-        name: 'Servidor 2 - HLS M3U8 (Akamai)', 
+        name: 'Servidor 2 - Backup Alternativo', 
         url: vod.backupStreamUrl, 
         quality: '1080p', 
-        protocol: vod.backupStreamUrl.includes('.mpd') ? 'dash' : 'hls' 
+        protocol: vod.backupStreamUrl.includes('.mpd') ? 'dash' : (vod.backupStreamUrl.includes('.m3u8') ? 'hls' : 'mp4') 
       });
     }
     return list;
@@ -259,6 +264,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   // Resolve rawUrl adapting protocol when Compatibility Mode is toggled
   const rawUrl = React.useMemo(() => {
     const base = currentSource?.url || '';
+    if (type === 'vod' || base.includes('.mp4') || base.includes('.webm')) {
+      return base;
+    }
     if (compatibilityProtocol === 'dash') {
       if (base.includes('.mpd')) return base;
       if (base.includes('index.m3u8')) return base.replace('index.m3u8', 'manifest.mpd');
@@ -269,10 +277,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       if (base.includes('.mpd')) return base.replace('.mpd', '.m3u8');
       return base;
     }
-  }, [currentSource, compatibilityProtocol]);
+  }, [currentSource, compatibilityProtocol, type]);
 
   // By default, IPTV channels, HTTP streams, and M3U8/MPD route through /api/proxy
   const needsProxy = React.useMemo(() => {
+    if (rawUrl.endsWith('.mp4') && rawUrl.startsWith('https://')) {
+      return false;
+    }
     return (
       type === 'channel' ||
       rawUrl.startsWith('http://') ||
@@ -308,6 +319,191 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       setToastMessage(null);
     }, 2400);
   }, []);
+
+  // Interrompe o vídeo, limpa cache/buffers do player e exibe o modal de assinatura ou login
+  const terminatePlayerAndClearCache = useCallback(() => {
+    setIsPlaying(false);
+    setIsFiveMinLimitReached(true);
+
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
+      } catch (e) {}
+    }
+    if (hlsRef.current) {
+      try {
+        hlsRef.current.stopLoad();
+        hlsRef.current.detachMedia();
+        hlsRef.current.destroy();
+      } catch (e) {}
+      hlsRef.current = null;
+    }
+    if (mpegtsRef.current) {
+      try {
+        mpegtsRef.current.pause();
+        mpegtsRef.current.unload();
+        mpegtsRef.current.detachMediaElement();
+        mpegtsRef.current.destroy();
+      } catch (e) {}
+      mpegtsRef.current = null;
+    }
+    if (dashPlayerRef.current) {
+      try {
+        dashPlayerRef.current.reset();
+      } catch (e) {}
+      dashPlayerRef.current = null;
+    }
+
+    // Exibe o modal de autenticação ou assinatura para o usuário
+    if (!currentUser && onOpenAuth) {
+      onOpenAuth();
+    } else if (onOpenCheckout) {
+      onOpenCheckout();
+    }
+  }, [currentUser, onOpenAuth, onOpenCheckout]);
+
+  // 5-minute guest watch timer (300 segundos sem reiniciar para usuários não VIP)
+  useEffect(() => {
+    if (isVip) {
+      setIsFiveMinLimitReached(false);
+      return;
+    }
+
+    if (isFiveMinLimitReached) return;
+
+    const interval = setInterval(() => {
+      if (isPlaying && !isFiveMinLimitReached && !isAdblockDetected) {
+        setGuestWatchSeconds(prev => {
+          const next = prev + 1;
+          if (next >= 300) { // 5 minutos = 300s
+            terminatePlayerAndClearCache();
+          }
+          return next;
+        });
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, isVip, isFiveMinLimitReached, isAdblockDetected, terminatePlayerAndClearCache]);
+
+  // Session heartbeat: tracks watch time, adblock & syncs with MongoDB
+  useEffect(() => {
+    const sendHeartbeat = async (reset = false) => {
+      try {
+        const res = await api.sessionHeartbeat({
+          sessionId,
+          mediaId: item.id,
+          mediaType: type,
+          isVip,
+          deltaSeconds: reset ? 0 : 15,
+          userEmail: currentUser?.email,
+          adblockDetected: isAdblockDetected,
+          resetCycle: reset
+        });
+        if (res && res.isLimitExceeded && !isVip) {
+          terminatePlayerAndClearCache();
+        }
+      } catch (err) {
+        // Ignored in production
+      }
+    };
+
+    if (!isVip && isPlaying && !isFiveMinLimitReached && !isAdblockDetected) {
+      const hbTimer = setInterval(() => {
+        sendHeartbeat(false);
+      }, 15000);
+      return () => clearInterval(hbTimer);
+    }
+  }, [sessionId, item.id, type, isVip, isPlaying, isFiveMinLimitReached, isAdblockDetected, currentUser]);
+
+  // Anti-AdBlock Probe
+  const probeAdblock = useCallback(async () => {
+    let detected = false;
+
+    // 1. Canary DOM check
+    const canary = document.getElementById('maxtv-ad-element');
+    if (canary) {
+      const style = window.getComputedStyle(canary);
+      if (
+        canary.offsetHeight === 0 ||
+        canary.offsetWidth === 0 ||
+        style.display === 'none' ||
+        style.visibility === 'hidden'
+      ) {
+        detected = true;
+      }
+    }
+
+    // 2. Canary Network check (Ad blockers intercept scripts containing /ad- or /ads/)
+    try {
+      const res = await fetch('/api/ads/telemetry?t=' + Date.now(), {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      if (!res.ok) detected = true;
+    } catch (e) {
+      detected = true;
+    }
+
+    // 3. Canary JavaScript beacon check
+    try {
+      const isAdShieldHealthy = await api.checkAdShield();
+      if (!isAdShieldHealthy) detected = true;
+    } catch (e) {
+      detected = true;
+    }
+
+    if (detected) {
+      setIsAdblockDetected(true);
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+      setIsPlaying(false);
+    } else {
+      setIsAdblockDetected(false);
+    }
+    return !detected;
+  }, []);
+
+  useEffect(() => {
+    probeAdblock();
+    const interval = setInterval(probeAdblock, 20000);
+    return () => clearInterval(interval);
+  }, [probeAdblock]);
+
+  // Handler for restarting transmission after 5 min limit
+  const handleRestartPlayback = () => {
+    setGuestWatchSeconds(0);
+    setIsFiveMinLimitReached(false);
+    setIsLoading(true);
+
+    api.sessionHeartbeat({
+      sessionId,
+      mediaId: item.id,
+      mediaType: type,
+      isVip: false,
+      deltaSeconds: 0,
+      resetCycle: true
+    }).catch(() => {});
+
+    const video = videoRef.current;
+    if (video) {
+      if (type === 'vod') {
+        video.currentTime = 0;
+      }
+      video.play().then(() => {
+        setIsPlaying(true);
+        setIsLoading(false);
+        showToast('Transmissão reiniciada com sucesso! Mais 5 minutos liberados.');
+      }).catch(() => {
+        setReloadCounter(c => c + 1);
+      });
+    } else {
+      setReloadCounter(c => c + 1);
+    }
+  };
 
   /**
    * Função checkChannelHealth: valida o status HTTP do stream usando fetch com o método HEAD
@@ -364,7 +560,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       setConnectionLatency(latency);
 
       if (isDead) {
-        console.warn(`[checkChannelHealth] Link morto identificado instantaneamente via HEAD (${statusCode}) em ${latency}ms`);
         setIsConnectionUnstable(true);
         setStreamWarning(`Link morto detectado via HTTP HEAD (${statusCode}). O servidor recusou a conexão.`);
         return { online: false, isUnstable: true, latencyMs: latency, statusCode, isDead: true };
@@ -382,7 +577,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     } catch (err: any) {
       clearTimeout(timeoutId);
       const latency = Math.round(performance.now() - startTime);
-      console.warn(`[checkChannelHealth] Falha ou timeout HEAD (${latency}ms):`, err);
       setIsConnectionUnstable(true);
       setConnectionLatency(latency >= 3500 ? latency : 3500);
       setStreamWarning('Sinal instável: tempo de resposta da conexão HEAD excedeu 3,5 segundos.');
@@ -639,53 +833,58 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
 
     const loadStream = async () => {
-      // 1. Valida o status HTTP do stream usando fetch com método HEAD antes mesmo de carregar o vídeo
-      const health = await checkChannelHealth(rawUrl);
+      const isMp4 = type === 'vod' || rawUrl.includes('.mp4') || streamUrl.includes('.mp4') || rawUrl.includes('.webm') || (!rawUrl.includes('.m3u8') && !rawUrl.includes('.mpd'));
+      const isDash = !isMp4 && (compatibilityProtocol === 'dash' || streamUrl.includes('.mpd') || rawUrl.includes('.mpd'));
+      const isHls = !isMp4 && !isDash && (streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8') || (type === 'channel' && compatibilityProtocol === 'hls'));
+      const isTs = !isMp4 && !isDash && !isHls && (streamUrl.includes('.ts') || rawUrl.includes('.ts'));
 
-      if (isCancelled) return;
+      // 1. Valida o status HTTP do stream usando fetch com método HEAD apenas para canais de TV ao vivo
+      if (!isMp4) {
+        const health = await checkChannelHealth(rawUrl);
 
-      // Se identificar link morto instantaneamente
-      if (health.isDead) {
-        console.warn(`[LivePlayer] Link morto identificado antes do carregamento do vídeo.`);
+        if (isCancelled) return;
 
-        // Se ainda não esgotou as 3 tentativas automáticas
-        if (autoRetryCountRef.current < 3) {
-          const nextAttempt = autoRetryCountRef.current + 1;
-          autoRetryCountRef.current = nextAttempt;
-          setAutoRetryCount(nextAttempt);
-          connectionAttemptsRef.current += 1;
-          setConnectionAttempts(connectionAttemptsRef.current);
-          setIsConnectionUnstable(true);
-          setIsLoading(true);
-          setStreamWarning(`Link inativo identificado (HTTP HEAD). Tentando reconexão automática (${nextAttempt}/3)...`);
+        // Se identificar link morto instantaneamente
+        if (health.isDead) {
+          // Se ainda não esgotou as 3 tentativas automáticas
+          if (autoRetryCountRef.current < 3) {
+            const nextAttempt = autoRetryCountRef.current + 1;
+            autoRetryCountRef.current = nextAttempt;
+            setAutoRetryCount(nextAttempt);
+            connectionAttemptsRef.current += 1;
+            setConnectionAttempts(connectionAttemptsRef.current);
+            setIsConnectionUnstable(true);
+            setIsLoading(true);
+            setStreamWarning(`Link inativo identificado (HTTP HEAD). Tentando reconexão automática (${nextAttempt}/3)...`);
 
-          if (!usingProxy && nextAttempt === 2) {
-            setForceProxy(true);
-          }
-
-          setTimeout(() => {
-            if (!isCancelled) {
-              setReloadCounter(c => c + 1);
+            if (!usingProxy && nextAttempt === 2) {
+              setForceProxy(true);
             }
-          }, 600);
-          return;
-        } else {
-          // Esgotou as 3 tentativas automáticas iniciais - inicia backoff exponencial
-          setIsLoading(false);
-          setIsPlaying(false);
-          setHasError(true);
-          setIsTimedOut(true);
-          setIsConnectionUnstable(true);
-          setErrorMessage(`Link morto identificado instantaneamente via HTTP HEAD (${health.statusCode ? `Código HTTP ${health.statusCode}` : 'Servidor Inacessível'}) após 3 tentativas.`);
-          startExponentialBackoff();
-          return;
+
+            setTimeout(() => {
+              if (!isCancelled) {
+                setReloadCounter(c => c + 1);
+              }
+            }, 600);
+            return;
+          } else {
+            // Esgotou as 3 tentativas automáticas iniciais - inicia backoff exponencial
+            setIsLoading(false);
+            setIsPlaying(false);
+            setHasError(true);
+            setIsTimedOut(true);
+            setIsConnectionUnstable(true);
+            setErrorMessage(`Link morto identificado instantaneamente via HTTP HEAD (${health.statusCode ? `Código HTTP ${health.statusCode}` : 'Servidor Inacessível'}) após 3 tentativas.`);
+            startExponentialBackoff();
+            return;
+          }
         }
       }
 
-      // Se sinal respondeu ou não for link morto, inicia timeout assíncrono rigoroso de 3,5 segundos
+      // Timeout assíncrono (12s para VOD/filmes, 3.5s para canais ao vivo)
+      const timeoutLimit = isMp4 ? 12000 : 3500;
       canPlayTimeoutRef.current = setTimeout(() => {
         if (!hasCanPlayFiredRef.current && !isCancelled) {
-          console.warn(`[LivePlayer] Timeout de 3,5s: evento canplay não disparou dentro do limite (tentativa ${autoRetryCountRef.current + 1}/3)`);
 
           // Interromper a tentativa imediatamente
           if (hlsRef.current) {
@@ -712,7 +911,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           }
 
           if (autoRetryCountRef.current < 3) {
-            // Tenta automaticamente recarregar o stream do canal até 3 vezes!
             const nextAttempt = autoRetryCountRef.current + 1;
             autoRetryCountRef.current = nextAttempt;
             setAutoRetryCount(nextAttempt);
@@ -720,7 +918,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setConnectionAttempts(connectionAttemptsRef.current);
             setIsConnectionUnstable(true);
             setIsLoading(true);
-            setStreamWarning(`Tempo limite de 3,5s excedido. Tentando recarregar automaticamente (${nextAttempt}/3)...`);
+            setStreamWarning(`Tempo limite excedido. Tentando recarregar automaticamente (${nextAttempt}/3)...`);
 
             if (!usingProxy && nextAttempt === 2) {
               setForceProxy(true);
@@ -728,26 +926,52 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
             setReloadCounter(c => c + 1);
           } else {
-            // Esgotou as 3 tentativas automáticas: exibe a mensagem definitiva de erro, botão 'Reportar Erro' e inicia backoff exponencial
             setIsLoading(false);
             setIsPlaying(false);
             setHasError(true);
             setIsTimedOut(true);
             setIsConnectionUnstable(true);
             setErrorMessage(
-              'A inicialização da transmissão excedeu o limite de 3,5 segundos após 3 tentativas automáticas consecutivas. O canal pode estar offline ou o servidor congestionado.'
+              'A inicialização da transmissão excedeu o limite após 3 tentativas consecutivas. Tente recarregar ou selecionar outro servidor.'
             );
             startExponentialBackoff();
           }
         }
-      }, 3500);
+      }, timeoutLimit);
 
-      // Proceder com a montagem do player Dash / Hls / Ts / Nativo
-      const isDash = compatibilityProtocol === 'dash' || streamUrl.includes('.mpd') || rawUrl.includes('.mpd');
-      const isHls = !isDash && (streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8') || compatibilityProtocol === 'hls');
-      const isTs = !isDash && !isHls && (streamUrl.includes('.ts') || rawUrl.includes('.ts')) && !streamUrl.includes('.mp4');
+      // Proceder com a montagem do player MP4 Nativo / Dash / Hls / Ts
+      if (isMp4) {
+        setIsLoading(true);
+        video.src = streamUrl;
+        video.load();
 
-      if (isDash) {
+        const handleCanPlay = () => {
+          hasCanPlayFiredRef.current = true;
+          if (canPlayTimeoutRef.current) {
+            clearTimeout(canPlayTimeoutRef.current);
+            canPlayTimeoutRef.current = null;
+          }
+          setIsLoading(false);
+          setHasError(false);
+          setIsTimedOut(false);
+          setIsConnectionUnstable(false);
+          setStreamWarning(null);
+        };
+
+        video.addEventListener('canplay', handleCanPlay, { once: true });
+        video.addEventListener('loadeddata', handleCanPlay, { once: true });
+
+        video.play().then(() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+        }).catch(() => {
+          setIsLoading(false);
+        });
+
+        if (initialSeekTime && initialSeekTime > 0) {
+          video.currentTime = initialSeekTime;
+        }
+      } else if (isDash) {
         try {
           const dashPlayer = dashjs.MediaPlayer().create();
           dashPlayerRef.current = dashPlayer;
@@ -780,8 +1004,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setIsConnectionUnstable(false);
           });
 
-          dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e: any) => {
-            console.warn('Dash.js error:', e);
+          dashPlayer.on(dashjs.MediaPlayer.events.ERROR, () => {
             if (!usingProxy) {
               setForceProxy(true);
             } else if (autoRetryCountRef.current < 3) {
@@ -803,24 +1026,31 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             }
           });
         } catch (err) {
-          console.warn('Dashjs initialization failed:', err);
           video.src = streamUrl;
           video.play().catch(() => setIsPlaying(false));
         }
       } else if (isHls && Hls.isSupported()) {
+        // Configuração dinâmica e adaptativa de buffers baseada na latência detectada para máxima estabilidade
+        const isHighLatency = connectionLatency > 1500;
+        const isMediumLatency = connectionLatency > 600 && connectionLatency <= 1500;
+
+        const dynamicMaxBufferLength = isHighLatency ? 90 : isMediumLatency ? 60 : 45;
+        const dynamicMaxMaxBufferLength = isHighLatency ? 180 : isMediumLatency ? 120 : 90;
+        const dynamicMaxBufferSize = isHighLatency ? 150 * 1000 * 1000 : isMediumLatency ? 100 * 1000 * 1000 : 70 * 1000 * 1000;
+        const dynamicBackBufferLength = isHighLatency ? 90 : 60;
+        const dynamicLiveSyncDurationCount = isHighLatency ? 8 : isMediumLatency ? 6 : 4;
+        const dynamicLiveMaxLatency = isHighLatency ? 18 : isMediumLatency ? 14 : 10;
+        const dynamicFragTimeout = isHighLatency ? 25000 : 20000;
+
         const hls = new Hls({
           enableWorker: true,
-          // Desativar lowLatencyMode agressivo para transmissões IPTV. Evita que o player
-          // acelere a reprodução e esgote o buffer a cada 5 segundos.
           lowLatencyMode: false,
-          backBufferLength: 60,
-          maxBufferLength: 60,
-          maxMaxBufferLength: 120,
-          maxBufferSize: 90 * 1000 * 1000,
-          // Mantém uma margem confortável de 5 segmentos (~15s) para absorver flutuações de rede sem travar
-          liveSyncDurationCount: 5,
-          liveMaxLatencyDurationCount: 12,
-          // Pré-carrega o próximo fragmento antes do atual terminar, eliminando micro-pausas entre chunks
+          backBufferLength: dynamicBackBufferLength,
+          maxBufferLength: dynamicMaxBufferLength,
+          maxMaxBufferLength: dynamicMaxMaxBufferLength,
+          maxBufferSize: dynamicMaxBufferSize,
+          liveSyncDurationCount: dynamicLiveSyncDurationCount,
+          liveMaxLatencyDurationCount: dynamicLiveMaxLatency,
           startFragPrefetch: true,
           progressive: true,
           highBufferWatchdogPeriod: 2,
@@ -828,8 +1058,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           nudgeMaxRetry: 10,
           manifestLoadingTimeOut: 15000,
           manifestLoadingMaxRetry: 4,
-          fragLoadingTimeOut: 20000,
-          fragLoadingMaxRetry: 5,
+          fragLoadingTimeOut: dynamicFragTimeout,
+          fragLoadingMaxRetry: isHighLatency ? 6 : 4,
           levelLoadingTimeOut: 15000,
         });
 
@@ -893,29 +1123,27 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           }
         });
 
-        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
-          const currentLevel = hls.levels[data.level];
-          if (currentLevel) {
-            console.log(`HLS switched to level: ${currentLevel.height}p`);
-          }
+        hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+          // Level switched silently
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
-          // Recuperação inteligente de micro-travamentos de buffer (Buffer Stalled)
+          // Recuperação inteligente de micro-travamentos de buffer (Buffer Stalled) com expansão dinâmica
           if (!data.fatal && data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
-            console.log('HLS buffer stalled momentarily, nudging video smoothly...');
+            if (hls.config) {
+              hls.config.maxBufferLength = Math.min(120, (hls.config.maxBufferLength || 60) + 15);
+              hls.config.liveSyncDurationCount = Math.min(10, (hls.config.liveSyncDurationCount || 5) + 1);
+            }
             if (video && !video.paused && video.readyState >= 2) {
               video.currentTime += 0.15;
             }
             return;
           }
 
-          console.warn('HLS.js event error:', data);
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 if (!usingProxy) {
-                  console.log('Network error on direct stream. Switching to internal proxy...');
                   setForceProxy(true);
                 } else if (autoRetryCountRef.current < 3) {
                   const nextAttempt = autoRetryCountRef.current + 1;
@@ -926,7 +1154,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   setIsConnectionUnstable(true);
                   setReloadCounter(c => c + 1);
                 } else if (currentSourceIndex < sources.length - 1) {
-                  console.log('Switching to next source in catalog...');
                   setCurrentSourceIndex(prev => prev + 1);
                 } else {
                   setHasError(true);
@@ -937,7 +1164,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                console.log('HLS Media error encountered, attempting recovery...');
                 hls.recoverMediaError();
                 break;
               default:
@@ -992,8 +1218,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             });
           }
 
-          player.on(mpegts.Events.ERROR, (errorType: any, errorDetail: any) => {
-            console.warn('mpegts error:', errorType, errorDetail);
+          player.on(mpegts.Events.ERROR, () => {
             if (!usingProxy) {
               setForceProxy(true);
             } else if (autoRetryCountRef.current < 3) {
@@ -1015,7 +1240,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             }
           });
         } catch (err) {
-          console.warn('mpegts init failed, falling back to direct video tag:', err);
           video.src = streamUrl;
           video.play().catch(() => setIsPlaying(false));
         }
@@ -1027,8 +1251,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         video.play().then(() => {
           setIsPlaying(true);
           setIsLoading(false);
-        }).catch((err) => {
-          console.warn('Direct video play error:', err);
+        }).catch(() => {
           if (!usingProxy && rawUrl.startsWith('http://')) {
             setForceProxy(true);
           } else if (autoRetryCountRef.current < 3) {
@@ -1099,9 +1322,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
   // Video event handlers
   const handleVideoError = () => {
-    console.warn('HTML5 Video Error encountered on streamUrl:', streamUrl);
     if (!usingProxy) {
-      console.log('Retrying via server proxy...');
       setForceProxy(true);
     } else if (autoRetryCountRef.current < 3) {
       const nextAttempt = autoRetryCountRef.current + 1;
@@ -1110,7 +1331,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       setIsConnectionUnstable(true);
       setReloadCounter(c => c + 1);
     } else if (currentSourceIndex < sources.length - 1) {
-      console.log('Switching to next source index...');
       setCurrentSourceIndex(prev => prev + 1);
     } else {
       setHasError(true);
@@ -1297,10 +1517,10 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(console.error);
+      containerRef.current.requestFullscreen().catch(() => {});
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen().catch(console.error);
+      document.exitFullscreen().catch(() => {});
       setIsFullscreen(false);
     }
   }, []);
@@ -1318,8 +1538,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         setIsPiP(true);
         showToast('Mini-player (PiP) ativado');
       }
-    } catch (err) {
-      console.warn('PiP error:', err);
+    } catch {
       showToast('Picture-in-Picture não suportado neste navegador.');
     }
   }, [showToast]);
@@ -1371,8 +1590,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         a.click();
         showToast('Captura de tela salva com sucesso!');
       }
-    } catch (err) {
-      console.warn('Screenshot capture CORS notice:', err);
+    } catch {
       showToast('Não foi possível capturar a tela devido a restrições de CORS da fonte.');
     }
   }, [item, showToast]);
@@ -1745,48 +1963,91 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             <p className="text-xs text-indigo-200">Suporta arquivos WebVTT (.vtt) e SubRip (.srt)</p>
           </div>
         )}
-        {/* VIP Lock Screen */}
-        {isLocked ? (
-          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-20">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 mb-4 animate-bounce text-white">
-              <Crown className="w-7 h-7" />
+        {/* Anti-Adblock / Anti-Tampering Canary Element */}
+        <div 
+          id="maxtv-ad-element" 
+          className="adsbox ad-banner pub_300x250 pub_728x90 text-ad" 
+          aria-hidden="true" 
+          style={{ position: 'absolute', top: -9999, left: -9999, width: '10px', height: '10px', pointerEvents: 'none' }} 
+        />
+
+        {/* Anti-AdBlock Modal / Overlay */}
+        {isAdblockDetected && (
+          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-50 animate-fadeIn backdrop-blur-md">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10 mb-4 text-amber-400">
+              <ShieldAlert className="w-8 h-8 animate-pulse" />
             </div>
-            <span className="text-xs uppercase font-semibold tracking-wider text-indigo-400 mb-1">
-              Exclusivo para Assinantes VIP
+            <span className="text-xs uppercase font-bold tracking-wider text-amber-400 mb-1">
+              Bloqueador de Conteúdo Detectado
             </span>
             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
-              {'title' in item ? item.title : item.name}
+              Desative o AdBlock para Continuar
             </h3>
-            <p className="text-sm text-slate-400 max-w-md mb-6 font-normal">
-              Este conteúdo faz parte do catálogo VIP MAXTV. Você pode assinar via PIX com liberação instantânea ou assistir uma amostra grátis para testar o sinal agora mesmo!
+            <p className="text-sm text-slate-300 max-w-md mb-6 leading-relaxed">
+              Detectamos que você está utilizando um bloqueador de anúncios ou extensões de escudo ativas. Para garantir a estabilidade das transmissões e a liberação da degustação gratuita de 5 minutos, desative o bloqueador para o MAXTV.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => probeAdblock()}
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Já desativei, Continuar Transmissão</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-3 rounded-full bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold border border-white/10 transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 5-Minute Guest Limit Modal / Overlay */}
+        {isFiveMinLimitReached && !isVip && !isAdblockDetected && (
+          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-50 animate-fadeIn backdrop-blur-md">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 mb-4 text-white">
+              <Clock className="w-8 h-8 text-amber-300" />
+            </div>
+            <span className="text-xs uppercase font-bold tracking-wider text-indigo-400 mb-1">
+              Tempo de Degustação Excedido (5 minutos)
+            </span>
+            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
+              Você assistiu 5 minutos sem reiniciar
+            </h3>
+            <p className="text-sm text-slate-300 max-w-lg mb-6 leading-relaxed">
+              Aproveite acesso ilimitado a todos os canais ao vivo em Full HD/4K, filmes e séries sem anúncios por apenas <strong className="text-emerald-400 font-bold">R$ 10,00/mês</strong> em 1 dispositivo exclusivo. Ou reinicie a transmissão para mais 5 minutos de degustação.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={onOpenCheckout}
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 active:scale-95 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 active:scale-95 transition-all cursor-pointer"
               >
-                <Crown className="w-4 h-4" />
-                <span>Assinar VIP por R$ 19,90 com PIX</span>
+                <Crown className="w-4 h-4 text-amber-300" />
+                <span>Assinar VIP por R$ 10,00 (1 Dispositivo)</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setPreviewMode(true)}
-                className="flex items-center gap-2 px-5 py-3 rounded-full bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-sm font-semibold border border-emerald-500/40 transition-all cursor-pointer"
+                onClick={handleRestartPlayback}
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-sm font-semibold border border-emerald-500/40 hover:border-emerald-400 transition-all cursor-pointer"
               >
-                <Play className="w-4 h-4 fill-emerald-400 text-emerald-400" />
-                <span>Degustação Grátis (Assistir Amostra)</span>
+                <RotateCcw className="w-4 h-4 text-emerald-400" />
+                <span>Reiniciar Transmissão (+5 minutos)</span>
               </button>
 
               {!currentUser && onOpenAuth && (
                 <button
                   type="button"
                   onClick={onOpenAuth}
-                  className="flex items-center gap-2 px-5 py-3 rounded-full bg-indigo-950 hover:bg-indigo-900 text-indigo-300 text-sm font-semibold border border-indigo-500/30 transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-5 py-3 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-white/10 transition-colors cursor-pointer"
                 >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Já é assinante? Entrar na Conta</span>
+                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <span>Já é assinante? Entrar</span>
                 </button>
               )}
 
@@ -1795,12 +2056,28 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 onClick={onClose}
                 className="px-5 py-3 rounded-full bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold border border-white/10 transition-colors cursor-pointer"
               >
-                Voltar
+                Fechar
               </button>
             </div>
           </div>
-        ) : (
-          <>
+        )}
+
+        {/* Degustação Floating Pill for Non-VIP */}
+        {!isVip && !isFiveMinLimitReached && (
+          <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-amber-500/30 px-3 py-1.5 rounded-full text-xs text-white shadow-lg">
+            <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            <span className="font-medium">
+              Degustação: <strong className="text-amber-300 font-bold">{Math.max(0, 300 - guestWatchSeconds)}s restantes</strong>
+            </span>
+            <button
+              type="button"
+              onClick={onOpenCheckout}
+              className="ml-1 px-2 py-0.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] transition-colors"
+            >
+              VIP R$ 10
+            </button>
+          </div>
+        )}
             {/* Ambient Background Glow Layer with Smooth Visual Blur Transition */}
             {('logo' in item && item.logo) || ('posterUrl' in item && item.posterUrl) ? (
               <div 
@@ -3069,8 +3346,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 </div>
               </div>
             </div>
-          </>
-        )}
       </div>
 
       {/* Channel Trouble & Signal Recovery Assistant Modal */}

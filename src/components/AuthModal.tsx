@@ -60,23 +60,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemo = async (type: 'vip' | 'admin' | 'free' | 'carlos') => {
-    setError('');
-    setIsLoading(true);
-    try {
-      const res = await api.demoLogin(type);
-      setSuccessMsg(`Conectado como ${res.user.name}!`);
-      setTimeout(() => {
-        onSuccess(res.user, res.token);
-        onClose();
-      }, 500);
-    } catch (err: any) {
-      setError(err.message || 'Erro no login de teste');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div 
@@ -237,40 +220,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
             </button>
           </form>
-
-          {/* Quick Access Test Accounts */}
-          <div className="mt-6 pt-5 border-t border-white/10">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 text-center">
-              Acesso Rápido para Testes:
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('vip')}
-                disabled={isLoading}
-                className="flex items-center gap-2 p-2 bg-slate-950 hover:bg-indigo-950/40 border border-indigo-500/30 hover:border-indigo-500/60 rounded-xl text-left transition-all text-xs text-indigo-300 cursor-pointer"
-              >
-                <Crown className="w-4 h-4 text-amber-400 shrink-0" />
-                <div className="overflow-hidden">
-                  <div className="font-bold truncate">Cebolão VIP</div>
-                  <div className="text-[10px] text-slate-400">1 Ano Liberado</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('admin')}
-                disabled={isLoading}
-                className="flex items-center gap-2 p-2 bg-slate-950 hover:bg-slate-800 border border-white/10 hover:border-white/20 rounded-xl text-left transition-all text-xs text-slate-200 cursor-pointer"
-              >
-                <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
-                <div className="overflow-hidden">
-                  <div className="font-bold truncate">Admin Master</div>
-                  <div className="text-[10px] text-slate-400">Painel & Gestão</div>
-                </div>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

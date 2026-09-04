@@ -80,8 +80,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       if (cRes.channels) setChannels(cRes.channels);
       if (setRes.success) setSettings(setRes.settings);
       if (rRes.success && rRes.reports) setChannelReports(rRes.reports);
-    } catch (err) {
-      console.error('Failed to load admin data:', err);
+    } catch {
+      // Data load failure handled by state
     } finally {
       setIsLoading(false);
     }
@@ -884,7 +884,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                       </label>
                       <input
                         type="text"
-                        placeholder="Ex: Cortesia de demonstração, bonificação, pós-venda"
+                        placeholder="Ex: Cortesia comercial, ativação manual, pós-venda"
                         value={grantFormData.reason}
                         onChange={e => setGrantFormData(prev => ({ ...prev, reason: e.target.value }))}
                         className="w-full bg-slate-950 text-xs text-white rounded-2xl px-4 py-3 border border-white/10 focus:outline-none focus:border-emerald-500"
@@ -1702,19 +1702,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                       onChange={e => setSettings({ ...settings, announcementText: e.target.value })}
                       className="w-full bg-slate-950 text-xs text-white rounded-2xl px-4 py-3 border border-white/10 focus:outline-none focus:border-indigo-500"
                     />
-                  </div>
-
-                  <div className="flex items-center gap-3 pt-2">
-                    <input
-                      type="checkbox"
-                      id="sandboxMode"
-                      checked={settings.sandboxMode}
-                      onChange={e => setSettings({ ...settings, sandboxMode: e.target.checked })}
-                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <label htmlFor="sandboxMode" className="text-xs text-slate-300 font-medium cursor-pointer">
-                      Modo Sandbox / Demonstração (Permite aprovar PIX instantaneamente sem debitar)
-                    </label>
                   </div>
 
                   <div className="pt-4">

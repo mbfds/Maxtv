@@ -32,8 +32,8 @@ export const watchProgressStorage = {
           }
         }
       }
-    } catch (e) {
-      console.warn('Failed to read watch progress from localStorage:', e);
+    } catch {
+      // Ignored in production
     }
     return [];
   },
@@ -96,8 +96,8 @@ export const watchProgressStorage = {
       if (!userIdOrEmail) {
         localStorage.setItem(`${STORAGE_PREFIX}local`, JSON.stringify(updated));
       }
-    } catch (e) {
-      console.warn('Failed to save watch progress to localStorage:', e);
+    } catch {
+      // Ignored in production
     }
 
     // Server sync
@@ -109,7 +109,7 @@ export const watchProgressStorage = {
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         },
         body: JSON.stringify({ progress: progressEntry, email: userIdOrEmail })
-      }).catch(err => console.warn('Could not sync watch progress to server:', err));
+      }).catch(() => {});
     }
 
     window.dispatchEvent(new CustomEvent(PROGRESS_UPDATED_EVENT, { detail: updated }));
@@ -128,8 +128,8 @@ export const watchProgressStorage = {
       if (!userIdOrEmail) {
         localStorage.setItem(`${STORAGE_PREFIX}local`, JSON.stringify(updated));
       }
-    } catch (e) {
-      console.warn('Failed to remove watch progress from localStorage:', e);
+    } catch {
+      // Ignored in production
     }
 
     if (userIdOrEmail) {
@@ -138,7 +138,7 @@ export const watchProgressStorage = {
         headers: {
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         }
-      }).catch(err => console.warn('Could not sync progress removal to server:', err));
+      }).catch(() => {});
     }
 
     window.dispatchEvent(new CustomEvent(PROGRESS_UPDATED_EVENT, { detail: updated }));
@@ -151,8 +151,8 @@ export const watchProgressStorage = {
       if (!userIdOrEmail) {
         localStorage.removeItem(`${STORAGE_PREFIX}local`);
       }
-    } catch (e) {
-      console.warn('Failed to clear watch progress:', e);
+    } catch {
+      // Ignored in production
     }
     window.dispatchEvent(new CustomEvent(PROGRESS_UPDATED_EVENT, { detail: [] }));
   },
@@ -184,8 +184,8 @@ export const watchProgressStorage = {
           return merged;
         }
       }
-    } catch (err) {
-      console.warn('Watch progress server sync error:', err);
+    } catch {
+      // Ignored in production
     }
     return this.getProgressList(userIdOrEmail);
   }

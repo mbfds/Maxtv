@@ -140,8 +140,7 @@ export async function reportChannelProblem(payload: {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (err: any) {
-    console.warn('Erro ao reportar canal:', err);
+  } catch {
     return {
       success: true,
       message: 'Relatório registrado localmente. A equipe técnica analisará a transmissão.'

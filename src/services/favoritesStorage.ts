@@ -29,8 +29,8 @@ export const favoritesStorage = {
           }
         }
       }
-    } catch (e) {
-      console.warn('Failed to read favorites from localStorage:', e);
+    } catch {
+      // Ignore local storage error
     }
     return [];
   },
@@ -81,8 +81,8 @@ export const favoritesStorage = {
       if (!userIdOrEmail) {
         localStorage.setItem(`${STORAGE_PREFIX}local`, JSON.stringify(updated));
       }
-    } catch (e) {
-      console.warn('Failed to save favorites to localStorage:', e);
+    } catch {
+      // Local storage write error ignored
     }
 
     // Sync with server if user is logged in
@@ -94,7 +94,7 @@ export const favoritesStorage = {
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         },
         body: JSON.stringify({ item: newFav, email: userIdOrEmail })
-      }).catch(err => console.warn('Could not sync favorite to server:', err));
+      }).catch(() => {});
     }
 
     window.dispatchEvent(new CustomEvent(FAVORITES_UPDATED_EVENT, { detail: updated }));
@@ -114,8 +114,8 @@ export const favoritesStorage = {
       if (!userIdOrEmail) {
         localStorage.setItem(`${STORAGE_PREFIX}local`, JSON.stringify(updated));
       }
-    } catch (e) {
-      console.warn('Failed to remove favorite from localStorage:', e);
+    } catch {
+      // Ignore local storage error
     }
 
     // Sync with server
@@ -125,7 +125,7 @@ export const favoritesStorage = {
         headers: {
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
         }
-      }).catch(err => console.warn('Could not sync favorite deletion to server:', err));
+      }).catch(() => {});
     }
 
     window.dispatchEvent(new CustomEvent(FAVORITES_UPDATED_EVENT, { detail: updated }));
@@ -171,8 +171,8 @@ export const favoritesStorage = {
           return merged;
         }
       }
-    } catch (err) {
-      console.warn('Favorites server sync error:', err);
+    } catch {
+      // Ignored in production
     }
     return this.getFavorites(userIdOrEmail);
   }

@@ -4,8 +4,33 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
+import {
+  initMongo,
+  isMongoConnected,
+  getMongoStatus,
+  mongoSaveUser,
+  mongoFindUserByEmail,
+  mongoSaveSubscriber,
+  mongoFindSubscriberByEmail,
+  mongoGetAllSubscribers,
+  mongoSaveWatchProgress,
+  mongoGetWatchProgress,
+  mongoSaveTransaction,
+  mongoRecordSessionHeartbeat
+} from './serverMongo';
 
 dotenv.config();
+
+// Inicialização resiliente do MongoDB para ambiente de produção
+initMongo().then(connected => {
+  if (connected) {
+    console.log('[MongoDB] Conexão ativa com banco de dados de produção!');
+  } else {
+    console.log('[MongoDB] Banco de dados em memória pronto. Configure MONGODB_URI para persistência remota.');
+  }
+}).catch(err => {
+  console.warn('[MongoDB] Erro ao inicializar MongoDB:', err);
+});
 
 const app = express();
 const PORT = 3000;
@@ -104,80 +129,16 @@ const systemSettings = {
   mercadoPagoAccessToken: process.env.MERCADOPAGO_ACCESS_TOKEN || '',
   mercadoPagoPublicKey: process.env.MERCADOPAGO_PUBLIC_KEY || '',
   pixKey: 'financeiro@streamingbrasil.tv.br',
-  sandboxMode: true,
-  announcementText: '🎉 Bem-vindo ao Streaming Brasil MAXTV! Mais de 110 canais ao vivo e VOD em alta definição.',
+  sandboxMode: false,
+  announcementText: '🎉 MAXTV VIP: Mais de 110 canais ao vivo e VOD em alta definição. Plano R$ 10,00 por 1 dispositivo!',
   allowFreePreview: true,
-  freePreviewMinutes: 10
+  freePreviewMinutes: 5
 };
 
-const subscribers: ServerSubscriber[] = [
-  {
-    id: 'sub-vip-demo',
-    name: 'Assinante VIP Master',
-    email: 'vip@maxtv.vip',
-    cpf: '123.456.789-00',
-    planId: 'plan-anual-vip',
-    planName: 'MAXTV VIP Anual (Acesso Liberado)',
-    status: 'active',
-    startDate: '2026-09-02T19:00:00.000Z',
-    expiresAt: '2027-09-02T19:00:00.000Z',
-    amountPaid: 149.90
-  },
-  {
-    id: 'sub-1',
-    name: 'Carlos Alberto Mendes',
-    email: 'carlos.mendes@gmail.com',
-    cpf: '184.920.448-12',
-    planId: 'plan-anual-vip',
-    planName: 'MAXTV VIP Anual',
-    status: 'active',
-    startDate: '2026-01-15T10:00:00.000Z',
-    expiresAt: '2027-01-15T10:00:00.000Z',
-    amountPaid: 149.90
-  },
-  {
-    id: 'sub-2',
-    name: 'Juliana Paes Souza',
-    email: 'ju.souza@outlook.com',
-    cpf: '329.481.552-30',
-    planId: 'plan-mensal',
-    planName: 'Plano Mensal',
-    status: 'active',
-    startDate: '2026-08-20T14:30:00.000Z',
-    expiresAt: '2026-10-20T14:30:00.000Z',
-    amountPaid: 19.90
-  },
-  {
-    id: 'sub-3',
-    name: 'Rodrigo Santana',
-    email: 'rodrigo.futebol@bol.com.br',
-    cpf: '882.110.923-45',
-    planId: 'plan-trimestral',
-    planName: 'Plano Trimestral',
-    status: 'pending',
-    startDate: '2026-09-02T11:00:00.000Z',
-    expiresAt: '2026-12-02T11:00:00.000Z',
-    amountPaid: 49.90
-  }
-];
+const subscribers: ServerSubscriber[] = [];
 
-// In-memory registered user accounts
+// In-memory registered user accounts (Master admin for production management)
 const users: ServerUser[] = [
-  {
-    id: 'user-vip-demo',
-    name: 'Assinante VIP Master',
-    email: 'vip@maxtv.vip',
-    passwordHash: '123456',
-    cpf: '123.456.789-00',
-    role: 'user',
-    vipStatus: 'active',
-    planId: 'plan-anual-vip',
-    planName: 'MAXTV VIP Anual (Acesso Liberado)',
-    startDate: '2026-09-02T19:00:00.000Z',
-    expiresAt: '2027-09-02T19:00:00.000Z',
-    createdAt: '2026-09-02T19:00:00.000Z',
-    subscriberId: 'sub-vip-demo'
-  },
   {
     id: 'user-admin',
     name: 'Administrador Master',
@@ -185,41 +146,11 @@ const users: ServerUser[] = [
     passwordHash: 'admin123',
     role: 'admin',
     vipStatus: 'active',
-    planId: 'plan-anual-vip',
+    planId: 'plan-mensal',
     planName: 'Admin Master (Acesso Total)',
     startDate: '2026-01-01T00:00:00.000Z',
     expiresAt: '2030-12-31T23:59:59.000Z',
     createdAt: '2026-01-01T00:00:00.000Z'
-  },
-  {
-    id: 'user-carlos',
-    name: 'Carlos Alberto Mendes',
-    email: 'carlos.mendes@gmail.com',
-    passwordHash: '123456',
-    cpf: '184.920.448-12',
-    role: 'user',
-    vipStatus: 'active',
-    planId: 'plan-anual-vip',
-    planName: 'MAXTV VIP Anual',
-    startDate: '2026-01-15T10:00:00.000Z',
-    expiresAt: '2027-01-15T10:00:00.000Z',
-    createdAt: '2026-01-15T10:00:00.000Z',
-    subscriberId: 'sub-1'
-  },
-  {
-    id: 'user-juliana',
-    name: 'Juliana Paes Souza',
-    email: 'ju.souza@outlook.com',
-    passwordHash: '123456',
-    cpf: '329.481.552-30',
-    role: 'user',
-    vipStatus: 'active',
-    planId: 'plan-mensal',
-    planName: 'Plano Mensal (Liberado)',
-    startDate: '2026-08-20T14:30:00.000Z',
-    expiresAt: '2026-10-20T14:30:00.000Z',
-    createdAt: '2026-08-20T14:30:00.000Z',
-    subscriberId: 'sub-2'
   }
 ];
 
@@ -235,41 +166,10 @@ function syncUserWithSubscriber(sub: ServerSubscriber) {
   }
 }
 
-const transactions: ServerTransaction[] = [
-  {
-    id: 'PIX-BR-99120',
-    orderId: 'ORD-99120',
-    subscriberName: 'Carlos Alberto Mendes',
-    subscriberEmail: 'carlos.mendes@gmail.com',
-    cpf: '184.920.448-12',
-    planId: 'plan-anual-vip',
-    planName: 'MAXTV VIP Anual',
-    amount: 149.90,
-    status: 'approved',
-    qrCodeText: '00020126580014br.gov.bcb.pix0136e05d9b23-6447-4905-b045-66718cf2319c5204000053039865406149.905802BR5920Streaming Brasil TV6009Sao Paulo62070503***630489AB',
-    qrCodeBase64: '',
-    createdAt: '2026-01-15T09:55:00.000Z',
-    expiresAt: '2026-01-15T10:25:00.000Z',
-    approvedAt: '2026-01-15T09:58:20.000Z'
-  }
-];
+const transactions: ServerTransaction[] = [];
 
 // In-memory VIP grants log
-const grantHistory: ServerGrant[] = [
-  {
-    id: 'grant-init-1',
-    subscriberId: 'sub-2',
-    subscriberName: 'Juliana Paes Souza',
-    subscriberEmail: 'ju.souza@outlook.com',
-    monthsGranted: 1,
-    daysGranted: 30,
-    reason: 'Liberação de Mês pelo Administrador',
-    previousExpiresAt: '2026-08-20T14:30:00.000Z',
-    newExpiresAt: '2026-09-20T14:30:00.000Z',
-    grantedAt: '2026-08-20T14:30:00.000Z',
-    grantedBy: 'Admin Master'
-  }
-];
+const grantHistory: ServerGrant[] = [];
 
 // In-memory channel store
 let parsedRamysChannels: ServerChannel[] = [];
@@ -1154,6 +1054,10 @@ app.post('/api/auth/register', (req, res) => {
 
     users.unshift(newUser);
 
+    // Persistência MongoDB
+    mongoSaveUser(newUser).catch(err => console.warn('[MongoDB] Erro ao salvar usuário:', err));
+    mongoSaveSubscriber(sub).catch(err => console.warn('[MongoDB] Erro ao salvar assinante:', err));
+
     const safeUser = { ...newUser };
     delete (safeUser as any).passwordHash;
 
@@ -1168,7 +1072,7 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -1176,14 +1080,62 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    let user = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    // Se não estiver em memória, buscar no MongoDB
+    if (!user && isMongoConnected()) {
+      try {
+        const dbUser = await mongoFindUserByEmail(cleanEmail);
+        if (dbUser) {
+          user = {
+            id: dbUser.id,
+            name: dbUser.name,
+            email: dbUser.email,
+            passwordHash: dbUser.passwordHash,
+            cpf: dbUser.cpf,
+            role: dbUser.role,
+            vipStatus: dbUser.vipStatus as any,
+            planId: dbUser.planId,
+            planName: dbUser.planName,
+            startDate: dbUser.startDate,
+            expiresAt: dbUser.expiresAt,
+            createdAt: dbUser.createdAt,
+            subscriberId: dbUser.subscriberId
+          };
+          users.push(user);
+        }
+      } catch (dbErr) {
+        console.warn('[MongoDB] Erro na consulta de login:', dbErr);
+      }
+    }
 
     if (!user || user.passwordHash !== password) {
       return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
     }
 
     // Sync with subscriber status
-    const sub = subscribers.find(s => s.email.toLowerCase() === cleanEmail);
+    let sub = subscribers.find(s => s.email.toLowerCase() === cleanEmail);
+    if (!sub && isMongoConnected()) {
+      try {
+        const dbSub = await mongoFindSubscriberByEmail(cleanEmail);
+        if (dbSub) {
+          sub = {
+            id: dbSub.id,
+            name: dbSub.name,
+            email: dbSub.email,
+            cpf: dbSub.cpf,
+            planId: dbSub.planId,
+            planName: dbSub.planName,
+            status: dbSub.status,
+            startDate: dbSub.startDate,
+            expiresAt: dbSub.expiresAt,
+            amountPaid: dbSub.amountPaid
+          };
+          subscribers.push(sub);
+        }
+      } catch {}
+    }
+
     if (sub) {
       syncUserWithSubscriber(sub);
     }
@@ -1244,29 +1196,113 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true, message: 'Logout efetuado com sucesso' });
 });
 
-app.post('/api/auth/demo', (req, res) => {
-  const { type } = req.body;
-  let targetEmail = 'vip@maxtv.vip';
-  if (type === 'admin') targetEmail = 'admin@maxtv.vip';
-  if (type === 'free') targetEmail = 'rodrigo.futebol@bol.com.br';
-  if (type === 'carlos') targetEmail = 'carlos.mendes@gmail.com';
+// --- SESSION HEARTBEAT & ANTI-BYPASS / 5-MINUTE LIMIT TRACKER ---
+interface ActiveSession {
+  sessionId: string;
+  ip: string;
+  isVip: boolean;
+  userEmail?: string;
+  mediaId: string;
+  mediaType: 'channel' | 'vod';
+  totalWatchSeconds: number;
+  lastHeartbeat: number;
+}
 
-  const user = users.find(u => u.email.toLowerCase() === targetEmail.toLowerCase());
-  if (!user) return res.status(404).json({ error: 'Usuário demo não encontrado' });
+const activeSessions = new Map<string, ActiveSession>();
 
-  const sub = subscribers.find(s => s.email.toLowerCase() === user.email.toLowerCase());
-  if (sub) syncUserWithSubscriber(sub);
+app.post('/api/session/heartbeat', async (req, res) => {
+  const {
+    sessionId,
+    mediaId,
+    mediaType = 'vod',
+    isVip = false,
+    deltaSeconds = 15,
+    userEmail,
+    adblockDetected = false,
+    resetCycle = false
+  } = req.body;
 
-  const token = `token-${user.id}-${Date.now()}`;
-  const safeUser = { ...user };
-  delete (safeUser as any).passwordHash;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId é obrigatório' });
+  }
+
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+
+  let session = activeSessions.get(sessionId);
+  if (!session) {
+    session = {
+      sessionId,
+      ip: clientIp,
+      isVip: Boolean(isVip),
+      userEmail,
+      mediaId: mediaId || 'unknown',
+      mediaType,
+      totalWatchSeconds: 0,
+      lastHeartbeat: Date.now()
+    };
+    activeSessions.set(sessionId, session);
+  }
+
+  // Update session state
+  if (isVip) {
+    session.isVip = true;
+  }
+  if (userEmail) {
+    session.userEmail = userEmail;
+  }
+
+  if (resetCycle) {
+    // Reset cycle for new 5-minute preview
+    session.totalWatchSeconds = 0;
+    session.lastHeartbeat = Date.now();
+  } else if (!session.isVip) {
+    const validDelta = Math.min(Math.max(Number(deltaSeconds) || 0, 0), 30);
+    session.totalWatchSeconds += validDelta;
+    session.lastHeartbeat = Date.now();
+  }
+
+  const GUEST_LIMIT_SECONDS = 300; // 5 minutos sem reiniciar
+  const isLimitExceeded = !session.isVip && session.totalWatchSeconds >= GUEST_LIMIT_SECONDS;
+  const remainingSeconds = Math.max(0, GUEST_LIMIT_SECONDS - session.totalWatchSeconds);
+
+  // Sync to MongoDB asynchronously
+  mongoRecordSessionHeartbeat({
+    sessionId,
+    ip: clientIp,
+    userAgent: req.headers['user-agent'] as string,
+    isVip: session.isVip,
+    userEmail: session.userEmail,
+    mediaId: session.mediaId,
+    mediaType: session.mediaType,
+    totalWatchSeconds: session.totalWatchSeconds,
+    lastHeartbeat: new Date().toISOString(),
+    isBlocked: isLimitExceeded,
+    adblockDetected: Boolean(adblockDetected)
+  }).catch(() => {});
 
   res.json({
     success: true,
-    user: safeUser,
-    token,
-    message: `Autenticado como ${user.name}`
+    sessionId,
+    isVip: session.isVip,
+    totalWatchSeconds: session.totalWatchSeconds,
+    isLimitExceeded,
+    remainingSeconds,
+    adblockBlocked: Boolean(adblockDetected)
   });
+});
+
+// Anti-Adblock Canary endpoints
+app.get('/api/ads/telemetry', (req, res) => {
+  res.json({ status: 'ok', shieldActive: true });
+});
+
+app.get('/api/ads/beacon.js', (req, res) => {
+  res.type('application/javascript').send('window.__MAXTV_AD_SHIELD_OK__ = true;');
+});
+
+// Database status endpoint
+app.get('/api/db/status', (req, res) => {
+  res.json(getMongoStatus());
 });
 
 // 2.3 USER FAVORITES & WATCH PROGRESS STORES
@@ -1319,14 +1355,32 @@ app.delete('/api/user/favorites/:id', (req, res) => {
   res.json({ success: true, count: list.length, favorites: list });
 });
 
-// User Watch Progress Endpoints
-app.get('/api/user/progress', (req, res) => {
+// User Watch Progress Endpoints with MongoDB Persistence
+app.get('/api/user/progress', async (req, res) => {
   const userKey = getUserKeyFromReq(req);
-  const progressList = userProgressStore.get(userKey) || [];
+  let progressList = userProgressStore.get(userKey);
+  if (!progressList && isMongoConnected()) {
+    try {
+      const dbList = await mongoGetWatchProgress(userKey);
+      if (dbList && dbList.length > 0) {
+        progressList = dbList.map(doc => ({
+          id: doc.vodId,
+          title: doc.title,
+          currentTime: doc.currentTime,
+          duration: doc.duration,
+          percent: doc.percent,
+          completed: doc.completed,
+          updatedAt: doc.updatedAt
+        }));
+        userProgressStore.set(userKey, progressList);
+      }
+    } catch {}
+  }
+  progressList = progressList || [];
   res.json({ success: true, count: progressList.length, progress: progressList });
 });
 
-app.post('/api/user/progress', (req, res) => {
+app.post('/api/user/progress', async (req, res) => {
   const userKey = getUserKeyFromReq(req);
   const { progress } = req.body;
   if (!progress || !progress.id) {
@@ -1339,6 +1393,18 @@ app.post('/api/user/progress', (req, res) => {
   // Cap at 30 items
   if (list.length > 30) list = list.slice(0, 30);
   userProgressStore.set(userKey, list);
+
+  // Sync to MongoDB if connected
+  mongoSaveWatchProgress({
+    email: userKey,
+    vodId: progress.id,
+    title: progress.title || '',
+    currentTime: progress.currentTime || 0,
+    duration: progress.duration || 0,
+    percent: progress.percent || 0,
+    completed: Boolean(progress.completed),
+    updatedAt: new Date().toISOString()
+  }).catch(err => console.warn('[MongoDB] Save watch progress error:', err));
 
   res.json({ success: true, count: list.length, progress: list });
 });

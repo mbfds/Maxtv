@@ -130,7 +130,7 @@ export const VodSection: React.FC<VodSectionProps> = ({
             return (
               <div
                 key={item.id}
-                onClick={() => setActiveModalItem(item)}
+                onClick={() => onPlayVod(item)}
                 className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-white/5 hover:border-indigo-500/50 transition-all cursor-pointer hover:shadow-2xl hover:shadow-indigo-950/20 hover:-translate-y-1.5"
               >
                 {/* Poster image */}
@@ -155,7 +155,7 @@ export const VodSection: React.FC<VodSectionProps> = ({
                     )}
                   </div>
 
-                  {/* Top Right: Favorite Button + VIP badge */}
+                  {/* Top Right: Info + Favorite Button + VIP badge */}
                   <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
                     {isLocked && (
                       <div className="bg-indigo-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20">
@@ -163,6 +163,17 @@ export const VodSection: React.FC<VodSectionProps> = ({
                         VIP
                       </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveModalItem(item);
+                      }}
+                      className="p-1.5 rounded-full backdrop-blur-md bg-slate-900/80 text-white/70 border border-white/10 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                      title="Sinopse e Detalhes"
+                    >
+                      <Film className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -304,21 +315,32 @@ export const VodSection: React.FC<VodSectionProps> = ({
                 >
                   Fechar
                 </button>
+
+                {!isVip && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveModalItem(null);
+                      onOpenCheckout();
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-xs sm:text-sm border border-amber-500/40 transition-all cursor-pointer"
+                  >
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Plano VIP R$ 10,00</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
                     const itm = activeModalItem;
                     setActiveModalItem(null);
-                    if (itm.isVipOnly && !isVip) {
-                      onOpenCheckout();
-                    } else {
-                      onPlayVod(itm);
-                    }
+                    onPlayVod(itm);
                   }}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 transition-all"
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-white" />
-                  <span>{activeModalItem.isVipOnly && !isVip ? 'Liberar com VIP Pix' : 'Assistir Agora'}</span>
+                  <span>{isVip ? 'Assistir Agora' : 'Assistir (Prévia 5 min)'}</span>
                 </button>
               </div>
             </div>

@@ -3,17 +3,18 @@ import { SubscriptionPlan } from '../types';
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'plan-mensal',
-    name: 'Plano Mensal',
+    name: 'Plano Mensal VIP',
     period: 'monthly',
-    price: 19.90,
-    originalPrice: 29.90,
-    badge: 'Popular',
+    price: 10.00,
+    originalPrice: 20.00,
+    badge: 'Mais Vendido',
     durationDays: 30,
     features: [
-      'Acesso a 110+ canais de TV ao vivo em HD',
-      'Catálogo completo de Filmes e Séries (VOD)',
-      '1 Conexão simultânea',
-      'Ativação imediata via PIX Mercado Pago',
+      '1 Dispositivo conectado',
+      'Todos os canais de TV ao vivo em Full HD/4K',
+      'Catálogo completo de Filmes e Séries liberado',
+      'Sem propagandas e sem limite de 5 minutos',
+      'Ativação imediata via PIX Oficial Mercado Pago',
       'Suporte prioritário 24/7'
     ]
   },
@@ -21,32 +22,32 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'plan-trimestral',
     name: 'Plano Trimestral',
     period: 'quarterly',
-    price: 49.90,
-    originalPrice: 79.90,
-    badge: 'Mais Econômico',
+    price: 27.00,
+    originalPrice: 30.00,
+    badge: 'Desconto 10%',
     durationDays: 90,
     features: [
-      'Acesso ilimitado a todos os canais HD e Full HD',
+      '1 Dispositivo conectado',
+      'Acesso ilimitado 90 dias a todos os canais',
       'Filmes e séries sem anúncios',
-      '2 Conexões simultâneas',
-      'Canais Premiere, SporTV e Premiere Clubes',
-      '3 meses de acesso garantido'
+      'Canais Premiere, Esportes e Notícias',
+      'Economize com 3 meses de acesso garantido'
     ]
   },
   {
     id: 'plan-anual-vip',
-    name: 'MAXTV VIP Anual',
+    name: 'Plano Anual VIP',
     period: 'annual',
-    price: 149.90,
-    originalPrice: 238.80,
+    price: 99.00,
+    originalPrice: 120.00,
     badge: 'Melhor Custo-Benefício',
     durationDays: 365,
     features: [
-      'Acesso TOTAL VIP (Canais 4K + VOD Completo)',
-      '4 Telas simultâneas para toda a família',
-      'Canais adultos e Pay-Per-View inclusos',
+      '1 Dispositivo conectado',
+      'Acesso TOTAL VIP por 1 ano completo',
+      'Todos os canais, filmes e séries sem limites',
       'Guia de programação EPG em tempo real',
-      '1 Ano de streaming sem interrupções'
+      'Streaming em alta velocidade sem travamentos'
     ]
   }
 ];
