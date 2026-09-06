@@ -386,6 +386,8 @@ export default function App() {
               <HeroBanner
                 featuredVod={featuredVod}
                 featuredChannel={featuredChannel}
+                featuredVods={vodItems}
+                featuredChannels={channels}
                 isVip={isVip}
                 onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
                 onPlayVod={(vod) => handlePlayMedia(vod, 'vod')}

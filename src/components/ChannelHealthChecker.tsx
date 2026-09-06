@@ -59,7 +59,7 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
   const inlineTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inlineCanPlayFiredRef = useRef<boolean>(false);
 
-  // Strict 3.5s timeout for inline preview video initialization
+  // Strict 10s timeout for inline preview video initialization
   useEffect(() => {
     if (!inlinePreviewChannel) return;
     setInlinePlayerStatus('loading');
@@ -70,9 +70,9 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
     inlineTimeoutRef.current = setTimeout(() => {
       if (!inlineCanPlayFiredRef.current) {
         setInlinePlayerStatus('error');
-        setInlineErrorMessage('Conexão excedeu 3,5s: evento canplay não disparou.');
+        setInlineErrorMessage('Conexão excedeu 10s: evento canplay não disparou.');
       }
-    }, 3500);
+    }, 10000);
 
     return () => {
       if (inlineTimeoutRef.current) clearTimeout(inlineTimeoutRef.current);

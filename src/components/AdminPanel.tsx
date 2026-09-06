@@ -5,18 +5,20 @@ import {
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
-  Activity, Film, WifiOff
+  Activity, Film, WifiOff, FileCode
 } from 'lucide-react';
-import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport } from '../types';
+import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
 import { ChannelHealthChecker } from './ChannelHealthChecker';
+import { ChannelConfigEditor } from './ChannelConfigEditor';
+import { ChannelUpdateHistory } from './ChannelUpdateHistory';
 
 interface AdminPanelProps {
   onClose: () => void;
   onPreviewChannel: (channel: Channel) => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'channels' | 'transactions' | 'settings';
+type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'channels' | 'channels-config' | 'channels-history' | 'transactions' | 'settings';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -27,6 +29,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelReports, setChannelReports] = useState<ChannelReport[]>([]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [lastChannelUpdate, setLastChannelUpdate] = useState<ChannelUpdateHistoryEntry | null>(null);
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState<number>(0);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [actionFeedback, setActionFeedback] = useState<string>('');
@@ -63,14 +67,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [mRes, sRes, gRes, tRes, cRes, setRes, rRes] = await Promise.all([
+      const [mRes, sRes, gRes, tRes, cRes, setRes, rRes, hRes] = await Promise.all([
         api.getAdminMetrics(),
         api.getSubscribers(),
         api.getGrantsHistory(),
         api.getTransactions(),
         api.getChannels(),
         api.getSettings(),
-        api.getChannelReports()
+        api.getChannelReports(),
+        api.getChannelUpdateHistory()
       ]);
 
       if (mRes.success) setMetrics(mRes.metrics);
@@ -80,6 +85,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       if (cRes.channels) setChannels(cRes.channels);
       if (setRes.success) setSettings(setRes.settings);
       if (rRes.success && rRes.reports) setChannelReports(rRes.reports);
+      if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
     } catch {
       // Data load failure handled by state
     } finally {
@@ -261,6 +267,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       showFeedback(res.message);
       const cRes = await api.getChannels();
       if (cRes.channels) setChannels(cRes.channels);
+      const hRes = await api.getChannelUpdateHistory();
+      if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
+      setHistoryRefreshTrigger(prev => prev + 1);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -275,6 +284,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       showFeedback(res.message);
       const cRes = await api.getChannels();
       if (cRes.channels) setChannels(cRes.channels);
+      const hRes = await api.getChannelUpdateHistory();
+      if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
+      setHistoryRefreshTrigger(prev => prev + 1);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -574,6 +586,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 font-bold">
                 {channels.length}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('channels-config')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'channels-config'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FileCode className="w-4 h-4 text-emerald-400" />
+                <span>Configuração JSON</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                Editor
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('channels-history')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'channels-history'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <History className="w-4 h-4 text-cyan-400" />
+                <span>Histórico da Grade</span>
+              </div>
+              {lastChannelUpdate && (
+                <span className={`w-2 h-2 rounded-full ${lastChannelUpdate.success ? 'bg-emerald-400' : 'bg-rose-400'}`} title="Status da última atualização" />
+              )}
             </button>
 
             <button
@@ -1261,7 +1309,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Histórico de links inativos e conexões lentas (&gt; 3,5s) reportados diretamente pelos usuários no player.
+                    Histórico de links inativos e conexões lentas (&gt; 10s) reportados diretamente pelos usuários no player.
                   </p>
                 </div>
 
@@ -1300,9 +1348,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
 
                 <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 flex items-center justify-between">
                   <div>
-                    <span className="text-xs text-slate-400">Excedeu Limite de 3,5s</span>
+                    <span className="text-xs text-slate-400">Excedeu Limite de 10s</span>
                     <p className="text-2xl font-bold text-amber-400 mt-1">
-                      {channelReports.filter(r => r.status === 'slow_connection' || (r.latencyMs && r.latencyMs >= 3500) || r.reason.toLowerCase().includes('3,5')).length}
+                      {channelReports.filter(r => r.status === 'slow_connection' || (r.latencyMs && r.latencyMs >= 10000) || r.reason.toLowerCase().includes('10')).length}
                     </p>
                   </div>
                   <Clock className="w-8 h-8 text-amber-400/50" />
@@ -1380,7 +1428,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                               ) : report.status === 'slow_connection' ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/40">
                                   <Clock className="w-3 h-3 text-amber-400" />
-                                  Lento (&gt; 3,5s)
+                                  Lento (&gt; 10s)
                                 </span>
                               ) : report.status === 'unstable' ? (
                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-500/40">
@@ -1464,6 +1512,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => setActiveTab('channels-config')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-500/40 text-xs font-semibold shadow-md shadow-indigo-600/10 transition-all cursor-pointer"
+                    title="Editar arquivo de configuração JSON com validação"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Editar JSON da Grade</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('channels-history')}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 text-xs font-semibold transition-colors cursor-pointer"
+                    title="Histórico de atualizações da grade"
+                  >
+                    <History className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Histórico de Atualizações</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setActiveTab('channel-health')}
                     className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-emerald-500/20 transition-all cursor-pointer"
                   >
@@ -1505,6 +1573,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   </button>
                 </div>
               </div>
+
+              {/* Status e Última Atualização da Grade */}
+              {lastChannelUpdate && (
+                <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl border ${
+                      lastChannelUpdate.success 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                        : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                    }`}>
+                      <History className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Última Atualização da Grade:</span>
+                        <span className="text-xs font-semibold text-slate-300">{lastChannelUpdate.actionName}</span>
+                        {lastChannelUpdate.success ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                            <Check className="w-2.5 h-2.5" />
+                            Sucesso
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold bg-rose-950 text-rose-300 border border-rose-500/30">
+                            <AlertCircle className="w-2.5 h-2.5" />
+                            Falha
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-slate-400">
+                        <span>{lastChannelUpdate.dateFormatted}</span>
+                        <span>•</span>
+                        <span>{lastChannelUpdate.channelsCount} canais</span>
+                        <span>•</span>
+                        <span>por {lastChannelUpdate.author}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('channels-config')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors"
+                    >
+                      Editar JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('channels-history')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-white/10 transition-colors"
+                    >
+                      Ver Histórico Completo →
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900 shadow-sm">
                 <table className="w-full text-left text-xs">
@@ -1587,6 +1711,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 </table>
               </div>
             </div>
+          )}
+
+          {/* TAB: CONFIGURAÇÃO JSON DOS CANAIS */}
+          {activeTab === 'channels-config' && (
+            <ChannelConfigEditor
+              currentUserEmail="cebolao1302@gmail.com"
+              onOpenHistory={() => setActiveTab('channels-history')}
+              onSaveSuccess={async (count, msg) => {
+                showFeedback(msg);
+                try {
+                  const [cRes, hRes] = await Promise.all([
+                    api.getChannels(),
+                    api.getChannelUpdateHistory()
+                  ]);
+                  if (cRes.channels) setChannels(cRes.channels);
+                  if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
+                  setHistoryRefreshTrigger(prev => prev + 1);
+                } catch {
+                  // Handled
+                }
+              }}
+            />
+          )}
+
+          {/* TAB: HISTÓRICO DE ATUALIZAÇÕES DA GRADE */}
+          {activeTab === 'channels-history' && (
+            <ChannelUpdateHistory
+              onOpenConfigEditor={() => setActiveTab('channels-config')}
+              onTriggerSync={(source) => source === 'ramys' ? handleSyncRamys() : handleSyncSaimo()}
+              refreshTrigger={historyRefreshTrigger}
+            />
           )}
 
           {/* TAB 6: TRANSAÇÕES PIX */}

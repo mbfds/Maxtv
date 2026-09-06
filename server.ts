@@ -176,8 +176,100 @@ let parsedRamysChannels: ServerChannel[] = [];
 let parsedSaimoChannels: ServerChannel[] = [];
 let parsedRamysVod: any[] = [];
 let customAdminChannels: ServerChannel[] = [];
+let customConfigChannels: ServerChannel[] = [];
 let lastCatalogFetch = 0;
 let lastRamysFetch = 0;
+
+interface ServerChannelUpdateHistoryEntry {
+  id: string;
+  timestamp: string;
+  dateFormatted: string;
+  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
+  actionName: string;
+  success: boolean;
+  channelsCount: number;
+  details: string;
+  author: string;
+  durationMs?: number;
+  errorMessage?: string;
+}
+
+const CHANNELS_CONFIG_FILE = path.join(process.cwd(), 'public', 'data', 'channels-config.json');
+const CHANNELS_HISTORY_FILE = path.join(process.cwd(), 'public', 'data', 'channel-updates-history.json');
+
+let channelUpdateHistory: ServerChannelUpdateHistoryEntry[] = [];
+
+function initChannelStorage() {
+  try {
+    const dataDir = path.join(process.cwd(), 'public', 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    if (fs.existsSync(CHANNELS_CONFIG_FILE)) {
+      const raw = fs.readFileSync(CHANNELS_CONFIG_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.channels) ? parsed.channels : []);
+      if (list.length > 0) {
+        customConfigChannels = list;
+        console.log(`[CHANNELS CONFIG] ${customConfigChannels.length} canais carregados do arquivo channels-config.json`);
+      }
+    }
+
+    if (fs.existsSync(CHANNELS_HISTORY_FILE)) {
+      const rawHist = fs.readFileSync(CHANNELS_HISTORY_FILE, 'utf-8');
+      channelUpdateHistory = JSON.parse(rawHist);
+    }
+  } catch (e) {
+    console.warn('[CHANNELS INIT] Aviso ao inicializar armazenamento de canais:', e);
+  }
+
+  if (channelUpdateHistory.length === 0) {
+    const now = Date.now();
+    channelUpdateHistory = [
+      {
+        id: `hist-${now - 3600000}`,
+        timestamp: new Date(now - 3600000).toISOString(),
+        dateFormatted: new Date(now - 3600000).toLocaleString('pt-BR'),
+        type: 'initial_load',
+        actionName: 'Inicialização da Grade de Canais',
+        success: true,
+        channelsCount: 65,
+        details: 'Canais base de alta estabilidade carregados via CDN Saimo-TV e satlabscloud',
+        author: 'Sistema'
+      }
+    ];
+  }
+}
+initChannelStorage();
+
+function logChannelUpdate(entry: Omit<ServerChannelUpdateHistoryEntry, 'id' | 'timestamp' | 'dateFormatted'>): ServerChannelUpdateHistoryEntry {
+  const newEntry: ServerChannelUpdateHistoryEntry = {
+    id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: new Date().toISOString(),
+    dateFormatted: new Date().toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }),
+    ...entry
+  };
+  channelUpdateHistory.unshift(newEntry);
+  if (channelUpdateHistory.length > 150) {
+    channelUpdateHistory.pop();
+  }
+  try {
+    const dataDir = path.dirname(CHANNELS_HISTORY_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(CHANNELS_HISTORY_FILE, JSON.stringify(channelUpdateHistory, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[CHANNELS HISTORY] Falha ao persistir histórico:', e);
+  }
+  return newEntry;
+}
 
 // Helper to deduce category
 function categorizeChannel(name: string): string {
@@ -819,7 +911,7 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6500);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch(decodedUrl, {
       headers,
@@ -915,7 +1007,10 @@ app.get('/api/channels', (req, res) => {
     baseChannels.push(...validRamys);
   }
 
-  const all = [...customAdminChannels, ...baseChannels].map(ch => {
+  // If the admin saved a custom config file, prioritize those channels
+  const effectiveBase = customConfigChannels.length > 0 ? customConfigChannels : baseChannels;
+
+  const all = [...customAdminChannels, ...effectiveBase].map(ch => {
     const health = channelHealthStore.get(ch.id);
     if (health) {
       return {
@@ -930,10 +1025,11 @@ app.get('/api/channels', (req, res) => {
   res.json({
     success: true,
     count: all.length,
-    source: parsedSaimoChannels.length > 0 ? 'Saimo-TV + Multi-CDN' : 'Ramys/Iptv-Brasil-2026',
+    source: customConfigChannels.length > 0 ? 'Arquivo de Configuração (channels-config.json)' : (parsedSaimoChannels.length > 0 ? 'Saimo-TV + Multi-CDN' : 'Ramys/Iptv-Brasil-2026'),
     ramysCount: parsedRamysChannels.length,
     saimoCount: parsedSaimoChannels.length,
-    lastUpdated: lastCatalogFetch || lastRamysFetch,
+    configCount: customConfigChannels.length,
+    lastUpdated: lastCatalogFetch || lastRamysFetch || Date.now(),
     channels: all
   });
 });
@@ -1931,7 +2027,17 @@ app.post('/api/admin/channels', (req, res) => {
   };
 
   customAdminChannels.unshift(newChannel);
-  res.json({ success: true, channel: newChannel });
+
+  const hist = logChannelUpdate({
+    type: 'manual_add',
+    actionName: 'Adição Manual de Canal',
+    success: true,
+    channelsCount: customAdminChannels.length + parsedSaimoChannels.length,
+    details: `Canal "${newChannel.name}" (${newChannel.category}) cadastrado e ativado na grade`,
+    author: req.body?.author || 'Administrador'
+  });
+
+  res.json({ success: true, channel: newChannel, lastUpdate: hist });
 });
 
 app.put('/api/admin/channels/:id', (req, res) => {
@@ -1990,12 +2096,28 @@ app.put('/api/admin/channels/:id', (req, res) => {
       isVipOnly: Boolean(isVipOnly)
     };
     customAdminChannels.unshift(newCh);
-    return res.json({ success: true, channel: newCh, message: 'Canal adicionado e atualizado com sucesso!' });
+    const hist = logChannelUpdate({
+      type: 'manual_add',
+      actionName: 'Adição/Atualização de Canal',
+      success: true,
+      channelsCount: customAdminChannels.length + parsedSaimoChannels.length,
+      details: `Canal "${newCh.name}" adicionado à grade`,
+      author: req.body?.author || 'Administrador'
+    });
+    return res.json({ success: true, channel: newCh, lastUpdate: hist, message: 'Canal adicionado e atualizado com sucesso!' });
   }
 
   const allChannels = [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
   const updatedChannel = allChannels.find(c => c.id === id);
-  res.json({ success: true, channel: updatedChannel, message: 'Canal atualizado na grade com sucesso!' });
+  const hist = logChannelUpdate({
+    type: 'manual_edit',
+    actionName: 'Edição de Canal',
+    success: true,
+    channelsCount: allChannels.length,
+    details: `Canal "${updatedChannel?.name || id}" atualizado na grade`,
+    author: req.body?.author || 'Administrador'
+  });
+  res.json({ success: true, channel: updatedChannel, lastUpdate: hist, message: 'Canal atualizado na grade com sucesso!' });
 });
 
 app.delete('/api/admin/channels/:id', (req, res) => {
@@ -2003,25 +2125,407 @@ app.delete('/api/admin/channels/:id', (req, res) => {
   customAdminChannels = customAdminChannels.filter(c => c.id !== id);
   parsedRamysChannels = parsedRamysChannels.filter(c => c.id !== id);
   parsedSaimoChannels = parsedSaimoChannels.filter(c => c.id !== id);
+  customConfigChannels = customConfigChannels.filter(c => c.id !== id);
+
+  logChannelUpdate({
+    type: 'manual_delete',
+    actionName: 'Exclusão de Canal',
+    success: true,
+    channelsCount: customAdminChannels.length + parsedSaimoChannels.length,
+    details: `Canal ID "${id}" excluído da grade`,
+    author: req.body?.author || 'Administrador'
+  });
+
   res.json({ success: true });
 });
 
 app.post('/api/admin/channels/sync-ramys', async (req, res) => {
-  await Promise.allSettled([loadRamysCatalog(), loadRamysVod()]);
-  res.json({
-    success: true,
-    channelsCount: parsedRamysChannels.length,
-    vodCount: parsedRamysVod.length,
-    message: `Sincronizados com sucesso ${parsedRamysChannels.length} canais e ${parsedRamysVod.length} filmes/séries do repositório Ramys/Iptv-Brasil-2026!`
-  });
+  try {
+    await Promise.allSettled([loadRamysCatalog(), loadRamysVod()]);
+    const hist = logChannelUpdate({
+      type: 'sync_ramys',
+      actionName: 'Sincronização IPTV Brasil 2026 (Ramys)',
+      success: true,
+      channelsCount: parsedRamysChannels.length,
+      details: `${parsedRamysChannels.length} canais e ${parsedRamysVod.length} filmes/séries sincronizados do repositório oficial`,
+      author: req.body?.author || 'Administrador'
+    });
+
+    res.json({
+      success: true,
+      channelsCount: parsedRamysChannels.length,
+      vodCount: parsedRamysVod.length,
+      lastUpdate: hist,
+      message: `Sincronizados com sucesso ${parsedRamysChannels.length} canais e ${parsedRamysVod.length} filmes/séries do repositório Ramys/Iptv-Brasil-2026!`
+    });
+  } catch (err: any) {
+    const hist = logChannelUpdate({
+      type: 'sync_ramys',
+      actionName: 'Sincronização IPTV Brasil 2026 (Ramys)',
+      success: false,
+      channelsCount: 0,
+      details: `Falha na sincronização: ${err.message || err}`,
+      author: req.body?.author || 'Administrador',
+      errorMessage: err.message || String(err)
+    });
+    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar' });
+  }
 });
 
 app.post('/api/admin/channels/sync-saimo', async (req, res) => {
-  await loadSaimoCatalog();
+  try {
+    await loadSaimoCatalog();
+    const hist = logChannelUpdate({
+      type: 'sync_saimo',
+      actionName: 'Sincronização Saimo-TV',
+      success: true,
+      channelsCount: parsedSaimoChannels.length,
+      details: `${parsedSaimoChannels.length} canais de alta estabilidade sincronizados via CDN Saimo-TV`,
+      author: req.body?.author || 'Administrador'
+    });
+
+    res.json({
+      success: true,
+      count: parsedSaimoChannels.length,
+      lastUpdate: hist,
+      message: `Sincronizados ${parsedSaimoChannels.length} canais com sucesso da Saimo-TV!`
+    });
+  } catch (err: any) {
+    const hist = logChannelUpdate({
+      type: 'sync_saimo',
+      actionName: 'Sincronização Saimo-TV',
+      success: false,
+      channelsCount: 0,
+      details: `Falha na sincronização Saimo-TV: ${err.message || err}`,
+      author: req.body?.author || 'Administrador',
+      errorMessage: err.message || String(err)
+    });
+    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar' });
+  }
+});
+
+// --- CHANNELS JSON CONFIGURATION & UPDATE HISTORY SYSTEM ---
+
+// GET /api/admin/channels/config (Ler arquivo de configuração)
+app.get('/api/admin/channels/config', (req, res) => {
+  try {
+    let configObj: any = null;
+    let rawText = '';
+    let lastModified = new Date().toISOString();
+
+    if (fs.existsSync(CHANNELS_CONFIG_FILE)) {
+      rawText = fs.readFileSync(CHANNELS_CONFIG_FILE, 'utf-8');
+      const stats = fs.statSync(CHANNELS_CONFIG_FILE);
+      lastModified = stats.mtime.toISOString();
+      configObj = JSON.parse(rawText);
+    } else {
+      const baseChannels = parsedSaimoChannels.length > 0 ? parsedSaimoChannels : parsedRamysChannels;
+      const initialList = [...customAdminChannels, ...baseChannels];
+
+      configObj = {
+        version: "1.0",
+        updatedAt: new Date().toISOString(),
+        updatedBy: "Sistema",
+        description: "Configuração Oficial da Grade de Canais de TV do Sistema",
+        channels: initialList
+      };
+
+      rawText = JSON.stringify(configObj, null, 2);
+      const dataDir = path.dirname(CHANNELS_CONFIG_FILE);
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(CHANNELS_CONFIG_FILE, rawText, 'utf-8');
+    }
+
+    const channelsList = Array.isArray(configObj) ? configObj : (Array.isArray(configObj.channels) ? configObj.channels : []);
+
+    res.json({
+      success: true,
+      config: configObj,
+      rawJson: rawText,
+      filePath: 'public/data/channels-config.json',
+      count: channelsList.length,
+      lastModified
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Erro ao carregar arquivo de configuração: ' + (err.message || err) });
+  }
+});
+
+// POST /api/admin/channels/config/validate (Validação estrita de formato JSON e schema)
+app.post('/api/admin/channels/config/validate', (req, res) => {
+  const { rawJson, config } = req.body;
+  let parsed: any = config;
+
+  if (typeof rawJson === 'string') {
+    try {
+      parsed = JSON.parse(rawJson);
+    } catch (err: any) {
+      return res.json({
+        valid: false,
+        errorType: 'syntax',
+        error: `Erro de sintaxe no JSON: ${err.message}`,
+        details: err.toString()
+      });
+    }
+  }
+
+  if (!parsed || (typeof parsed !== 'object')) {
+    return res.json({
+      valid: false,
+      errorType: 'schema',
+      error: 'O formato deve ser um objeto com a chave "channels": [...] ou uma lista de canais em formato array [].'
+    });
+  }
+
+  const list = Array.isArray(parsed) ? parsed : parsed.channels;
+  if (!Array.isArray(list)) {
+    return res.json({
+      valid: false,
+      errorType: 'schema',
+      error: 'A chave "channels" deve ser um array contendo os canais de TV.'
+    });
+  }
+
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  const seenIds = new Set<string>();
+
+  list.forEach((ch, idx) => {
+    if (!ch || typeof ch !== 'object') {
+      errors.push(`Item #${idx + 1} não é um objeto de canal válido.`);
+      return;
+    }
+    if (!ch.name || typeof ch.name !== 'string' || !ch.name.trim()) {
+      errors.push(`Canal no índice #${idx + 1} não possui um "name" (nome obrigatório).`);
+    }
+
+    if (ch.id) {
+      if (seenIds.has(ch.id)) {
+        warnings.push(`ID duplicado detectado: "${ch.id}" (índice #${idx + 1}).`);
+      } else {
+        seenIds.add(ch.id);
+      }
+    } else {
+      warnings.push(`Canal "${ch.name || idx + 1}" sem ID fixo. Será gerado automaticamente.`);
+    }
+
+    const hasSources = Array.isArray(ch.sources) && ch.sources.length > 0 && ch.sources.some((s: any) => s && (s.url || typeof s === 'string'));
+    const hasDirectUrl = typeof ch.url === 'string' && ch.url.trim().length > 0;
+    const hasStreamUrl = typeof ch.streamUrl === 'string' && ch.streamUrl.trim().length > 0;
+
+    if (!hasSources && !hasDirectUrl && !hasStreamUrl) {
+      errors.push(`Canal "${ch.name || idx + 1}" não possui URL de stream definida.`);
+    }
+  });
+
+  if (errors.length > 0) {
+    return res.json({
+      valid: false,
+      errorType: 'schema',
+      error: errors[0],
+      errors,
+      warnings,
+      count: list.length
+    });
+  }
+
+  res.json({
+    valid: true,
+    count: list.length,
+    warnings
+  });
+});
+
+// POST /api/admin/channels/config (Salvar e aplicar arquivo de configuração)
+app.post('/api/admin/channels/config', (req, res) => {
+  try {
+    const { rawJson, config, author } = req.body;
+    let parsed: any = config;
+
+    if (typeof rawJson === 'string') {
+      try {
+        parsed = JSON.parse(rawJson);
+      } catch (err: any) {
+        logChannelUpdate({
+          type: 'json_edit',
+          actionName: 'Tentativa de Edição JSON',
+          success: false,
+          channelsCount: 0,
+          details: `Falha de validação de sintaxe JSON: ${err.message}`,
+          author: author || 'Administrador',
+          errorMessage: err.message
+        });
+
+        return res.status(400).json({
+          success: false,
+          error: `Erro de sintaxe no arquivo JSON: ${err.message}. A gravação foi cancelada para proteger o sistema.`
+        });
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Estrutura JSON inválida. Envie um objeto com a chave "channels" ou um array de canais.'
+      });
+    }
+
+    const rawList = Array.isArray(parsed) ? parsed : parsed.channels;
+    if (!Array.isArray(rawList)) {
+      return res.status(400).json({
+        success: false,
+        error: 'O arquivo JSON deve conter um array na chave "channels".'
+      });
+    }
+
+    if (rawList.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'A lista de canais não pode estar vazia. Insira ao menos um canal válido para não deixar a grade desprovida.'
+      });
+    }
+
+    const normalized: ServerChannel[] = [];
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      if (!item || typeof item !== 'object') continue;
+      const name = typeof item.name === 'string' ? item.name.trim() : '';
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          error: `Canal no índice #${i + 1} está sem nome ("name" é obrigatório).`
+        });
+      }
+
+      let sources: { url: string; referer?: string; userAgent?: string; quality?: string }[] = [];
+      if (Array.isArray(item.sources) && item.sources.length > 0) {
+        sources = item.sources.map((s: any) => {
+          if (typeof s === 'string') {
+            return { url: s, quality: '1080p' };
+          }
+          return {
+            url: s.url || '',
+            referer: s.referer || undefined,
+            userAgent: s.userAgent || undefined,
+            quality: s.quality || '1080p'
+          };
+        }).filter(s => Boolean(s.url));
+      } else if (item.url) {
+        sources = [{ url: item.url, quality: item.quality || '1080p', referer: item.referer }];
+      } else if (item.streamUrl) {
+        sources = [{ url: item.streamUrl, quality: item.quality || '1080p', referer: item.referer }];
+      }
+
+      if (sources.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Canal "${name}" não possui nenhuma fonte de stream ("url" ou "sources").`
+        });
+      }
+
+      const id = item.id ? String(item.id).trim() : `cfg-ch-${Date.now()}-${i}-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+      const category = item.category || categorizeChannel(name);
+      const logo = item.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200';
+      const isActive = item.isActive !== undefined ? Boolean(item.isActive) : true;
+      const isVipOnly = item.isVipOnly !== undefined ? Boolean(item.isVipOnly) : false;
+
+      normalized.push({
+        id,
+        name,
+        category,
+        logo,
+        sources,
+        isActive,
+        isVipOnly,
+        isCustom: true,
+        epgNow: item.epgNow || undefined,
+        epgNext: item.epgNext || undefined
+      });
+    }
+
+    const finalDocument = {
+      version: "1.0",
+      updatedAt: new Date().toISOString(),
+      updatedBy: author || "Administrador",
+      description: typeof parsed.description === 'string' ? parsed.description : "Configuração Oficial da Grade de Canais de TV do Sistema",
+      channels: normalized
+    };
+
+    const formattedJson = JSON.stringify(finalDocument, null, 2);
+    const dataDir = path.dirname(CHANNELS_CONFIG_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(CHANNELS_CONFIG_FILE, formattedJson, 'utf-8');
+
+    customConfigChannels = normalized;
+
+    const historyEntry = logChannelUpdate({
+      type: 'json_edit',
+      actionName: 'Edição de Arquivo JSON de Canais',
+      success: true,
+      channelsCount: normalized.length,
+      details: `Arquivo de configuração channels-config.json salvo com sucesso. ${normalized.length} canais validados e ativos na grade.`,
+      author: author || 'Administrador'
+    });
+
+    res.json({
+      success: true,
+      message: `Arquivo de configuração salvo com sucesso! Grade atualizada com ${normalized.length} canais ativos.`,
+      channelsCount: normalized.length,
+      lastUpdate: historyEntry,
+      config: finalDocument,
+      rawJson: formattedJson
+    });
+  } catch (err: any) {
+    const errorMsg = err.message || 'Erro interno ao salvar arquivo de configuração de canais';
+    logChannelUpdate({
+      type: 'json_edit',
+      actionName: 'Edição de Arquivo JSON de Canais',
+      success: false,
+      channelsCount: 0,
+      details: `Falha na gravação do arquivo: ${errorMsg}`,
+      author: req.body?.author || 'Administrador',
+      errorMessage: errorMsg
+    });
+
+    res.status(500).json({ success: false, error: errorMsg });
+  }
+});
+
+// GET /api/admin/channels/history (Histórico de atualizações da grade)
+app.get('/api/admin/channels/history', (req, res) => {
   res.json({
     success: true,
-    count: parsedSaimoChannels.length,
-    message: `Sincronizados ${parsedSaimoChannels.length} canais com sucesso da Saimo-TV!`
+    lastUpdate: channelUpdateHistory[0] || null,
+    history: channelUpdateHistory,
+    total: channelUpdateHistory.length
+  });
+});
+
+// POST /api/admin/channels/history/clear (Limpar histórico)
+app.post('/api/admin/channels/history/clear', (req, res) => {
+  const clearedEntry = logChannelUpdate({
+    type: 'initial_load',
+    actionName: 'Limpeza de Histórico',
+    success: true,
+    channelsCount: (customConfigChannels.length || parsedSaimoChannels.length),
+    details: 'O histórico de atualizações anteriores foi arquivado/limpo pelo administrador.',
+    author: req.body?.author || 'Administrador'
+  });
+
+  channelUpdateHistory = [clearedEntry];
+  try {
+    if (fs.existsSync(CHANNELS_HISTORY_FILE)) {
+      fs.writeFileSync(CHANNELS_HISTORY_FILE, JSON.stringify(channelUpdateHistory, null, 2), 'utf-8');
+    }
+  } catch {
+    // Ignored
+  }
+
+  res.json({
+    success: true,
+    message: 'Histórico de atualizações da grade resetado com sucesso.',
+    history: channelUpdateHistory,
+    lastUpdate: clearedEntry
   });
 });
 

@@ -9,7 +9,7 @@ import {
   Server, RefreshCw, Film, PictureInPicture, Camera, 
   Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
   HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
-  Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText
+  Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText, SkipForward, ListOrdered
 } from 'lucide-react';
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { api } from '../services/api';
@@ -106,7 +106,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>('contain');
   const [qualities, setQualities] = useState<QualityOption[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
-  const [activeMenu, setActiveMenu] = useState<'settings' | 'sources' | 'help' | 'subtitles' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'settings' | 'sources' | 'help' | 'subtitles' | 'episodes' | null>(null);
 
   // Subtitles (.vtt / .srt) State
   const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<SubtitleTrackOption[]>([]);
@@ -183,7 +183,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [showTroubleshootModal, setShowTroubleshootModal] = useState<boolean>(false);
   const [reloadCounter, setReloadCounter] = useState<number>(0);
 
-  // Rigorous 3.5s timeout and channel health indicators
+  // Rigorous 10s timeout and channel health indicators
   const canPlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasCanPlayFiredRef = useRef<boolean>(false);
   const [isTimedOut, setIsTimedOut] = useState<boolean>(false);
@@ -191,7 +191,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [connectionLatency, setConnectionLatency] = useState<number>(0);
   const [hasReportedError, setHasReportedError] = useState<boolean>(false);
 
-  // Auto-retry counter (up to 3 times after 3.5s timeout or dead link before definitive error and Reportar Erro button)
+  // Auto-retry counter (up to 3 times after 10s timeout or dead link before definitive error and Reportar Erro button)
   const [autoRetryCount, setAutoRetryCount] = useState<number>(0);
   const autoRetryCountRef = useRef<number>(0);
 
@@ -210,6 +210,115 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [isFiveMinLimitReached, setIsFiveMinLimitReached] = useState<boolean>(false);
   const [isAdblockDetected, setIsAdblockDetected] = useState<boolean>(false);
   const isLocked = false; // Todos os usuários acessam com direito aos 5 minutos de degustação
+
+  // Series identification and episode tracking (Piloto Automático applies specifically to series)
+  const isSeries = type === 'vod' && 'type' in item && (item as VodItem).type === 'series';
+
+  const seriesEpisodes = React.useMemo<{
+    seasonNumber: number;
+    episodeNumber: number;
+    title: string;
+    duration: string;
+    streamUrl: string;
+  }[]>(() => {
+    if (!isSeries) return [];
+    const epList: {
+      seasonNumber: number;
+      episodeNumber: number;
+      title: string;
+      duration: string;
+      streamUrl: string;
+    }[] = [];
+    const vod = item as VodItem;
+    if (vod.seasons && vod.seasons.length > 0) {
+      for (const s of vod.seasons) {
+        if (s.episodes && s.episodes.length > 0) {
+          for (const ep of s.episodes) {
+            epList.push({
+              seasonNumber: s.seasonNumber,
+              episodeNumber: ep.episodeNumber,
+              title: ep.title,
+              duration: ep.duration,
+              streamUrl: ep.streamUrl
+            });
+          }
+        }
+      }
+    }
+    if (epList.length === 0) {
+      const fallbackSamples = [
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackSeeTheWorld.mp4'
+      ];
+      for (let i = 1; i <= 6; i++) {
+        epList.push({
+          seasonNumber: 1,
+          episodeNumber: i,
+          title: `Episódio ${i}`,
+          duration: '48m',
+          streamUrl: i === 1 && vod.streamUrl ? vod.streamUrl : fallbackSamples[(i - 1) % fallbackSamples.length]
+        });
+      }
+    }
+    return epList;
+  }, [item, isSeries]);
+
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState<number>(() => {
+    if (!isSeries) return 0;
+    const vod = item as VodItem;
+    if (vod.activeEpisodeNumber) {
+      const idx = seriesEpisodes.findIndex(
+        e => e.episodeNumber === vod.activeEpisodeNumber &&
+             (!vod.activeSeasonNumber || e.seasonNumber === vod.activeSeasonNumber)
+      );
+      if (idx !== -1) return idx;
+    }
+    if (vod.streamUrl) {
+      const idx = seriesEpisodes.findIndex(e => e.streamUrl === vod.streamUrl);
+      if (idx !== -1) return idx;
+    }
+    return 0;
+  });
+
+  useEffect(() => {
+    if (isSeries) {
+      const vod = item as VodItem;
+      let target = 0;
+      if (vod.activeEpisodeNumber) {
+        const idx = seriesEpisodes.findIndex(
+          e => e.episodeNumber === vod.activeEpisodeNumber &&
+               (!vod.activeSeasonNumber || e.seasonNumber === vod.activeSeasonNumber)
+        );
+        if (idx !== -1) target = idx;
+      } else if (vod.streamUrl) {
+        const idx = seriesEpisodes.findIndex(e => e.streamUrl === vod.streamUrl);
+        if (idx !== -1) target = idx;
+      }
+      setCurrentEpisodeIndex(target);
+    }
+  }, [item, isSeries, seriesEpisodes]);
+
+  const currentEpisode = isSeries ? (seriesEpisodes[currentEpisodeIndex] || seriesEpisodes[0]) : null;
+  const nextEpisode = isSeries && currentEpisodeIndex < seriesEpisodes.length - 1
+    ? seriesEpisodes[currentEpisodeIndex + 1]
+    : null;
+
+  // Autopilot (Piloto Automático) State: only applicable for series
+  const [isAutopilotEnabled, setIsAutopilotEnabled] = useState<boolean>(() => {
+    if (isSeries && (item as VodItem).autoPilotEnabled !== undefined) {
+      return (item as VodItem).autoPilotEnabled!;
+    }
+    const saved = localStorage.getItem('maxtv_series_autopilot');
+    return saved !== 'false'; // Default to true
+  });
+
+  const [autopilotCountdown, setAutopilotCountdown] = useState<number | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasAutoTriggeredRef = useRef<boolean>(false);
 
   // Build unified sources list with protocol metadata
   const sources: { name: string; url: string; referer?: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4' }[] = React.useMemo(() => {
@@ -240,12 +349,16 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       });
     }
 
+    const effectiveStreamUrl = (isSeries && currentEpisode?.streamUrl)
+      ? currentEpisode.streamUrl
+      : vod.streamUrl;
+
     const list: { name: string; url: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4' }[] = [
       { 
         name: 'Servidor 1 - Alta Velocidade (CDN)', 
-        url: vod.streamUrl, 
+        url: effectiveStreamUrl, 
         quality: '1080p', 
-        protocol: vod.streamUrl.includes('.mpd') ? 'dash' : (vod.streamUrl.includes('.m3u8') ? 'hls' : 'mp4') 
+        protocol: effectiveStreamUrl.includes('.mpd') ? 'dash' : (effectiveStreamUrl.includes('.m3u8') ? 'hls' : 'mp4') 
       }
     ];
     if (vod.backupStreamUrl) {
@@ -257,7 +370,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       });
     }
     return list;
-  }, [item, type]);
+  }, [item, type, isSeries, currentEpisode]);
 
   const currentSource = sources[currentSourceIndex] || sources[0];
 
@@ -508,7 +621,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   /**
    * Função checkChannelHealth: valida o status HTTP do stream usando fetch com o método HEAD
    * antes mesmo de carregar o vídeo, para identificar links mortos instantaneamente.
-   * Se a conexão exceder 3,5 segundos ou retornar status HTTP >= 400, indica instabilidade/erro.
+   * Se a conexão exceder 10 segundos ou retornar status HTTP >= 400, indica instabilidade/erro.
    */
   const checkChannelHealth = useCallback(async (customUrl?: string): Promise<{ 
     online: boolean; 
@@ -523,7 +636,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     setIsCheckingHealth(true);
     const startTime = performance.now();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       // 1. Valida o status HTTP usando fetch com método HEAD via /api/check-stream
@@ -555,7 +668,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       // Status HTTP >= 400 identifica link morto instantaneamente
       const isDead = statusCode !== undefined && statusCode >= 400;
       const isOnline = !isDead && (res?.ok || res?.type === 'opaque' || (statusCode !== undefined && statusCode < 400));
-      const isUnstable = latency > 3500 || !isOnline;
+      const isUnstable = latency > 10000 || !isOnline;
 
       setConnectionLatency(latency);
 
@@ -567,7 +680,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
       if (isUnstable) {
         setIsConnectionUnstable(true);
-        setStreamWarning(`Latência de resposta: ${latency}ms (acima de 3,5s). Conexão instável.`);
+        setStreamWarning(`Latência de resposta: ${latency}ms (acima de 10s). Conexão instável.`);
         return { online: isOnline, isUnstable: true, latencyMs: latency, statusCode, isDead: false };
       }
 
@@ -578,8 +691,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       clearTimeout(timeoutId);
       const latency = Math.round(performance.now() - startTime);
       setIsConnectionUnstable(true);
-      setConnectionLatency(latency >= 3500 ? latency : 3500);
-      setStreamWarning('Sinal instável: tempo de resposta da conexão HEAD excedeu 3,5 segundos.');
+      setConnectionLatency(latency >= 10000 ? latency : 10000);
+      setStreamWarning('Sinal instável: tempo de resposta da conexão HEAD excedeu 10 segundos.');
       return { online: false, isUnstable: true, latencyMs: latency, isDead: true };
     } finally {
       setIsCheckingHealth(false);
@@ -591,9 +704,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     try {
       const channelName = 'name' in item ? item.name : item.title;
       const defaultReason = isTimedOut
-        ? 'Timeout de 3,5s na inicialização do vídeo (evento canplay não disparou)'
+        ? 'Timeout de 10s na inicialização do vídeo (evento canplay não disparou)'
         : isConnectionUnstable
-          ? `Conexão Instável (latência de resposta ${connectionLatency > 0 ? `${connectionLatency}ms` : '> 3,5s'})`
+          ? `Conexão Instável (latência de resposta ${connectionLatency > 0 ? `${connectionLatency}ms` : '> 10s'})`
           : 'Sinal não carrega ou link inativo';
       const reason = customReason || defaultReason;
 
@@ -612,14 +725,14 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
   };
 
-  // Reportar canal como offline quando a conexão exceder 3,5 segundos
+  // Reportar canal como offline quando a conexão exceder 10 segundos
   const handleReportOffline = () => {
-    handleReportError('Canal reportado como OFFLINE pelo usuário (Conexão excedeu 3,5s)');
+    handleReportError('Canal reportado como OFFLINE pelo usuário (Conexão excedeu 10s)');
   };
 
   // Manual on-demand health check
   const runManualHealthCheck = async () => {
-    showToast('Executando diagnóstico de conexão do sinal (limite 3,5s)...');
+    showToast('Executando diagnóstico de conexão do sinal (limite 10s)...');
     const res = await checkChannelHealth();
     if (res.online && !res.isUnstable) {
       showToast(`Canal Online e Estável! Latência: ${res.latencyMs}ms`);
@@ -796,7 +909,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 3500);
   }, [isPlaying, isLocked, activeMenu]);
 
-  // Main video loader with pre-flight HEAD check & 3.5s timeout with up to 3 automatic retries
+  // Main video loader with pre-flight HEAD check & 10s timeout with up to 3 automatic retries
   useEffect(() => {
     if (isLocked) {
       setIsLoading(false);
@@ -881,8 +994,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         }
       }
 
-      // Timeout assíncrono (12s para VOD/filmes, 3.5s para canais ao vivo)
-      const timeoutLimit = isMp4 ? 12000 : 3500;
+      // Timeout assíncrono (15s para VOD/filmes, 10s para canais ao vivo)
+      const timeoutLimit = isMp4 ? 15000 : 10000;
       canPlayTimeoutRef.current = setTimeout(() => {
         if (!hasCanPlayFiredRef.current && !isCancelled) {
 
@@ -1340,6 +1453,122 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
   };
 
+  // Series Autopilot (Piloto Automático) Episode Switcher
+  const playNextEpisode = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setAutopilotCountdown(null);
+    hasAutoTriggeredRef.current = false;
+
+    if (isSeries && nextEpisode) {
+      const nextIdx = currentEpisodeIndex + 1;
+      setCurrentEpisodeIndex(nextIdx);
+      setCurrentTime(0);
+      hasAppliedInitialSeekRef.current = true;
+      setIsLoading(true);
+      setHasError(false);
+      showToast(`Iniciando T${nextEpisode.seasonNumber}:E${nextEpisode.episodeNumber} - ${nextEpisode.title}`);
+
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
+      }
+    }
+  }, [isSeries, nextEpisode, currentEpisodeIndex, showToast]);
+
+  const startNextEpisodeCountdown = useCallback((initialSeconds: number = 5) => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    hasAutoTriggeredRef.current = true;
+    const startSec = Math.max(1, Math.min(8, initialSeconds));
+    setAutopilotCountdown(startSec);
+
+    countdownTimerRef.current = setInterval(() => {
+      setAutopilotCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+          }
+          playNextEpisode();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [playNextEpisode]);
+
+  const cancelAutopilotCountdown = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setAutopilotCountdown(null);
+    showToast('Avanço automático cancelado.');
+  }, [showToast]);
+
+  const toggleAutopilot = useCallback(() => {
+    setIsAutopilotEnabled(prev => {
+      const nextVal = !prev;
+      localStorage.setItem('maxtv_series_autopilot', String(nextVal));
+      if (!nextVal && countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+        setAutopilotCountdown(null);
+      }
+      showToast(nextVal 
+        ? 'Piloto Automático ATIVADO: Ao fim do episódio, o próximo inicia sozinho!' 
+        : 'Piloto Automático DESATIVADO.');
+      return nextVal;
+    });
+  }, [showToast]);
+
+  const playEpisodeByIndex = useCallback((idx: number) => {
+    if (idx < 0 || idx >= seriesEpisodes.length) return;
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setAutopilotCountdown(null);
+    hasAutoTriggeredRef.current = false;
+    setCurrentEpisodeIndex(idx);
+    setCurrentTime(0);
+    hasAppliedInitialSeekRef.current = true;
+    setIsLoading(true);
+    setHasError(false);
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+    const targetEp = seriesEpisodes[idx];
+    showToast(`Reproduzindo T${targetEp.seasonNumber}:E${targetEp.episodeNumber} - ${targetEp.title}`);
+  }, [seriesEpisodes, showToast]);
+
+  const handleVideoEnded = useCallback(() => {
+    setIsPlaying(false);
+
+    if (isSeries && nextEpisode) {
+      if (isAutopilotEnabled) {
+        startNextEpisodeCountdown(5);
+      } else {
+        showToast(`Fim do episódio. Próximo: T${nextEpisode.seasonNumber}:E${nextEpisode.episodeNumber}`);
+      }
+    } else if (isSeries && !nextEpisode) {
+      showToast('Você concluiu todos os episódios desta série!');
+    }
+  }, [isSeries, nextEpisode, isAutopilotEnabled, startNextEpisodeCountdown, showToast]);
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       const time = videoRef.current.currentTime;
@@ -1359,14 +1588,36 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       if (type === 'vod' && time > 5) {
         if (Math.abs(time - lastSavedProgressTimeRef.current) >= 4) {
           lastSavedProgressTimeRef.current = time;
+          const vodItemToSave: VodItem = (isSeries && currentEpisode)
+            ? {
+                ...(item as VodItem),
+                activeSeasonNumber: currentEpisode.seasonNumber,
+                activeEpisodeNumber: currentEpisode.episodeNumber,
+                activeEpisodeTitle: currentEpisode.title
+              }
+            : (item as VodItem);
           watchProgressStorage.saveProgress(
-            item as VodItem,
+            vodItemToSave,
             time,
             video.duration || duration,
             currentUser?.email,
             authToken
           );
         }
+      }
+
+      // Series Piloto Automático: if within 8s of the end of the episode and playing
+      if (
+        isSeries &&
+        isAutopilotEnabled &&
+        nextEpisode &&
+        (video.duration || duration) > 20 &&
+        time > 0 &&
+        (video.duration || duration) - time <= 8 &&
+        autopilotCountdown === null &&
+        !hasAutoTriggeredRef.current
+      ) {
+        startNextEpisodeCountdown(Math.ceil((video.duration || duration) - time));
       }
     }
   };
@@ -1899,6 +2150,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           if (type === 'vod') skipSeconds(10);
           resetControlsTimer();
           break;
+        case 'n':
+          if (isSeries && nextEpisode) {
+            e.preventDefault();
+            playNextEpisode();
+            resetControlsTimer();
+          }
+          break;
         case 'escape':
           if (activeMenu) {
             setActiveMenu(null);
@@ -1909,7 +2167,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, toggleMute, toggleFullscreen, togglePiP, captureScreenshot, adjustVolumeBy, skipSeconds, type, activeMenu, resetControlsTimer]);
+  }, [togglePlay, toggleMute, toggleFullscreen, togglePiP, captureScreenshot, adjustVolumeBy, skipSeconds, type, activeMenu, resetControlsTimer, isSeries, nextEpisode, playNextEpisode]);
 
   const formatTime = (secs: number) => {
     if (!secs || isNaN(secs)) return '00:00';
@@ -2107,7 +2365,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               }`}
               onClick={togglePlay}
               onDoubleClick={toggleFullscreen}
-              onEnded={() => setIsPlaying(false)}
+              onEnded={handleVideoEnded}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onWaiting={() => setIsLoading(true)}
@@ -2212,6 +2470,72 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </div>
             )}
 
+            {/* Series Autopilot (Piloto Automático) Next Episode Floating Card */}
+            {autopilotCountdown !== null && nextEpisode && (
+              <div 
+                id="series-autopilot-countdown-overlay"
+                className="absolute bottom-24 right-4 sm:right-8 z-45 max-w-xs sm:max-w-sm bg-slate-950/95 border border-indigo-500/50 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn text-white select-none"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+                    </span>
+                    <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                      Piloto Automático
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={cancelAutopilotCountdown}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Cancelar avanço automático"
+                    aria-label="Cancelar avanço automático"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-sm font-semibold text-white line-clamp-1 mb-0.5">
+                  Próximo: T{nextEpisode.seasonNumber}:E{nextEpisode.episodeNumber} - {nextEpisode.title}
+                </p>
+                <p className="text-xs text-slate-300 mb-2.5">
+                  Iniciando automaticamente em <strong className="text-indigo-300 font-mono text-sm">{autopilotCountdown}s</strong>...
+                </p>
+
+                {/* Progress bar countdown */}
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-3">
+                  <div 
+                    className="h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(99,102,241,0.8)]"
+                    style={{ width: `${Math.max(0, Math.min(100, (autopilotCountdown / 5) * 100))}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    id="series-autopilot-play-now"
+                    type="button"
+                    onClick={playNextEpisode}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Assistir Próximo</span>
+                  </button>
+
+                  <button
+                    id="series-autopilot-cancel"
+                    type="button"
+                    onClick={cancelAutopilotCountdown}
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Overlay Estilizado de Conexão Instável com Animação de Fade-In e Botão 'Tentar Novamente' Centralizado em Destaque */}
             {isConnectionUnstable && !hasError && (
               <div 
@@ -2232,13 +2556,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     Conexão Instável
                   </h4>
                   <span className="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    {connectionLatency > 0 ? `${connectionLatency}ms (> 3,5s)` : '> 3,5s'}
+                    {connectionLatency > 0 ? `${connectionLatency}ms (> 10s)` : '> 10s'}
                   </span>
                 </div>
 
                 {/* Mensagem Explicativa */}
                 <p className="text-xs sm:text-sm text-slate-300 max-w-md mb-3 leading-relaxed">
-                  {streamWarning || 'A resposta do sinal demorou mais de 3,5 segundos para carregar o vídeo. O canal pode estar com instabilidade temporária no servidor de origem.'}
+                  {streamWarning || 'A resposta do sinal demorou mais de 10 segundos para carregar o vídeo. O canal pode estar com instabilidade temporária no servidor de origem.'}
                 </p>
 
                 {/* Indicador de Tentativa Automática (se em andamento) */}
@@ -2374,10 +2698,10 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   )}
                 </div>
                 <h4 className="text-lg sm:text-xl font-bold text-white mb-1.5 tracking-tight">
-                  {isTimedOut ? 'Tempo Limite de 3,5s Excedido' : 'Não foi possível iniciar a transmissão'}
+                  {isTimedOut ? 'Tempo Limite de 10s Excedido' : 'Não foi possível iniciar a transmissão'}
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-lg mb-3 font-normal leading-relaxed">
-                  {errorMessage || 'O link do servidor de origem está offline ou demorou mais de 3,5 segundos para responder. Tente recarregar ou alternar para outro servidor.'}
+                  {errorMessage || 'O link do servidor de origem está offline ou demorou mais de 10 segundos para responder. Tente recarregar ou alternar para outro servidor.'}
                 </p>
 
                 {/* Status de Tentativas de Conexão & Backoff Exponencial */}
@@ -2581,6 +2905,18 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   </div>
                   {'epgNow' in item && item.epgNow ? (
                     <p className="text-xs text-slate-300">No Ar: {item.epgNow}</p>
+                  ) : isSeries && currentEpisode ? (
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs text-indigo-300 font-medium truncate max-w-[200px] sm:max-w-xs">
+                        T{currentEpisode.seasonNumber}:E{currentEpisode.episodeNumber} • {currentEpisode.title}
+                      </p>
+                      {isAutopilotEnabled && (
+                        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-semibold border border-indigo-400/30">
+                          <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                          Piloto Automático
+                        </span>
+                      )}
+                    </div>
                   ) : 'duration' in item && item.duration ? (
                     <p className="text-xs text-slate-400">Duração: {item.duration} • {item.rating || 'Livre'}</p>
                   ) : null}
@@ -2701,7 +3037,105 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <div className="flex justify-between items-center"><span className="text-slate-400">↑ / ↓</span><span className="font-semibold text-white">Volume ±10%</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">← / →</span><span className="font-semibold text-white">Avançar / Voltar 10s</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">L</span><span className="font-semibold text-white">Legendas (.vtt)</span></div>
+                  {isSeries && (
+                    <div className="flex justify-between items-center"><span className="text-slate-400">N</span><span className="font-semibold text-indigo-300">Próximo Episódio</span></div>
+                  )}
                   <div className="flex justify-between items-center"><span className="text-slate-400">Duplo Clique</span><span className="font-semibold text-white">Alternar Tela Cheia</span></div>
+                </div>
+              </div>
+            )}
+
+            {/* Episodes Menu Drawer (Series Only) */}
+            {activeMenu === 'episodes' && isSeries && (
+              <div 
+                id="series-episodes-panel"
+                className="absolute bottom-20 left-4 sm:left-10 z-45 w-80 sm:w-96 max-h-[440px] bg-slate-900/95 border border-indigo-500/30 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn flex flex-col pointer-events-auto select-none"
+              >
+                <div className="flex items-center justify-between pb-2.5 border-b border-white/10 mb-3 shrink-0">
+                  <div>
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <ListOrdered className="w-3.5 h-3.5 text-indigo-400" />
+                      Episódios da Série
+                    </span>
+                    <p className="text-[11px] text-slate-400 truncate max-w-[230px]">
+                      {'title' in item ? item.title : ''}
+                    </p>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setActiveMenu(null)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Piloto Automático Toggle inside Episodes drawer */}
+                <div className="flex items-center justify-between p-2.5 mb-3 rounded-xl bg-indigo-950/50 border border-indigo-500/20 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className={`w-4 h-4 ${isAutopilotEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
+                    <div>
+                      <p className="text-xs font-semibold text-white">Piloto Automático</p>
+                      <p className="text-[10px] text-slate-300">Pula e inicia o próximo episódio sozinho</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleAutopilot}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      isAutopilotEnabled 
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
+                        : 'bg-slate-800 text-slate-400 border border-white/10 hover:text-white'
+                    }`}
+                  >
+                    {isAutopilotEnabled ? 'LIGADO' : 'DESLIGADO'}
+                  </button>
+                </div>
+
+                {/* Episode List */}
+                <div className="overflow-y-auto space-y-1.5 pr-1 max-h-60 scrollbar-thin scrollbar-thumb-white/10">
+                  {seriesEpisodes.map((ep, idx) => {
+                    const isCurrent = idx === currentEpisodeIndex;
+                    return (
+                      <button
+                        key={`${ep.seasonNumber}-${ep.episodeNumber}`}
+                        type="button"
+                        onClick={() => {
+                          playEpisodeByIndex(idx);
+                          setActiveMenu(null);
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                          isCurrent
+                            ? 'bg-indigo-600/25 border border-indigo-500/50 text-white shadow-sm'
+                            : 'hover:bg-white/5 border border-transparent text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                            isCurrent 
+                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40' 
+                              : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {isCurrent ? <Play className="w-3 h-3 fill-white ml-0.5" /> : ep.episodeNumber}
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`text-xs font-medium truncate ${isCurrent ? 'text-indigo-300 font-bold' : 'text-slate-200'}`}>
+                              {ep.title}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              Temporada {ep.seasonNumber} • {ep.duration}
+                            </p>
+                          </div>
+                        </div>
+
+                        {isCurrent && (
+                          <span className="text-[10px] uppercase font-bold text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-500/30 shrink-0">
+                            No Ar
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -3216,6 +3650,64 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                         <FastForward className="w-4 h-4" />
                       </button>
                     </>
+                  )}
+
+                  {/* Series Navigation & Piloto Automático */}
+                  {isSeries && (
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <button
+                        type="button"
+                        id="liveplayer-next-episode-btn"
+                        onClick={playNextEpisode}
+                        disabled={!nextEpisode}
+                        className={`p-2 rounded-full transition-colors cursor-pointer ${
+                          nextEpisode 
+                            ? 'text-slate-300 hover:text-white hover:bg-white/10' 
+                            : 'text-slate-600 cursor-not-allowed'
+                        }`}
+                        title={nextEpisode ? `Próximo Episódio: T${nextEpisode.seasonNumber}:E${nextEpisode.episodeNumber} - ${nextEpisode.title} (N)` : 'Último episódio da série'}
+                      >
+                        <SkipForward className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        id="liveplayer-autopilot-btn"
+                        onClick={toggleAutopilot}
+                        className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                          isAutopilotEnabled
+                            ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm shadow-indigo-600/20'
+                            : 'bg-slate-900/60 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
+                        }`}
+                        title={isAutopilotEnabled ? 'Piloto Automático ativado. Ao terminar, o próximo episódio inicia sozinho.' : 'Piloto Automático desligado. Clique para ativar.'}
+                      >
+                        <Sparkles className={`w-3.5 h-3.5 ${isAutopilotEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
+                        <span className="hidden sm:inline">Piloto Automático:</span>
+                        <span className={isAutopilotEnabled ? 'text-indigo-200 font-bold' : 'text-slate-400'}>
+                          {isAutopilotEnabled ? 'ON' : 'OFF'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="liveplayer-episodes-drawer-btn"
+                        onClick={() => setActiveMenu(activeMenu === 'episodes' ? null : 'episodes')}
+                        className={`hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                          activeMenu === 'episodes'
+                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
+                            : 'bg-slate-900/80 text-slate-300 hover:text-white border-white/10 hover:bg-slate-800'
+                        }`}
+                        title="Ver episódios da série"
+                      >
+                        <ListOrdered className="w-3.5 h-3.5" />
+                        <span>Episódios</span>
+                        {currentEpisode && (
+                          <span className="text-[10px] font-mono text-indigo-300">
+                            (E{currentEpisode.episodeNumber}/{seriesEpisodes.length})
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   )}
 
                   {/* Volume Controls & Slider */}

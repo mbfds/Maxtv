@@ -67,6 +67,10 @@ export interface VodItem {
   trailerUrl?: string;
   featured?: boolean;
   isVipOnly?: boolean;
+  activeSeasonNumber?: number;
+  activeEpisodeNumber?: number;
+  activeEpisodeTitle?: string;
+  autoPilotEnabled?: boolean;
   seasons?: {
     seasonNumber: number;
     episodes: {
@@ -255,5 +259,37 @@ export interface ChannelReport {
   userEmail: string;
   latencyMs?: number;
   status?: string;
+}
+
+export interface ChannelUpdateHistoryEntry {
+  id: string;
+  timestamp: string;
+  dateFormatted: string;
+  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
+  actionName: string;
+  success: boolean;
+  channelsCount: number;
+  details: string;
+  author: string;
+  durationMs?: number;
+  errorMessage?: string;
+}
+
+export interface ChannelsConfigFile {
+  version: string;
+  updatedAt: string;
+  updatedBy?: string;
+  description?: string;
+  channels: Channel[];
+}
+
+export interface ChannelsConfigResponse {
+  success: boolean;
+  config?: ChannelsConfigFile;
+  rawJson?: string;
+  filePath?: string;
+  count?: number;
+  lastModified?: string;
+  error?: string;
 }
 

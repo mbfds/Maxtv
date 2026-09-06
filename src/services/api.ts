@@ -1,4 +1,4 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse } from '../types';
 
 export const api = {
   // Channels
@@ -209,6 +209,81 @@ export const api = {
   async syncSaimoChannels(): Promise<{ success: boolean; count: number; message: string }> {
     const res = await fetch('/api/admin/channels/sync-saimo', { method: 'POST' });
     if (!res.ok) throw new Error('Falha ao sincronizar com Saimo-TV');
+    return await res.json();
+  },
+
+  // Channels Configuration File (JSON Editor & Validation)
+  async getChannelsConfig(): Promise<ChannelsConfigResponse> {
+    try {
+      const res = await fetch('/api/admin/channels/config');
+      if (!res.ok) throw new Error('Falha ao carregar arquivo de configuração de canais');
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao conectar com o servidor' };
+    }
+  },
+
+  async validateChannelsConfig(payload: { rawJson?: string; config?: any }): Promise<{
+    valid: boolean;
+    error?: string;
+    errorType?: string;
+    count?: number;
+    warnings?: string[];
+    errors?: string[];
+  }> {
+    const res = await fetch('/api/admin/channels/config/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  },
+
+  async saveChannelsConfig(payload: { rawJson?: string; config?: any; author?: string }): Promise<{
+    success: boolean;
+    message: string;
+    channelsCount?: number;
+    lastUpdate?: ChannelUpdateHistoryEntry;
+    error?: string;
+    config?: ChannelsConfigFile;
+    rawJson?: string;
+  }> {
+    const res = await fetch('/api/admin/channels/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao salvar arquivo de configuração de canais');
+    }
+    return data;
+  },
+
+  // Channels Update History
+  async getChannelUpdateHistory(): Promise<{
+    success: boolean;
+    lastUpdate: ChannelUpdateHistoryEntry | null;
+    history: ChannelUpdateHistoryEntry[];
+    total: number;
+  }> {
+    try {
+      const res = await fetch('/api/admin/channels/history');
+      if (!res.ok) throw new Error('Falha ao obter histórico de atualizações');
+      return await res.json();
+    } catch {
+      return { success: false, lastUpdate: null, history: [], total: 0 };
+    }
+  },
+
+  async clearChannelUpdateHistory(): Promise<{
+    success: boolean;
+    message: string;
+    history: ChannelUpdateHistoryEntry[];
+    lastUpdate?: ChannelUpdateHistoryEntry;
+  }> {
+    const res = await fetch('/api/admin/channels/history/clear', { method: 'POST' });
+    if (!res.ok) throw new Error('Falha ao limpar histórico');
     return await res.json();
   },
 

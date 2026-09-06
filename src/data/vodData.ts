@@ -45,6 +45,18 @@ export const INITIAL_VOD: VodItem[] = [
             title: 'Episódio 2: Linhas Cruzadas',
             duration: '48m',
             streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'
+          },
+          {
+            episodeNumber: 3,
+            title: 'Episódio 3: O Cerco Se Fecha',
+            duration: '50m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+          },
+          {
+            episodeNumber: 4,
+            title: 'Episódio 4: Revelações na Colina',
+            duration: '55m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4'
           }
         ]
       }
@@ -115,9 +127,21 @@ export const INITIAL_VOD: VodItem[] = [
         episodes: [
           {
             episodeNumber: 1,
-            title: 'Quando Estiver Perdido na Escuridão',
+            title: 'Episódio 1: Quando Estiver Perdido na Escuridão',
             duration: '1h 21m',
             streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackSeeTheWorld.mp4'
+          },
+          {
+            episodeNumber: 2,
+            title: 'Episódio 2: Infectados',
+            duration: '53m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+          },
+          {
+            episodeNumber: 3,
+            title: 'Episódio 3: Longo, Longo Tempo',
+            duration: '1h 15m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'
           }
         ]
       }
@@ -136,7 +160,32 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'A trajetória de vitórias, superação, decepções e alegrias de Ayrton Senna, desvendando sua personalidade e suas relações pessoais até o trágico acidente em Ímola.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
     featured: false,
-    isVipOnly: false
+    isVipOnly: false,
+    seasons: [
+      {
+        seasonNumber: 1,
+        episodes: [
+          {
+            episodeNumber: 1,
+            title: 'Episódio 1: O Sonho de Menino',
+            duration: '45m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4'
+          },
+          {
+            episodeNumber: 2,
+            title: 'Episódio 2: Conquistando a Europa',
+            duration: '48m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+          },
+          {
+            episodeNumber: 3,
+            title: 'Episódio 3: A Glória em Mônaco',
+            duration: '52m',
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+          }
+        ]
+      }
+    ]
   },
   {
     id: 'vod-8',
@@ -152,5 +201,35 @@ export const INITIAL_VOD: VodItem[] = [
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
     featured: false,
     isVipOnly: true
+  },
+  {
+    id: 'vod-9',
+    title: 'Pantanal Selvagem: O Reino das Águas',
+    type: 'movie',
+    year: 2024,
+    duration: '1h 32m',
+    rating: 'Livre',
+    genre: ['Documentário', 'Natureza', 'Nacional'],
+    bannerUrl: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=1920&q=80',
+    posterUrl: 'https://images.unsplash.com/photo-1534567153574-2b12153a87f0?auto=format&fit=crop&w=600&q=80',
+    synopsis: 'Um documentário imersivo em 4K explorando a rica biodiversidade do Pantanal brasileiro, registrando a vida das onças-pintadas, tuiuiús e a luta pela preservação ambiental.',
+    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    featured: true,
+    isVipOnly: false
+  },
+  {
+    id: 'vod-10',
+    title: 'Pelé: Eterno Camisa 10',
+    type: 'movie',
+    year: 2023,
+    duration: '1h 48m',
+    rating: '10+',
+    genre: ['Documentário', 'Biografia', 'Esporte'],
+    bannerUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1920&q=80',
+    posterUrl: 'https://images.unsplash.com/photo-1518091043644-c1d4457512c6?auto=format&fit=crop&w=600&q=80',
+    synopsis: 'Com imagens raras restauradas em alta resolução e depoimentos inéditos, reviva os momentos cruciais da lenda que transformou o futebol em arte mundial.',
+    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    featured: false,
+    isVipOnly: false
   }
 ];
