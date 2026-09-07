@@ -1,4 +1,4 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo } from '../types';
 
 export const api = {
   // Channels
@@ -306,6 +306,51 @@ export const api = {
     } catch {
       return { success: false, count: 0, items: [] };
     }
+  },
+
+  // Repository Links (IPTV Brasil 2026 - Ramys)
+  async getRepoLinksInfo(): Promise<{ success: boolean } & RepoLinksInfo> {
+    const res = await fetch('/api/admin/repo-links/info');
+    if (!res.ok) throw new Error('Falha ao obter dados do repositório IPTV Brasil 2026');
+    return await res.json();
+  },
+
+  async syncRepoLinks(payload: { file: string; customUrl?: string; author?: string }): Promise<{
+    success: boolean;
+    message: string;
+    channelsCount?: number;
+    vodCount?: number;
+    file?: string;
+    durationMs?: number;
+    lastUpdate?: ChannelUpdateHistoryEntry;
+  }> {
+    const res = await fetch('/api/admin/repo-links/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao sincronizar links do repositório');
+    }
+    return data;
+  },
+
+  async testRepoHost(host: string): Promise<{
+    success: boolean;
+    host: string;
+    online: boolean;
+    status?: number;
+    latencyMs: number;
+    message?: string;
+    error?: string;
+  }> {
+    const res = await fetch('/api/admin/repo-links/test-host', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host })
+    });
+    return await res.json();
   },
 
   async getSettings(): Promise<{ success: boolean; settings: SystemSettings }> {

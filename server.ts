@@ -55,7 +55,9 @@ interface ServerChannel {
   name: string;
   category: string;
   logo: string;
-  sources: { url: string; referer?: string; userAgent?: string; quality?: string }[];
+  streamUrl?: string;
+  backupStreamUrl?: string;
+  sources: { name?: string; url: string; referer?: string; userAgent?: string; quality?: string; isWorking?: boolean }[];
   isCustom?: boolean;
   isActive: boolean;
   isVipOnly?: boolean;
@@ -184,7 +186,7 @@ interface ServerChannelUpdateHistoryEntry {
   id: string;
   timestamp: string;
   dateFormatted: string;
-  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
+  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'repo_sync' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
   actionName: string;
   success: boolean;
   channelsCount: number;
@@ -322,8 +324,8 @@ async function loadRamysCatalog() {
 
         currentMetadata = { name: channelName, logo, group };
       } else if (!line.startsWith('#') && currentMetadata) {
-        // Skip dead IPTV hosts
-        if (!line.includes('tjtor8411.com')) {
+        // Valid stream line from CanaisBR03.m3u8
+        if (line.startsWith('http://') || line.startsWith('https://')) {
           const rawGroup = currentMetadata.group.toLowerCase();
           let cat: string = 'Variedades & Música';
 
@@ -345,15 +347,26 @@ async function loadRamysCatalog() {
 
           const cleanLower = currentMetadata.name.toLowerCase();
           const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'cazé', 'cnn brasil'].some(k => cleanLower.includes(k));
+          const directStream = line;
+          const proxyStream = `/api/proxy?url=${encodeURIComponent(directStream)}`;
 
           result.push({
             id: `ramys-${result.length + 1}-${cleanLower.replace(/[^a-z0-9]/g, '-')}`,
             name: currentMetadata.name,
             category: cat,
             logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
+            streamUrl: proxyStream,
+            backupStreamUrl: directStream,
             sources: [
               {
-                url: line,
+                name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)',
+                url: proxyStream,
+                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
+                isWorking: true
+              },
+              {
+                name: 'Servidor 2 - Direto IPTV Brasil 2026',
+                url: directStream,
                 quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
                 referer: 'http://tjtor8411.com/'
               }
@@ -380,39 +393,6 @@ async function loadRamysCatalog() {
 // Function to fetch and parse Ramys/Iptv-Brasil-2026 VOD (Filmes-Series.m3u8)
 async function loadRamysVod() {
   try {
-    const verifiedWorkingStreams = [
-      {
-        name: 'Servidor 1 - Stream HD Fast (Fastly CDN)',
-        url: 'https://vjs.zencdn.net/v/oceans.mp4',
-        backup: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        quality: '1080p'
-      },
-      {
-        name: 'Servidor 2 - HLS Mux Multi-Bitrate',
-        url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        backup: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
-        quality: '1080p'
-      },
-      {
-        name: 'Servidor 3 - Cinema HD (Trailer Oficial)',
-        url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
-        backup: 'https://vjs.zencdn.net/v/oceans.mp4',
-        quality: '1080p'
-      },
-      {
-        name: 'Servidor 4 - Big Buck Bunny 720p',
-        url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
-        backup: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        quality: '720p'
-      },
-      {
-        name: 'Servidor 5 - Elephants Dream HD',
-        url: 'https://archive.org/download/ElephantsDream/ed_1024_512kb.mp4',
-        backup: 'https://vjs.zencdn.net/v/oceans.mp4',
-        quality: '720p'
-      }
-    ];
-
     const url = 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8';
     const res = await fetch(url, { headers: { 'User-Agent': 'StreamingBrasil/1.0' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -437,38 +417,50 @@ async function loadRamysVod() {
 
         currentMetadata = { name: title, logo, group };
       } else if (!line.startsWith('#') && currentMetadata) {
-        if (currentMetadata.logo && currentMetadata.logo.includes('tmdb.org')) {
+        if (line.startsWith('http://') || line.startsWith('https://')) {
           const isSeries = currentMetadata.group.toLowerCase().includes('serie') || currentMetadata.group.toLowerCase().includes('novela');
-          const assigned = verifiedWorkingStreams[result.length % verifiedWorkingStreams.length];
+          const realStreamUrl = line;
+          const proxyStreamUrl = `/api/proxy?url=${encodeURIComponent(realStreamUrl)}`;
+
+          // Extract Year from title if present
+          let releaseYear = 2025;
+          const yearMatch = currentMetadata.name.match(/[\(\[]?(19\d{2}|20\d{2})[\)\]]?/);
+          if (yearMatch) {
+            const py = parseInt(yearMatch[1], 10);
+            if (py >= 1970 && py <= 2030) releaseYear = py;
+          }
+
+          const poster = currentMetadata.logo || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80';
+
           result.push({
-            id: `ramys-vod-${result.length + 1}`,
+            id: `ramys-vod-${result.length + 1}-${currentMetadata.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
             title: currentMetadata.name,
             type: isSeries ? 'series' : 'movie',
-            year: 2024,
+            year: releaseYear,
             duration: isSeries ? 'Temporada Completa' : '1h 50m',
-            rating: '14+',
-            genre: [currentMetadata.group.replace('Filmes | ', '').replace('Series | ', '')],
-            bannerUrl: currentMetadata.logo,
-            posterUrl: currentMetadata.logo,
-            synopsis: `Disponível no catálogo MAXTV (${currentMetadata.group}). Áudio dublado e original em alta resolução.`,
-            streamUrl: assigned.url,
-            backupStreamUrl: assigned.backup,
+            rating: releaseYear >= 2024 ? '14+' : '12+',
+            genre: [currentMetadata.group.replace('Filmes | ', '').replace('Series | ', '').replace('Séries | ', '').trim() || 'Geral'],
+            bannerUrl: poster,
+            posterUrl: poster,
+            synopsis: `Disponível no catálogo MAXTV (${currentMetadata.group}). Título oficial sincronizado do repositório IPTV Brasil 2026. Áudio em alta resolução.`,
+            streamUrl: proxyStreamUrl,
+            backupStreamUrl: realStreamUrl,
             sources: [
-              { name: assigned.name, url: assigned.url, quality: assigned.quality },
-              { name: 'Servidor 2 - HLS Alternativo', url: assigned.backup, quality: '1080p' }
+              { name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)', url: proxyStreamUrl, quality: '1080p' },
+              { name: 'Servidor 2 - Direto IPTV Brasil 2026', url: realStreamUrl, quality: '1080p' }
             ],
             featured: result.length < 8,
-            isVipOnly: result.length > 25 // Top 25 movies are free for preview/degustação!
+            isVipOnly: result.length > 25
           });
         }
         currentMetadata = null;
-        if (result.length >= 120) break; // Curate top 120 VOD titles
+        if (result.length >= 250) break; // Curate top 250 VOD titles from the repo
       }
     }
 
     if (result.length > 0) {
       parsedRamysVod = result;
-      console.log(`[Ramys IPTV Brasil 2026] Successfully loaded ${parsedRamysVod.length} VOD titles with resilient multi-stream mirrors!`);
+      console.log(`[Ramys IPTV Brasil 2026] Successfully loaded ${parsedRamysVod.length} real VOD titles from repository!`);
     }
   } catch (err) {
     console.warn('[Ramys IPTV Brasil 2026] Failed to fetch VOD:', err);
@@ -641,20 +633,19 @@ app.all('/api/proxy', async (req, res) => {
     let response: Response;
     try {
       response = await fetch(decodedUrl, { headers });
-      const contentType = response.headers.get('content-type') || '';
-      
-      // If remote returned an error, 403, or an HTML page (like dead IPTV servers returning nginx default page)
-      if (!response.ok || (contentType.includes('text/html') && (decodedUrl.endsWith('.ts') || decodedUrl.endsWith('.mp4') || decodedUrl.includes('/movie/')))) {
-        const fallbackUrl = 'https://vjs.zencdn.net/v/oceans.mp4';
-        const fallbackHeaders: Record<string, string> = { 'User-Agent': 'Mozilla/5.0' };
-        if (rangeHeader) fallbackHeaders['Range'] = rangeHeader;
-        response = await fetch(fallbackUrl, { headers: fallbackHeaders });
-      }
-    } catch (fetchErr) {
-      const fallbackUrl = 'https://vjs.zencdn.net/v/oceans.mp4';
-      const fallbackHeaders: Record<string, string> = { 'User-Agent': 'Mozilla/5.0' };
-      if (rangeHeader) fallbackHeaders['Range'] = rangeHeader;
-      response = await fetch(fallbackUrl, { headers: fallbackHeaders });
+    } catch (fetchErr: any) {
+      return res.status(502).json({
+        error: 'Falha de conexão com o servidor de transmissão',
+        message: fetchErr.message || 'Host offline ou inacessível',
+        targetUrl: decodedUrl
+      });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: `Servidor de origem retornou status HTTP ${response.status}`,
+        targetUrl: decodedUrl
+      });
     }
 
     const respContentType = response.headers.get('content-type') || '';
@@ -668,13 +659,10 @@ app.all('/api/proxy', async (req, res) => {
       const text = await response.text();
       // If the response is actually an HTML error page from remote server
       if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-        const fallbackHls = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
-        const fbRes = await fetch(fallbackHls, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const fbText = await fbRes.text();
-        const rewritten = rewriteM3u8(fbText, fallbackHls, '');
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-        res.status(200).send(rewritten);
-        return;
+        return res.status(502).json({
+          error: 'Servidor remoto retornou página HTML de erro ao invés de playlist M3U8 válida',
+          targetUrl: decodedUrl
+        });
       }
 
       const rewritten = rewriteM3u8(text, decodedUrl, referer || '');
@@ -1003,8 +991,7 @@ app.get('/api/channels', (req, res) => {
   // SaimoPlayer provides real, working Brazilian live TV channels
   const baseChannels = [...parsedSaimoChannels];
   if (parsedRamysChannels.length > 0) {
-    const validRamys = parsedRamysChannels.filter(r => !r.sources.some(s => s.url.includes('tjtor8411.com')));
-    baseChannels.push(...validRamys);
+    baseChannels.push(...parsedRamysChannels);
   }
 
   // If the admin saved a custom config file, prioritize those channels
@@ -2201,6 +2188,289 @@ app.post('/api/admin/channels/sync-saimo', async (req, res) => {
       errorMessage: err.message || String(err)
     });
     res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar' });
+  }
+});
+
+// --- REPOSITORY LINKS UPDATER (IPTV Brasil 2026 - Ramys) ---
+
+app.get('/api/admin/repo-links/info', (req, res) => {
+  res.json({
+    success: true,
+    repoUrl: 'https://github.com/Ramys/Iptv-Brasil-2026',
+    branch: 'master',
+    files: [
+      {
+        name: 'CanaisBR03.m3u8',
+        description: 'Grade Essencial Brasil (988 canais com TV Aberta, Premiere, SporTV, ESPN, HBO, Telecine, Filmes e Desenhos)',
+        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
+        type: 'channels',
+        approxItems: 988,
+        primaryServer: 'tjtor8411.com:80'
+      },
+      {
+        name: 'Filmes-Series.m3u8',
+        description: 'Catálogo VOD Oficial (290.000+ títulos com metadados TMDB, Lançamentos 2024-2026, Séries e Novelas)',
+        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8',
+        type: 'vod',
+        approxItems: 290610,
+        primaryServer: 'hubby.cx:80'
+      },
+      {
+        name: 'CanaisBR01.m3u8',
+        description: 'Grade Master Brasil 01 (292.000 transmissões de todo o território nacional)',
+        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8',
+        type: 'channels',
+        approxItems: 292953,
+        primaryServer: 'up.kiwi'
+      },
+      {
+        name: 'CanaisBR02.m3u8',
+        description: 'Grade Alternativa Brasil 02 (298.000 transmissões espelho)',
+        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR02.m3u8',
+        type: 'channels',
+        approxItems: 298409,
+        primaryServer: 'tjtor8411.com'
+      },
+      {
+        name: 'CanaisEuropa.m3u8',
+        description: 'Canais Internacionais Europa (Portugal, Espanha, Reino Unido, França)',
+        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisEuropa.m3u8',
+        type: 'channels',
+        approxItems: 106539,
+        primaryServer: 'vip.europaiptv.vip:2086'
+      },
+      {
+        name: 'CanaisItalia.m3u8',
+        description: 'Canais Internacionais Itália (RAI, Sky Italia, Mediaset)',
+        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisItalia.m3u8',
+        type: 'channels',
+        approxItems: 84200,
+        primaryServer: 'vip.europaiptv.vip:2086'
+      }
+    ],
+    currentStats: {
+      ramysChannels: parsedRamysChannels.length,
+      ramysVod: parsedRamysVod.length,
+      saimoChannels: parsedSaimoChannels.length,
+      lastRamysFetch,
+      lastCatalogFetch
+    }
+  });
+});
+
+app.post('/api/admin/repo-links/sync', async (req, res) => {
+  const { file, customUrl, author } = req.body || {};
+  const currentAuthor = author || 'Administrador';
+  const startTime = Date.now();
+
+  try {
+    if (file === 'Filmes-Series.m3u8') {
+      const { updateCatalogFromM3U } = await import('./scripts/updateContent');
+      const vodResult = await updateCatalogFromM3U({ source: 'ramys' });
+      await loadRamysVod();
+
+      const hist = logChannelUpdate({
+        type: 'repo_sync',
+        actionName: 'Atualização VOD: Filmes-Series.m3u8',
+        success: true,
+        channelsCount: vodResult.count || parsedRamysVod.length,
+        details: `Sincronizados ${vodResult.count || parsedRamysVod.length} filmes e séries atualizados diretamente do repositório Ramys/Iptv-Brasil-2026`,
+        author: currentAuthor,
+        durationMs: Date.now() - startTime
+      });
+
+      return res.json({
+        success: true,
+        message: `Catálogo VOD atualizado com sucesso (${vodResult.count || parsedRamysVod.length} títulos)!`,
+        vodCount: parsedRamysVod.length,
+        channelsCount: parsedRamysChannels.length,
+        durationMs: Date.now() - startTime,
+        lastUpdate: hist
+      });
+    }
+
+    if (file === 'all') {
+      await loadRamysCatalog();
+      const { updateCatalogFromM3U } = await import('./scripts/updateContent');
+      await updateCatalogFromM3U({ source: 'ramys' });
+      await loadRamysVod();
+
+      const hist = logChannelUpdate({
+        type: 'repo_sync',
+        actionName: 'Atualização Completa: Grade & VOD (IPTV Brasil 2026)',
+        success: true,
+        channelsCount: parsedRamysChannels.length,
+        details: `Sincronização global executada: ${parsedRamysChannels.length} canais ao vivo e ${parsedRamysVod.length} títulos VOD atualizados do GitHub.`,
+        author: currentAuthor,
+        durationMs: Date.now() - startTime
+      });
+
+      return res.json({
+        success: true,
+        message: `Sincronização global concluída! ${parsedRamysChannels.length} canais e ${parsedRamysVod.length} títulos VOD atualizados com sucesso.`,
+        channelsCount: parsedRamysChannels.length,
+        vodCount: parsedRamysVod.length,
+        durationMs: Date.now() - startTime,
+        lastUpdate: hist
+      });
+    }
+
+    // Default or specific channel list (CanaisBR03.m3u8, CanaisBR01.m3u8, CanaisEuropa, etc.)
+    const targetUrl = customUrl || (file ? `https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/${file}` : 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8');
+    
+    const fetchRes = await fetch(targetUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} ao obter ${targetUrl}`);
+    const text = await fetchRes.text();
+
+    const lines = text.split(/\r?\n/);
+    const result: ServerChannel[] = [];
+    let currentMetadata: { name: string; logo: string; group: string } | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      if (line.startsWith('#EXTINF:')) {
+        const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
+        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+        const groupMatch = line.match(/group-title="([^"]+)"/);
+
+        const channelName = nameMatch ? nameMatch[1].trim() : 'Canal';
+        const logo = logoMatch ? logoMatch[1].trim() : '';
+        const group = groupMatch ? groupMatch[1].trim() : '';
+
+        currentMetadata = { name: channelName, logo, group };
+      } else if (!line.startsWith('#') && currentMetadata) {
+        if (line.startsWith('http://') || line.startsWith('https://')) {
+          const rawGroup = currentMetadata.group.toLowerCase();
+          let cat = 'Variedades & Música';
+
+          if (rawGroup.includes('esporte') || rawGroup.includes('premiere') || rawGroup.includes('sportv') || rawGroup.includes('espn') || rawGroup.includes('nba') || rawGroup.includes('dazn') || rawGroup.includes('ppv')) {
+            cat = 'Esportes';
+          } else if (rawGroup.includes('aberto') || rawGroup.includes('globo') || rawGroup.includes('record')) {
+            cat = 'Abertos';
+          } else if (rawGroup.includes('notícia') || rawGroup.includes('noticia')) {
+            cat = 'Notícias';
+          } else if (rawGroup.includes('filme') || rawGroup.includes('serie') || rawGroup.includes('hbo') || rawGroup.includes('telecine')) {
+            cat = 'Filmes & Séries';
+          } else if (rawGroup.includes('infantil') || rawGroup.includes('desenho')) {
+            cat = 'Infantis';
+          } else if (rawGroup.includes('document')) {
+            cat = 'Documentários';
+          } else {
+            cat = categorizeChannel(currentMetadata.name);
+          }
+
+          const cleanLower = currentMetadata.name.toLowerCase();
+          const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'cazé', 'cnn brasil'].some(k => cleanLower.includes(k));
+          const directStream = line;
+          const proxyStream = `/api/proxy?url=${encodeURIComponent(directStream)}`;
+
+          result.push({
+            id: `repo-${file || 'custom'}-${result.length + 1}-${cleanLower.replace(/[^a-z0-9]/g, '-')}`,
+            name: currentMetadata.name,
+            category: cat,
+            logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
+            streamUrl: proxyStream,
+            backupStreamUrl: directStream,
+            sources: [
+              {
+                name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)',
+                url: proxyStream,
+                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
+                isWorking: true
+              },
+              {
+                name: 'Servidor 2 - Direto IPTV Brasil 2026',
+                url: directStream,
+                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p'
+              }
+            ],
+            isActive: true,
+            isVipOnly: !isFree
+          });
+        }
+        currentMetadata = null;
+        if (result.length >= 1200) break;
+      }
+    }
+
+    if (result.length > 0) {
+      parsedRamysChannels = result;
+      lastRamysFetch = Date.now();
+    }
+
+    const fileNameDisplay = file || (customUrl ? 'URL Personalizada' : 'CanaisBR03.m3u8');
+    const hist = logChannelUpdate({
+      type: 'repo_sync',
+      actionName: `Atualização de Links: ${fileNameDisplay}`,
+      success: true,
+      channelsCount: result.length,
+      details: `${result.length} canais extraídos com sucesso do arquivo ${fileNameDisplay} no repositório Ramys/Iptv-Brasil-2026.`,
+      author: currentAuthor,
+      durationMs: Date.now() - startTime
+    });
+
+    res.json({
+      success: true,
+      message: `Lista ${fileNameDisplay} atualizada com sucesso (${result.length} canais carregados)!`,
+      file: fileNameDisplay,
+      channelsCount: result.length,
+      durationMs: Date.now() - startTime,
+      lastUpdate: hist
+    });
+  } catch (err: any) {
+    const hist = logChannelUpdate({
+      type: 'repo_sync',
+      actionName: `Atualização de Links: ${file || 'Lista'}`,
+      success: false,
+      channelsCount: 0,
+      details: `Falha ao sincronizar links do repositório: ${err.message || err}`,
+      author: currentAuthor,
+      durationMs: Date.now() - startTime,
+      errorMessage: err.message || String(err)
+    });
+    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar links do repositório' });
+  }
+});
+
+app.post('/api/admin/repo-links/test-host', async (req, res) => {
+  const { host } = req.body || {};
+  if (!host) {
+    return res.status(400).json({ success: false, error: 'Host é obrigatório' });
+  }
+
+  const cleanHost = String(host).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const testUrl = `http://${cleanHost}/`;
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(testUrl, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(6000)
+    });
+    const latencyMs = Date.now() - startTime;
+    res.json({
+      success: true,
+      host: cleanHost,
+      online: response.status < 500,
+      status: response.status,
+      latencyMs,
+      message: `Host respondeu em ${latencyMs}ms com HTTP ${response.status}`
+    });
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    res.json({
+      success: false,
+      host: cleanHost,
+      online: false,
+      latencyMs,
+      error: err.message || 'Tempo limite esgotado'
+    });
   }
 });
 

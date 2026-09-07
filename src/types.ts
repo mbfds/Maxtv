@@ -265,7 +265,7 @@ export interface ChannelUpdateHistoryEntry {
   id: string;
   timestamp: string;
   dateFormatted: string;
-  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
+  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'repo_sync' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
   actionName: string;
   success: boolean;
   channelsCount: number;
@@ -273,6 +273,28 @@ export interface ChannelUpdateHistoryEntry {
   author: string;
   durationMs?: number;
   errorMessage?: string;
+}
+
+export interface RepoFileMeta {
+  name: string;
+  description: string;
+  url: string;
+  type: 'channels' | 'vod';
+  approxItems: number;
+  primaryServer: string;
+}
+
+export interface RepoLinksInfo {
+  repoUrl: string;
+  branch: string;
+  files: RepoFileMeta[];
+  currentStats: {
+    ramysChannels: number;
+    ramysVod: number;
+    saimoChannels: number;
+    lastRamysFetch?: number;
+    lastCatalogFetch?: number;
+  };
 }
 
 export interface ChannelsConfigFile {

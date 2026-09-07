@@ -2,19 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { 
   History, CheckCircle2, AlertCircle, RefreshCw, Trash2, 
   Search, Filter, Clock, Tv, FileCode, ArrowUpRight, 
-  Sparkles, ShieldCheck, User, Calendar
+  Sparkles, ShieldCheck, User, Calendar, GitBranch
 } from 'lucide-react';
 import { api } from '../services/api';
 import { ChannelUpdateHistoryEntry } from '../types';
 
 interface ChannelUpdateHistoryProps {
   onOpenConfigEditor?: () => void;
+  onOpenRepoSync?: () => void;
   onTriggerSync?: (source: 'ramys' | 'saimo') => void;
   refreshTrigger?: number;
 }
 
 export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
   onOpenConfigEditor,
+  onOpenRepoSync,
   onTriggerSync,
   refreshTrigger
 }) => {
@@ -153,6 +155,17 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               <span>Atualizar Histórico</span>
             </button>
+
+            {onOpenRepoSync && (
+              <button
+                type="button"
+                onClick={onOpenRepoSync}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition-all"
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                <span>Atualizar Links (2026)</span>
+              </button>
+            )}
 
             {onOpenConfigEditor && (
               <button

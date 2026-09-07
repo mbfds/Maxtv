@@ -140,7 +140,8 @@ export async function fetchRamysM3U(url: string = RAMYS_M3U_URL, limit: number =
           const { title, year } = cleanTitle(currentMeta.rawName);
           const isSeries = currentMeta.group.toLowerCase().includes('serie') || currentMeta.rawName.toLowerCase().includes('temporada');
           const genres = detectGenre(currentMeta.group, currentMeta.rawName);
-          const fallback = RELIABLE_BACKUPS[items.length % RELIABLE_BACKUPS.length];
+          const realStream = line;
+          const proxyStream = `/api/proxy?url=${encodeURIComponent(realStream)}`;
 
           const id = `vod-ramys-${items.length + 1}-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
           const poster = currentMeta.logo && currentMeta.logo.startsWith('http')
@@ -158,11 +159,11 @@ export async function fetchRamysM3U(url: string = RAMYS_M3U_URL, limit: number =
             bannerUrl: poster,
             posterUrl: poster,
             synopsis: `Disponível no catálogo MAXTV em alta definição (${genres.join(', ')}). Áudio original e dublado sem travamentos.`,
-            streamUrl: line,
-            backupStreamUrl: fallback,
+            streamUrl: proxyStream,
+            backupStreamUrl: realStream,
             sources: [
-              { name: 'Servidor 1 - Ramys IPTV Brasil', url: line, quality: '1080p' },
-              { name: 'Servidor 2 - CDN Backup Resiliente', url: fallback, quality: '1080p' }
+              { name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)', url: proxyStream, quality: '1080p' },
+              { name: 'Servidor 2 - Direto IPTV Brasil 2026', url: realStream, quality: '1080p' }
             ],
             featured: items.length < 8,
             isVipOnly: items.length >= 35

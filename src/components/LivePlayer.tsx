@@ -246,21 +246,14 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       }
     }
     if (epList.length === 0) {
-      const fallbackSamples = [
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackSeeTheWorld.mp4'
-      ];
+      const defaultUrl = vod.streamUrl || vod.backupStreamUrl || '';
       for (let i = 1; i <= 6; i++) {
         epList.push({
           seasonNumber: 1,
           episodeNumber: i,
           title: `Episódio ${i}`,
           duration: '48m',
-          streamUrl: i === 1 && vod.streamUrl ? vod.streamUrl : fallbackSamples[(i - 1) % fallbackSamples.length]
+          streamUrl: defaultUrl
         });
       }
     }

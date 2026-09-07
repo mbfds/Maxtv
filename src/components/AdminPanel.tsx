@@ -5,20 +5,21 @@ import {
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
-  Activity, Film, WifiOff, FileCode
+  Activity, Film, WifiOff, FileCode, GitBranch
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
 import { ChannelHealthChecker } from './ChannelHealthChecker';
 import { ChannelConfigEditor } from './ChannelConfigEditor';
 import { ChannelUpdateHistory } from './ChannelUpdateHistory';
+import { RepoLinksUpdater } from './RepoLinksUpdater';
 
 interface AdminPanelProps {
   onClose: () => void;
   onPreviewChannel: (channel: Channel) => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'channels' | 'channels-config' | 'channels-history' | 'transactions' | 'settings';
+type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'channels' | 'channels-config' | 'channels-history' | 'repo-sync' | 'transactions' | 'settings';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -622,6 +623,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               {lastChannelUpdate && (
                 <span className={`w-2 h-2 rounded-full ${lastChannelUpdate.success ? 'bg-emerald-400' : 'bg-rose-400'}`} title="Status da última atualização" />
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('repo-sync')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'repo-sync'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <GitBranch className="w-4 h-4 text-emerald-400" />
+                <span>Atualizar Links (2026)</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                GitHub
+              </span>
             </button>
 
             <button
@@ -1739,8 +1758,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
           {activeTab === 'channels-history' && (
             <ChannelUpdateHistory
               onOpenConfigEditor={() => setActiveTab('channels-config')}
+              onOpenRepoSync={() => setActiveTab('repo-sync')}
               onTriggerSync={(source) => source === 'ramys' ? handleSyncRamys() : handleSyncSaimo()}
               refreshTrigger={historyRefreshTrigger}
+            />
+          )}
+
+          {/* TAB: ATUALIZADOR DE LINKS (IPTV BRASIL 2026 - RAMYS) */}
+          {activeTab === 'repo-sync' && (
+            <RepoLinksUpdater
+              currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
+              onRefreshChannels={async () => {
+                try {
+                  const [cRes, hRes] = await Promise.all([
+                    api.getChannels(),
+                    api.getChannelUpdateHistory()
+                  ]);
+                  if (cRes.channels) setChannels(cRes.channels);
+                  if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
+                  setHistoryRefreshTrigger(prev => prev + 1);
+                } catch {
+                  // Handled
+                }
+              }}
+              onNavigateToHistory={() => setActiveTab('channels-history')}
             />
           )}
 
