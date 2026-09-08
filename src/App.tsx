@@ -7,6 +7,7 @@ import { PlansView } from './components/PlansView';
 import { LivePlayer } from './components/LivePlayer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { AdminPanel } from './components/AdminPanel';
+import { AdminAuthGate } from './components/AdminAuthGate';
 import { AuthModal } from './components/AuthModal';
 import { FavoritesView } from './components/FavoritesView';
 
@@ -375,10 +376,22 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentTab === 'admin' ? (
-          <AdminPanel 
-            onClose={() => setCurrentTab('live')}
-            onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
-          />
+          currentUser?.role === 'admin' ? (
+            <AdminPanel 
+              onClose={() => setCurrentTab('live')}
+              onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
+            />
+          ) : (
+            <AdminAuthGate
+              onAdminSuccess={(adminUser) => {
+                setCurrentUser(adminUser);
+                try {
+                  localStorage.setItem('maxtv_user', JSON.stringify(adminUser));
+                } catch {}
+              }}
+              onCancel={() => setCurrentTab('live')}
+            />
+          )
         ) : (
           <>
             {/* Hero Banner only on Live & Overview */}
@@ -504,14 +517,26 @@ export default function App() {
             >
               Planos & Preços PIX
             </button>
-            <button 
-              type="button"
-              onClick={() => setCurrentTab('admin')}
-              className="text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-600/20 text-white transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Painel Admin</span>
-            </button>
+            {currentUser?.role === 'admin' ? (
+              <button 
+                type="button"
+                onClick={() => setCurrentTab('admin')}
+                className="text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-600/20 text-white transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Painel Admin</span>
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={() => setCurrentTab('admin')}
+                className="text-xs font-medium px-3 py-1.5 border border-slate-800 hover:border-slate-700 rounded-lg text-slate-500 hover:text-slate-400 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Acesso reservado aos administradores"
+              >
+                <Lock className="w-3 h-3 text-slate-600" />
+                <span>Acesso Admin</span>
+              </button>
+            )}
             <a 
               href="https://github.com/gabrielsaimo/Saimo-TV" 
               target="_blank" 

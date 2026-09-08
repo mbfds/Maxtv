@@ -467,6 +467,25 @@ export const api = {
     return data;
   },
 
+  async saveM3uSource(payload: { name?: string; url: string; enabled?: boolean }): Promise<{
+    success: boolean;
+    source: any;
+    sources: any[];
+    config?: M3uAutoUpdateConfig;
+    message: string;
+  }> {
+    const res = await fetch('/api/admin/channels/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao salvar fonte M3U');
+    }
+    return data;
+  },
+
   async runM3uAutoUpdateNow(author?: string): Promise<{ success: boolean; message: string; stats?: any }> {
     const res = await fetch('/api/admin/channels/run-auto-update', {
       method: 'POST',
@@ -601,6 +620,19 @@ export const api = {
       throw new Error(err.error || 'Erro ao realizar login');
     }
     return await res.json();
+  },
+
+  async adminVerify(data: { pin?: string; email?: string; password?: string }): Promise<{ success: boolean; user: any; token: string; message?: string }> {
+    const res = await fetch('/api/auth/admin-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || result.message || 'Falha na autenticação de administrador');
+    }
+    return result;
   },
 
   async getMe(token?: string, email?: string): Promise<{ success: boolean; user: any }> {

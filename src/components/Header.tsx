@@ -131,18 +131,20 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Planos VIP</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setCurrentTab('admin')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-              currentTab === 'admin'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-500'
-                : 'text-slate-400 hover:text-indigo-400 hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>Painel Admin</span>
-          </button>
+          {currentUser?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => setCurrentTab('admin')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                currentTab === 'admin'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-500'
+                  : 'text-slate-400 hover:text-indigo-400 hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              <span>Painel Admin</span>
+            </button>
+          )}
         </nav>
 
         {/* Right side: Search, VIP status, User Profile, Checkout Trigger */}
@@ -257,19 +259,21 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Quick Admin Toggle */}
-          <button
-            type="button"
-            onClick={() => setCurrentTab(currentTab === 'admin' ? 'live' : 'admin')}
-            className={`p-2 rounded-xl border transition-all cursor-pointer ${
-              currentTab === 'admin'
-                ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
-                : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-            title="Painel Administrativo"
-          >
-            <Shield className="w-5 h-5" />
-          </button>
+          {/* Quick Admin Toggle - Only for authenticated administrators */}
+          {currentUser?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={() => setCurrentTab(currentTab === 'admin' ? 'live' : 'admin')}
+              className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                currentTab === 'admin'
+                  ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
+                  : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+              title="Painel Administrativo"
+            >
+              <Shield className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -332,16 +336,18 @@ export const Header: React.FC<HeaderProps> = ({
           <Crown className="w-4 h-4" />
           <span>VIP Pix</span>
         </button>
-        <button
-          type="button"
-          onClick={() => setCurrentTab('admin')}
-          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
-            currentTab === 'admin' ? 'text-indigo-400 font-bold' : 'text-slate-400'
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          <span>Admin</span>
-        </button>
+        {currentUser?.role === 'admin' && (
+          <button
+            type="button"
+            onClick={() => setCurrentTab('admin')}
+            className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
+              currentTab === 'admin' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            <span>Admin</span>
+          </button>
+        )}
       </div>
     </header>
   );

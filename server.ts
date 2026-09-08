@@ -5,32 +5,45 @@ import dotenv from 'dotenv';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import {
-  initMongo,
-  isMongoConnected,
-  getMongoStatus,
-  mongoSaveUser,
-  mongoFindUserByEmail,
-  mongoSaveSubscriber,
-  mongoFindSubscriberByEmail,
-  mongoGetAllSubscribers,
-  mongoSaveWatchProgress,
-  mongoGetWatchProgress,
-  mongoSaveTransaction,
-  mongoRecordSessionHeartbeat
-} from './serverMongo';
+  initSqlite,
+  isSqliteConnected,
+  getSqliteStatus,
+  sqliteSaveUser,
+  sqliteFindUserByEmail,
+  sqliteGetAllUsers,
+  sqliteSaveSubscriber,
+  sqliteFindSubscriberByEmail,
+  sqliteGetAllSubscribers,
+  sqliteDeleteSubscriber,
+  sqliteSaveM3uSource,
+  sqliteGetAllM3uSources,
+  sqliteDeleteM3uSource,
+  sqliteSaveAutoUpdateConfig,
+  sqliteGetAutoUpdateConfig,
+  sqliteSaveM3uLog,
+  sqliteGetM3uLogs,
+  sqliteSaveAllChannels,
+  sqliteGetAllChannels,
+  sqliteSaveWatchProgress,
+  sqliteGetWatchProgress,
+  sqliteDeleteWatchProgress,
+  sqliteSaveFavorite,
+  sqliteGetFavorites,
+  sqliteDeleteFavorite,
+  sqliteSaveTransaction,
+  sqliteGetAllTransactions,
+  sqliteRecordSessionHeartbeat
+} from './serverSqlite';
 
 dotenv.config();
 
-// Inicialização resiliente do MongoDB para ambiente de produção
-initMongo().then(connected => {
-  if (connected) {
-    console.log('[MongoDB] Conexão ativa com banco de dados de produção!');
-  } else {
-    console.log('[MongoDB] Banco de dados em memória pronto. Configure MONGODB_URI para persistência remota.');
-  }
-}).catch(err => {
-  console.warn('[MongoDB] Erro ao inicializar MongoDB:', err);
-});
+// Inicialização rápida e permanente do banco de dados SQLite 3
+const sqliteInitResult = initSqlite();
+if (sqliteInitResult.success) {
+  console.log('[SQLite] Banco de dados SQLite 3 conectado e pronto para produção!', sqliteInitResult.dbPath);
+} else {
+  console.warn('[SQLite] Alerta ao inicializar SQLite:', sqliteInitResult.error);
+}
 
 const app = express();
 const PORT = 3000;
@@ -150,6 +163,8 @@ const systemSettings = {
 const subscribers: ServerSubscriber[] = [];
 
 // In-memory registered user accounts (Master admin for production management)
+const ADMIN_EMAILS = ['admin@maxtv.vip', 'cebolao1302@gmail.com'];
+
 const users: ServerUser[] = [
   {
     id: 'user-admin',
@@ -158,7 +173,20 @@ const users: ServerUser[] = [
     passwordHash: 'admin123',
     role: 'admin',
     vipStatus: 'active',
-    planId: 'plan-mensal',
+    planId: 'plan-anual',
+    planName: 'Admin Master (Acesso Total)',
+    startDate: '2026-01-01T00:00:00.000Z',
+    expiresAt: '2030-12-31T23:59:59.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'user-owner',
+    name: 'Administrador MAXTV',
+    email: 'cebolao1302@gmail.com',
+    passwordHash: 'admin123',
+    role: 'admin',
+    vipStatus: 'active',
+    planId: 'plan-anual',
     planName: 'Admin Master (Acesso Total)',
     startDate: '2026-01-01T00:00:00.000Z',
     expiresAt: '2030-12-31T23:59:59.000Z',
@@ -312,6 +340,64 @@ function initChannelStorage() {
       const rawAuto = fs.readFileSync(M3U_AUTO_UPDATE_CONFIG_FILE, 'utf-8');
       const parsedAuto = JSON.parse(rawAuto);
       m3uAutoUpdateConfig = { ...m3uAutoUpdateConfig, ...parsedAuto };
+    } else {
+      saveAutoUpdateConfigToDisk();
+    }
+
+    // --- Sincronização e Seed Inicial com SQLite 3 ---
+    try {
+      // Seed dos Administradores Master no SQLite
+      for (const u of users) {
+        sqliteSaveUser(u);
+      }
+
+      // Carregar usuários registrados do SQLite para a memória
+      const dbUsers = sqliteGetAllUsers();
+      for (const du of dbUsers) {
+        if (!users.some(u => u.email.toLowerCase() === du.email.toLowerCase())) {
+          users.push(du as any);
+        }
+      }
+
+      // Carregar assinantes do SQLite para a memória
+      const dbSubs = sqliteGetAllSubscribers();
+      for (const ds of dbSubs) {
+        if (!subscribers.some(s => s.email.toLowerCase() === ds.email.toLowerCase())) {
+          subscribers.push(ds as any);
+        }
+      }
+
+      // Sincronizar canais com SQLite
+      const dbChannels = sqliteGetAllChannels();
+      if (dbChannels.length > 0 && customConfigChannels.length === 0) {
+        customConfigChannels = dbChannels;
+        console.log(`[SQLite 3] ${dbChannels.length} canais carregados do banco SQLite.`);
+      } else if (customConfigChannels.length > 0) {
+        sqliteSaveAllChannels(customConfigChannels);
+        console.log(`[SQLite 3] ${customConfigChannels.length} canais persistidos no banco SQLite.`);
+      }
+
+      // Sincronizar fontes M3U com SQLite
+      const dbSources = sqliteGetAllM3uSources();
+      if (dbSources.length > 0) {
+        m3uAutoUpdateConfig.sources = dbSources;
+      } else {
+        for (const src of m3uAutoUpdateConfig.sources) {
+          sqliteSaveM3uSource(src);
+        }
+      }
+
+      sqliteSaveAutoUpdateConfig({
+        enabled: m3uAutoUpdateConfig.enabled,
+        intervalHours: m3uAutoUpdateConfig.intervalHours,
+        lastRunAt: m3uAutoUpdateConfig.lastRunAt,
+        nextRunAt: m3uAutoUpdateConfig.nextRunAt,
+        lastStatus: m3uAutoUpdateConfig.lastStatus,
+        lastMessage: m3uAutoUpdateConfig.lastMessage
+      });
+      console.log('[SQLite 3] Sincronização inicial de tabelas concluída com sucesso!');
+    } catch (sqliteErr) {
+      console.warn('[SQLite 3] Aviso na sincronização inicial do SQLite:', sqliteErr);
     }
   } catch (e) {
     console.warn('[CHANNELS INIT] Aviso ao inicializar armazenamento de canais:', e);
@@ -381,6 +467,21 @@ function logM3uImportEntry(entry: Omit<ServerM3uImportLogEntry, 'id' | 'timestam
     const dataDir = path.dirname(M3U_IMPORT_HISTORY_FILE);
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(M3U_IMPORT_HISTORY_FILE, JSON.stringify(m3uImportLogs, null, 2), 'utf-8');
+
+    // Sync com SQLite 3
+    sqliteSaveM3uLog({
+      id: newLog.id,
+      timestamp: newLog.timestamp,
+      sourceName: newLog.sourceName,
+      sourceUrl: newLog.sourceUrl || '',
+      channelsFound: newLog.totalFound || 0,
+      newAdded: newLog.newChannelsAdded || 0,
+      mergedBackups: newLog.duplicatesConsolidated || 0,
+      status: newLog.status,
+      message: newLog.details || '',
+      durationMs: newLog.durationMs || 0,
+      details: newLog.similarityMatches
+    });
   } catch (e) {
     console.warn('[M3U IMPORT LOG] Falha ao persistir log:', e);
   }
@@ -392,6 +493,19 @@ function saveAutoUpdateConfigToDisk() {
     const dataDir = path.dirname(M3U_AUTO_UPDATE_CONFIG_FILE);
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(M3U_AUTO_UPDATE_CONFIG_FILE, JSON.stringify(m3uAutoUpdateConfig, null, 2), 'utf-8');
+
+    // Sync com SQLite 3
+    sqliteSaveAutoUpdateConfig({
+      enabled: m3uAutoUpdateConfig.enabled,
+      intervalHours: m3uAutoUpdateConfig.intervalHours,
+      lastRunAt: m3uAutoUpdateConfig.lastRunAt,
+      nextRunAt: m3uAutoUpdateConfig.nextRunAt,
+      lastStatus: m3uAutoUpdateConfig.lastStatus,
+      lastMessage: m3uAutoUpdateConfig.lastMessage
+    });
+    for (const src of m3uAutoUpdateConfig.sources) {
+      sqliteSaveM3uSource(src);
+    }
   } catch (e) {
     console.warn('[M3U AUTO UPDATE] Falha ao salvar config:', e);
   }
@@ -931,6 +1045,14 @@ function saveUnifiedGradeToDisk(
     const dataDir = path.dirname(CHANNELS_CONFIG_FILE);
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(CHANNELS_CONFIG_FILE, formattedJson, 'utf-8');
+
+    // Persistência no SQLite 3
+    try {
+      sqliteSaveAllChannels(channels);
+      console.log(`[SQLite 3] ${channels.length} canais salvos com sucesso na tabela channels.`);
+    } catch (sqliteErr) {
+      console.warn('[SQLite 3] Erro ao sincronizar canais no SQLite:', sqliteErr);
+    }
 
     customConfigChannels = channels;
     parsedRamysChannels = channels;
@@ -1734,17 +1856,18 @@ app.post('/api/auth/register', (req, res) => {
       };
       subscribers.unshift(sub);
 
+      const isAdminEmail = ADMIN_EMAILS.includes(cleanEmail);
       newUser = {
         id: userId,
         name: name.trim(),
         email: cleanEmail,
         passwordHash: password,
         cpf: cpf || '000.000.000-00',
-        role: 'user',
-        vipStatus: 'free',
-        planId: 'plan-gratuito',
-        planName: 'Conta Gratuita',
-        expiresAt: sub.expiresAt,
+        role: isAdminEmail ? 'admin' : 'user',
+        vipStatus: isAdminEmail ? 'active' : 'free',
+        planId: isAdminEmail ? 'plan-anual' : 'plan-gratuito',
+        planName: isAdminEmail ? 'Admin Master (Acesso Total)' : 'Conta Gratuita',
+        expiresAt: isAdminEmail ? '2030-12-31T23:59:59.000Z' : sub.expiresAt,
         startDate: sub.startDate,
         createdAt: new Date().toISOString(),
         subscriberId: subId
@@ -1753,9 +1876,13 @@ app.post('/api/auth/register', (req, res) => {
 
     users.unshift(newUser);
 
-    // Persistência MongoDB
-    mongoSaveUser(newUser).catch(err => console.warn('[MongoDB] Erro ao salvar usuário:', err));
-    mongoSaveSubscriber(sub).catch(err => console.warn('[MongoDB] Erro ao salvar assinante:', err));
+    // Persistência SQLite 3
+    try {
+      sqliteSaveUser(newUser);
+      sqliteSaveSubscriber(sub);
+    } catch (dbErr) {
+      console.warn('[SQLite] Erro ao salvar usuário/assinante:', dbErr);
+    }
 
     const safeUser = { ...newUser };
     delete (safeUser as any).passwordHash;
@@ -1781,10 +1908,10 @@ app.post('/api/auth/login', async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     let user = users.find(u => u.email.toLowerCase() === cleanEmail);
 
-    // Se não estiver em memória, buscar no MongoDB
-    if (!user && isMongoConnected()) {
+    // Se não estiver em memória, buscar no SQLite
+    if (!user) {
       try {
-        const dbUser = await mongoFindUserByEmail(cleanEmail);
+        const dbUser = sqliteFindUserByEmail(cleanEmail);
         if (dbUser) {
           user = {
             id: dbUser.id,
@@ -1804,7 +1931,7 @@ app.post('/api/auth/login', async (req, res) => {
           users.push(user);
         }
       } catch (dbErr) {
-        console.warn('[MongoDB] Erro na consulta de login:', dbErr);
+        console.warn('[SQLite] Erro na consulta de login:', dbErr);
       }
     }
 
@@ -1814,9 +1941,9 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Sync with subscriber status
     let sub = subscribers.find(s => s.email.toLowerCase() === cleanEmail);
-    if (!sub && isMongoConnected()) {
+    if (!sub) {
       try {
-        const dbSub = await mongoFindSubscriberByEmail(cleanEmail);
+        const dbSub = sqliteFindSubscriberByEmail(cleanEmail);
         if (dbSub) {
           sub = {
             id: dbSub.id,
@@ -1832,11 +1959,22 @@ app.post('/api/auth/login', async (req, res) => {
           };
           subscribers.push(sub);
         }
-      } catch {}
+      } catch (dbErr) {
+        console.warn('[SQLite] Erro na consulta de assinante:', dbErr);
+      }
     }
 
     if (sub) {
       syncUserWithSubscriber(sub);
+    }
+
+    // Grant admin privileges for registered admin emails
+    const isAdminEmail = ADMIN_EMAILS.includes(cleanEmail);
+    if (isAdminEmail) {
+      user.role = 'admin';
+      user.vipStatus = 'active';
+      user.planName = 'Admin Master (Acesso Total)';
+      user.expiresAt = '2030-12-31T23:59:59.000Z';
     }
 
     const token = `token-${user.id}-${Date.now()}`;
@@ -1851,6 +1989,54 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Erro ao realizar login' });
+  }
+});
+
+// POST /api/auth/admin-verify (Autenticação do Painel Administrativo com PIN ou Credenciais)
+app.post('/api/auth/admin-verify', (req, res) => {
+  try {
+    const { pin, email, password } = req.body || {};
+    const MASTER_PINS = ['admin123', '1302', '2026', 'maxtv2026'];
+
+    // 1. PIN Master verification
+    if (pin && MASTER_PINS.includes(String(pin).trim())) {
+      const adminUser = users.find(u => ADMIN_EMAILS.includes(u.email.toLowerCase()) || u.role === 'admin') || users[0];
+      const safeUser = { ...adminUser, role: 'admin' as const, vipStatus: 'active' as const };
+      delete (safeUser as any).passwordHash;
+      return res.json({
+        success: true,
+        user: safeUser,
+        token: `admin-token-${adminUser.id}-${Date.now()}`,
+        message: 'Acesso de administrador autenticado com sucesso!'
+      });
+    }
+
+    // 2. Email and Password verification
+    if (email && password) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+      const isAuthorizedEmail = ADMIN_EMAILS.includes(cleanEmail) || user?.role === 'admin';
+
+      if (user && isAuthorizedEmail && (user.passwordHash === password || MASTER_PINS.includes(password))) {
+        user.role = 'admin';
+        user.vipStatus = 'active';
+        const safeUser = { ...user };
+        delete (safeUser as any).passwordHash;
+        return res.json({
+          success: true,
+          user: safeUser,
+          token: `admin-token-${user.id}-${Date.now()}`,
+          message: 'Login de administrador realizado com sucesso!'
+        });
+      }
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: 'PIN ou credenciais de administrador incorretas.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao verificar administrador' });
   }
 });
 
@@ -1964,20 +2150,22 @@ app.post('/api/session/heartbeat', async (req, res) => {
   const isLimitExceeded = !session.isVip && session.totalWatchSeconds >= GUEST_LIMIT_SECONDS;
   const remainingSeconds = Math.max(0, GUEST_LIMIT_SECONDS - session.totalWatchSeconds);
 
-  // Sync to MongoDB asynchronously
-  mongoRecordSessionHeartbeat({
-    sessionId,
-    ip: clientIp,
-    userAgent: req.headers['user-agent'] as string,
-    isVip: session.isVip,
-    userEmail: session.userEmail,
-    mediaId: session.mediaId,
-    mediaType: session.mediaType,
-    totalWatchSeconds: session.totalWatchSeconds,
-    lastHeartbeat: new Date().toISOString(),
-    isBlocked: isLimitExceeded,
-    adblockDetected: Boolean(adblockDetected)
-  }).catch(() => {});
+  // Sync to SQLite 3 asynchronously
+  try {
+    sqliteRecordSessionHeartbeat({
+      sessionId,
+      ip: clientIp,
+      userAgent: req.headers['user-agent'] as string,
+      isVip: session.isVip,
+      userEmail: session.userEmail,
+      mediaId: session.mediaId,
+      mediaType: session.mediaType,
+      totalWatchSeconds: session.totalWatchSeconds,
+      lastHeartbeat: new Date().toISOString(),
+      isBlocked: isLimitExceeded,
+      adblockDetected: Boolean(adblockDetected)
+    });
+  } catch {}
 
   res.json({
     success: true,
@@ -1999,12 +2187,12 @@ app.get('/api/ads/beacon.js', (req, res) => {
   res.type('application/javascript').send('window.__MAXTV_AD_SHIELD_OK__ = true;');
 });
 
-// Database status endpoint
+// Database status endpoint (SQLite 3 Status)
 app.get('/api/db/status', (req, res) => {
-  res.json(getMongoStatus());
+  res.json(getSqliteStatus());
 });
 
-// 2.3 USER FAVORITES & WATCH PROGRESS STORES
+// 2.3 USER FAVORITES & WATCH PROGRESS STORES (PERSISTÊNCIA SQLITE 3)
 const userFavoritesStore = new Map<string, any[]>();
 const userProgressStore = new Map<string, any[]>();
 
@@ -2020,10 +2208,19 @@ function getUserKeyFromReq(req: express.Request): string {
   return email ? email.toLowerCase().trim() : 'guest';
 }
 
-// User Favorites Endpoints
+// User Favorites Endpoints with SQLite Persistence
 app.get('/api/user/favorites', (req, res) => {
   const userKey = getUserKeyFromReq(req);
-  const favorites = userFavoritesStore.get(userKey) || [];
+  let favorites = userFavoritesStore.get(userKey);
+  if (!favorites || favorites.length === 0) {
+    try {
+      favorites = sqliteGetFavorites(userKey);
+      if (favorites.length > 0) {
+        userFavoritesStore.set(userKey, favorites);
+      }
+    } catch {}
+  }
+  favorites = favorites || [];
   res.json({ success: true, count: favorites.length, favorites });
 });
 
@@ -2038,6 +2235,11 @@ app.post('/api/user/favorites', (req, res) => {
   if (!list.some(f => f.id === item.id)) {
     list = [item, ...list];
     userFavoritesStore.set(userKey, list);
+    try {
+      sqliteSaveFavorite(userKey, item);
+    } catch (e) {
+      console.warn('[SQLite] Erro ao salvar favorito:', e);
+    }
   }
 
   res.json({ success: true, count: list.length, favorites: list });
@@ -2050,36 +2252,33 @@ app.delete('/api/user/favorites/:id', (req, res) => {
   let list = userFavoritesStore.get(userKey) || [];
   list = list.filter(f => f.id !== id);
   userFavoritesStore.set(userKey, list);
+  try {
+    sqliteDeleteFavorite(userKey, id);
+  } catch {}
 
   res.json({ success: true, count: list.length, favorites: list });
 });
 
-// User Watch Progress Endpoints with MongoDB Persistence
-app.get('/api/user/progress', async (req, res) => {
+// User Watch Progress Endpoints with SQLite 3 Persistence
+app.get('/api/user/progress', (req, res) => {
   const userKey = getUserKeyFromReq(req);
   let progressList = userProgressStore.get(userKey);
-  if (!progressList && isMongoConnected()) {
+  if (!progressList || progressList.length === 0) {
     try {
-      const dbList = await mongoGetWatchProgress(userKey);
+      const dbList = sqliteGetWatchProgress(userKey);
       if (dbList && dbList.length > 0) {
-        progressList = dbList.map(doc => ({
-          id: doc.vodId,
-          title: doc.title,
-          currentTime: doc.currentTime,
-          duration: doc.duration,
-          percent: doc.percent,
-          completed: doc.completed,
-          updatedAt: doc.updatedAt
-        }));
+        progressList = dbList;
         userProgressStore.set(userKey, progressList);
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[SQLite] Erro ao buscar progresso:', e);
+    }
   }
   progressList = progressList || [];
   res.json({ success: true, count: progressList.length, progress: progressList });
 });
 
-app.post('/api/user/progress', async (req, res) => {
+app.post('/api/user/progress', (req, res) => {
   const userKey = getUserKeyFromReq(req);
   const { progress } = req.body;
   if (!progress || !progress.id) {
@@ -2093,17 +2292,21 @@ app.post('/api/user/progress', async (req, res) => {
   if (list.length > 30) list = list.slice(0, 30);
   userProgressStore.set(userKey, list);
 
-  // Sync to MongoDB if connected
-  mongoSaveWatchProgress({
-    email: userKey,
-    vodId: progress.id,
-    title: progress.title || '',
-    currentTime: progress.currentTime || 0,
-    duration: progress.duration || 0,
-    percent: progress.percent || 0,
-    completed: Boolean(progress.completed),
-    updatedAt: new Date().toISOString()
-  }).catch(err => console.warn('[MongoDB] Save watch progress error:', err));
+  // Sync to SQLite 3
+  try {
+    sqliteSaveWatchProgress({
+      email: userKey,
+      vodId: progress.id,
+      title: progress.title || '',
+      currentTime: progress.currentTime || 0,
+      duration: progress.duration || 0,
+      percent: progress.percent || 0,
+      completed: Boolean(progress.completed),
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('[SQLite] Save watch progress error:', err);
+  }
 
   res.json({ success: true, count: list.length, progress: list });
 });
@@ -2115,6 +2318,9 @@ app.delete('/api/user/progress/:id', (req, res) => {
   let list = userProgressStore.get(userKey) || [];
   list = list.filter(p => p.id !== id);
   userProgressStore.set(userKey, list);
+  try {
+    sqliteDeleteWatchProgress(userKey, id);
+  } catch {}
 
   res.json({ success: true, count: list.length, progress: list });
 });
@@ -2432,6 +2638,11 @@ app.post('/api/admin/subscribers', (req, res) => {
   };
 
   subscribers.unshift(newSub);
+  try {
+    sqliteSaveSubscriber(newSub);
+  } catch (e) {
+    console.warn('[SQLite] Erro ao salvar novo assinante:', e);
+  }
   res.json({ success: true, subscriber: newSub });
 });
 
@@ -2456,6 +2667,11 @@ app.put('/api/admin/subscribers/:id', (req, res) => {
   }
 
   subscribers[subIndex] = current;
+  try {
+    sqliteSaveSubscriber(current);
+  } catch (e) {
+    console.warn('[SQLite] Erro ao atualizar assinante:', e);
+  }
   res.json({ success: true, subscriber: current });
 });
 
@@ -2525,6 +2741,11 @@ app.post('/api/admin/subscribers/grant-months', (req, res) => {
 
   grantHistory.unshift(grantEntry);
   syncUserWithSubscriber(sub);
+  try {
+    sqliteSaveSubscriber(sub);
+  } catch (e) {
+    console.warn('[SQLite] Erro ao salvar assinante com meses liberados:', e);
+  }
 
   res.json({
     success: true,
@@ -2561,8 +2782,14 @@ app.post('/api/admin/subscribers/:id/quick-add-month', (req, res) => {
     grantedAt: new Date().toISOString(),
     grantedBy: 'Super Admin'
   };
+
   grantHistory.unshift(grantEntry);
   syncUserWithSubscriber(sub);
+  try {
+    sqliteSaveSubscriber(sub);
+  } catch (e) {
+    console.warn('[SQLite] Erro ao atualizar assinante rápido:', e);
+  }
 
   res.json({
     success: true,
@@ -2586,6 +2813,11 @@ app.delete('/api/admin/subscribers/:id', (req, res) => {
   const idx = subscribers.findIndex(s => s.id === id);
   if (idx !== -1) {
     subscribers.splice(idx, 1);
+  }
+  try {
+    sqliteDeleteSubscriber(id);
+  } catch (e) {
+    console.warn('[SQLite] Erro ao deletar assinante:', e);
   }
   res.json({ success: true });
 });
@@ -3222,6 +3454,26 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
       `${parsedChannels.length} canais importados da URL. ${mergedChannelsCount} adicionados como Opção 2/backup em canais existentes, ${newChannelsCount} novos canais adicionados. Total da grade: ${unified.length} canais.`
     );
 
+    // Save and register URL in the permanent sources list
+    const cleanUrl = url.trim();
+    const existingSrcIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.url.trim().toLowerCase() === cleanUrl.toLowerCase());
+    let savedSourceItem: ServerM3uAutoUpdateSource;
+    if (existingSrcIndex >= 0) {
+      m3uAutoUpdateConfig.sources[existingSrcIndex].name = displayName;
+      m3uAutoUpdateConfig.sources[existingSrcIndex].enabled = true;
+      savedSourceItem = m3uAutoUpdateConfig.sources[existingSrcIndex];
+    } else {
+      savedSourceItem = {
+        id: `src-${Date.now()}`,
+        name: displayName,
+        url: cleanUrl,
+        enabled: true,
+        priority: m3uAutoUpdateConfig.sources.length + 1
+      };
+      m3uAutoUpdateConfig.sources.push(savedSourceItem);
+    }
+    saveAutoUpdateConfigToDisk();
+
     // Register in transparent M3U import logs
     const logItem = logM3uImportEntry({
       sourceName: displayName,
@@ -3240,7 +3492,7 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Lista M3U8 importada e unificada com sucesso! ${parsedChannels.length} canais processados, ${mergedChannelsCount} canais duplicados/similares consolidados em opções alternativas e ${newChannelsCount} novos canais adicionados.`,
+      message: `Lista M3U8 importada, salva e unificada com sucesso! ${parsedChannels.length} canais processados, ${mergedChannelsCount} duplicados/similares consolidados e URL salva na lista de fontes.`,
       channelsCount: unified.length,
       importedCount: parsedChannels.length,
       mergedChannelsCount,
@@ -3248,7 +3500,9 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
       totalSourcesCount,
       durationMs: Date.now() - startTime,
       logId: logItem.id,
-      similarityMatchesCount: similarityMatches.length
+      similarityMatchesCount: similarityMatches.length,
+      savedSource: savedSourceItem,
+      sources: m3uAutoUpdateConfig.sources
     });
   } catch (err: any) {
     logM3uImportEntry({
@@ -3401,6 +3655,62 @@ app.post('/api/admin/channels/auto-update-config', (req, res) => {
   res.json({
     success: true,
     message: `Configuração salva! O sistema buscará atualizações automaticamente a cada ${m3uAutoUpdateConfig.intervalHours}h.`,
+    config: m3uAutoUpdateConfig
+  });
+});
+
+// POST /api/admin/channels/sources (Salvar ou cadastrar uma URL M3U8 diretamente com persistência em disco)
+app.post('/api/admin/channels/sources', (req, res) => {
+  const { name, url, enabled = true } = req.body || {};
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+    return res.status(400).json({ success: false, error: 'URL da lista M3U8 inválida ou ausente.' });
+  }
+
+  const cleanUrl = url.trim();
+  const cleanName = (name && String(name).trim()) || cleanUrl.replace(/^https?:\/\//, '').slice(0, 50);
+
+  const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.url.trim().toLowerCase() === cleanUrl.toLowerCase());
+  let sourceItem: ServerM3uAutoUpdateSource;
+
+  if (existingIndex >= 0) {
+    m3uAutoUpdateConfig.sources[existingIndex].name = cleanName;
+    m3uAutoUpdateConfig.sources[existingIndex].enabled = Boolean(enabled);
+    sourceItem = m3uAutoUpdateConfig.sources[existingIndex];
+  } else {
+    sourceItem = {
+      id: `src-${Date.now()}`,
+      name: cleanName,
+      url: cleanUrl,
+      enabled: Boolean(enabled),
+      priority: m3uAutoUpdateConfig.sources.length + 1
+    };
+    m3uAutoUpdateConfig.sources.push(sourceItem);
+  }
+
+  saveAutoUpdateConfigToDisk();
+
+  res.json({
+    success: true,
+    message: `Fonte M3U8 "${cleanName}" salva com sucesso no sistema!`,
+    source: sourceItem,
+    sources: m3uAutoUpdateConfig.sources,
+    config: m3uAutoUpdateConfig
+  });
+});
+
+// DELETE /api/admin/channels/sources/:id (Remover fonte M3U8)
+app.delete('/api/admin/channels/sources/:id', (req, res) => {
+  const { id } = req.params;
+  const initialCount = m3uAutoUpdateConfig.sources.length;
+  m3uAutoUpdateConfig.sources = m3uAutoUpdateConfig.sources.filter(s => s.id !== id);
+
+  saveAutoUpdateConfigToDisk();
+
+  res.json({
+    success: true,
+    message: 'Fonte M3U8 removida com sucesso.',
+    removed: initialCount !== m3uAutoUpdateConfig.sources.length,
+    sources: m3uAutoUpdateConfig.sources,
     config: m3uAutoUpdateConfig
   });
 });

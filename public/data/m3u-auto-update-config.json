@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "intervalHours": 24,
+  "sources": [
+    {
+      "id": "src-ramys-br03",
+      "name": "Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026)",
+      "url": "https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "src-1788867612976",
+      "name": "Teste Fonte Backup",
+      "url": "https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8",
+      "enabled": true,
+      "priority": 2
+    },
+    {
+      "id": "src-1788868299358",
+      "name": "Lista Teste IPTV",
+      "url": "https://example.com/lista-teste.m3u8",
+      "enabled": true,
+      "priority": 3
+    }
+  ],
+  "lastRunAt": "2026-09-08T11:40:02.360Z",
+  "nextRunAt": "2026-09-09T11:40:02.361Z",
+  "lastStatus": "idle",
+  "lastMessage": "Ciclo de auto-atualização configurado a cada 24 horas."
+}

@@ -196,34 +196,33 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
   // Add a new M3U source to periodic monitoring
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSourceUrl.trim() || !autoUpdateConfig) return;
+    if (!newSourceUrl.trim()) return;
 
-    const newSource: M3uAutoUpdateSource = {
-      id: `src-${Date.now()}`,
-      name: newSourceName.trim() || `Fonte M3U8 #${autoUpdateConfig.sources.length + 1}`,
-      url: newSourceUrl.trim(),
-      enabled: true,
-      priority: autoUpdateConfig.sources.length + 1
-    };
-
-    const updatedSources = [...autoUpdateConfig.sources, newSource];
     setIsSavingAutoUpdate(true);
     try {
-      const res = await api.saveM3uAutoUpdateConfig({ sources: updatedSources });
-      if (res.success && res.config) {
-        setAutoUpdateConfig(res.config);
+      const res = await api.saveM3uSource({
+        name: newSourceName.trim(),
+        url: newSourceUrl.trim()
+      });
+      if (res.success) {
+        if (res.config) {
+          setAutoUpdateConfig(res.config);
+        } else if (res.sources && autoUpdateConfig) {
+          setAutoUpdateConfig({ ...autoUpdateConfig, sources: res.sources });
+        }
         setNewSourceUrl('');
         setNewSourceName('');
         setResultMessage({
           type: 'success',
-          title: 'Fonte M3U8 Cadastrada!',
-          details: `A fonte "${newSource.name}" foi incluída no ciclo de atualização periódica.`
+          title: 'Fonte M3U8 Salva com Sucesso!',
+          details: res.message || 'URL registrada e salva permanentemente no disco para monitoramento.'
         });
+        await loadData();
       }
     } catch (err: any) {
       setResultMessage({
         type: 'error',
-        title: 'Erro ao Adicionar Fonte',
+        title: 'Erro ao Salvar Fonte M3U8',
         details: err.message || 'Falha ao salvar fonte'
       });
     } finally {
