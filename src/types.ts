@@ -168,6 +168,7 @@ export interface SystemSettings {
   announcementText: string;
   allowFreePreview: boolean;
   freePreviewMinutes: number;
+  autoUpdateIntervalHours?: number; // 0 = disabled, 6, 12, 24, 48, 72 hours
 }
 
 export interface VipGrant {
@@ -265,7 +266,7 @@ export interface ChannelUpdateHistoryEntry {
   id: string;
   timestamp: string;
   dateFormatted: string;
-  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'repo_sync' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
+  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'repo_sync' | 'unify_grade' | 'm3u_import' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
   actionName: string;
   success: boolean;
   channelsCount: number;
@@ -314,4 +315,66 @@ export interface ChannelsConfigResponse {
   lastModified?: string;
   error?: string;
 }
+
+export interface UnifyGradeStats {
+  totalChannels: number;
+  totalSources: number;
+  multiSourceChannels: number;
+  singleSourceChannels: number;
+  avgSourcesPerChannel: number;
+  ramysCount: number;
+  saimoCount: number;
+  lastUnifiedAt?: string;
+}
+
+export interface SimilarityMatchLog {
+  incomingName: string;
+  matchedChannelName: string;
+  similarityScore: number;
+  assignedOption: string;
+  matchReason?: string;
+}
+
+export interface M3uImportLogEntry {
+  id: string;
+  timestamp: string;
+  dateFormatted: string;
+  sourceName: string;
+  sourceUrl?: string;
+  totalFound: number;
+  duplicatesConsolidated: number;
+  newChannelsAdded: number;
+  totalStreamOptions: number;
+  finalGradeCount: number;
+  status: 'success' | 'warning' | 'error';
+  durationMs: number;
+  author: string;
+  details: string;
+  similarityMatches?: SimilarityMatchLog[];
+}
+
+export interface M3uAutoUpdateSource {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  priority: number;
+}
+
+export interface M3uAutoUpdateConfig {
+  enabled: boolean;
+  intervalHours: number;
+  sources: M3uAutoUpdateSource[];
+  lastRunAt?: string;
+  nextRunAt?: string;
+  lastStatus?: 'success' | 'error' | 'running' | 'idle';
+  lastMessage?: string;
+  lastStats?: {
+    totalFound: number;
+    duplicatesConsolidated: number;
+    newChannelsAdded: number;
+    finalGradeCount: number;
+  };
+}
+
 

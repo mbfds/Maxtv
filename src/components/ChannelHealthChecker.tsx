@@ -49,6 +49,7 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [statusFilter, setStatusFilter] = useState<HealthFilter>('all');
   const [sortBy, setSortBy] = useState<'name' | 'latency' | 'status'>('status');
+  const [displayLimit, setDisplayLimit] = useState<number>(100);
 
   // Mini-player state for immediate visual test
   const [inlinePreviewChannel, setInlinePreviewChannel] = useState<Channel | null>(null);
@@ -184,24 +185,26 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
     });
   }, [channels, searchQuery, selectedCategory, statusFilter, sortBy, healthMap]);
 
-  // Check single channel
-  const handleTestChannel = async (channel: Channel) => {
+  // Check single channel (supports Opção 1, Opção 2...)
+  const handleTestChannel = async (channel: Channel, sourceIndex = 0) => {
     setTestingChannelIds(prev => new Set(prev).add(channel.id));
     try {
-      const res = await api.checkChannelHealth(channel.id);
+      const res = await api.checkChannelHealth(channel.id, sourceIndex);
       if (res.success && res.result) {
         setHealthMap(prev => new Map(prev).set(channel.id, res.result));
         const statusLabel = res.result.status === 'online' ? 'Online' : res.result.status === 'unstable' ? 'Instável' : 'Offline';
-        showFeedback(`${channel.name}: Sinal ${statusLabel} (${res.result.latencyMs}ms)`);
+        const optLabel = sourceIndex > 0 ? ` (Opção ${sourceIndex + 1})` : '';
+        showFeedback(`${channel.name}${optLabel}: Sinal ${statusLabel} (${res.result.latencyMs}ms)`);
       }
     } catch (err: any) {
       // If error, mark offline
+      const targetSource = channel.sources[sourceIndex] || channel.sources[0];
       const fallbackResult: ChannelHealthResult = {
         channelId: channel.id,
         channelName: channel.name,
         category: channel.category,
-        sourceIndex: 0,
-        url: channel.sources[0]?.url || '',
+        sourceIndex,
+        url: targetSource?.url || '',
         status: 'offline',
         statusCode: 0,
         statusText: 'Erro ao testar',
@@ -909,13 +912,44 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
 
       {/* CHANNELS HEALTH MONITOR TABLE */}
       <div className="bg-slate-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="p-4 bg-slate-900/90 border-b border-white/10 flex items-center justify-between text-xs text-slate-400">
-          <span className="font-bold text-slate-200">
-            Grade de Monitoramento • Exibindo {filteredChannels.length} de {channels.length} canais
-          </span>
-          <span className="text-[11px]">
-            Clique em <strong>Testar</strong> para verificar ou no <strong>Play</strong> para testar imagem e som
-          </span>
+        <div className="p-4 bg-slate-900/90 border-b border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-slate-200">
+              Grade de Monitoramento • Exibindo {Math.min(displayLimit, filteredChannels.length)} de {filteredChannels.length} canais
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/5">
+              Total Geral: {channels.length}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400">Mostrar:</span>
+            {[100, 250, 500].map(limit => (
+              <button
+                key={limit}
+                type="button"
+                onClick={() => setDisplayLimit(limit)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  displayLimit === limit
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                }`}
+              >
+                {limit}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setDisplayLimit(filteredChannels.length)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                displayLimit >= filteredChannels.length
+                  ? 'bg-teal-600 text-white shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/20'
+              }`}
+            >
+              Ver Todos ({filteredChannels.length})
+            </button>
+          </div>
         </div>
 
         {filteredChannels.length === 0 ? (
@@ -949,7 +983,7 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-slate-200">
-                {filteredChannels.slice(0, 100).map((channel) => {
+                {filteredChannels.slice(0, displayLimit).map((channel) => {
                   const health = healthMap.get(channel.id);
                   const isTesting = testingChannelIds.has(channel.id);
                   const status = health ? health.status : 'untested';
@@ -979,8 +1013,32 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
                             </div>
                           )}
                           <div>
-                            <p className="font-bold text-white text-xs">{channel.name}</p>
-                            <p className="text-[10px] text-slate-400">ID: {channel.id}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-bold text-white text-xs">{channel.name}</p>
+                              {channel.sources.length > 1 && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                                  {channel.sources.length} Opções
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-slate-400">ID: {channel.id}</span>
+                              {channel.sources.length > 1 && (
+                                <div className="flex items-center gap-1">
+                                  {channel.sources.map((src, sIdx) => (
+                                    <button
+                                      key={sIdx}
+                                      type="button"
+                                      onClick={() => handleTestChannel(channel, sIdx)}
+                                      className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-teal-900/60 text-slate-300 hover:text-teal-200 border border-white/5 cursor-pointer"
+                                      title={`Testar ${src.label || `Opção ${sIdx + 1}`}`}
+                                    >
+                                      {src.label || `Opção ${sIdx + 1}`}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -1109,9 +1167,27 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
               </tbody>
             </table>
 
-            {filteredChannels.length > 100 && (
-              <div className="p-3 text-center bg-slate-950/60 border-t border-white/5 text-xs text-slate-400">
-                Mostrando os primeiros 100 canais da lista filtrada. Use a barra de pesquisa ou os filtros de categoria para refinar a busca.
+            {filteredChannels.length > displayLimit && (
+              <div className="p-4 bg-slate-950/80 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
+                <span>
+                  Exibindo <strong>{Math.min(displayLimit, filteredChannels.length)}</strong> de <strong>{filteredChannels.length}</strong> canais.
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDisplayLimit(prev => Math.min(prev + 100, filteredChannels.length))}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-md shadow-indigo-600/30"
+                  >
+                    Carregar Mais 100 Canais
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDisplayLimit(filteredChannels.length)}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold rounded-xl text-xs border border-teal-500/20 transition-colors cursor-pointer"
+                  >
+                    Exibir Todos ({filteredChannels.length})
+                  </button>
+                </div>
               </div>
             )}
           </div>

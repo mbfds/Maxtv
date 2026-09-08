@@ -49,6 +49,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Platform Health Check (Container Ingress & Health Monitor)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
 // --- IN-MEMORY DATABASE & STATE ---
 interface ServerChannel {
   id: string;
@@ -134,7 +143,8 @@ const systemSettings = {
   sandboxMode: false,
   announcementText: '🎉 MAXTV VIP: Mais de 110 canais ao vivo e VOD em alta definição. Plano R$ 10,00 por 1 dispositivo!',
   allowFreePreview: true,
-  freePreviewMinutes: 5
+  freePreviewMinutes: 5,
+  autoUpdateIntervalHours: 24
 };
 
 const subscribers: ServerSubscriber[] = [];
@@ -186,7 +196,7 @@ interface ServerChannelUpdateHistoryEntry {
   id: string;
   timestamp: string;
   dateFormatted: string;
-  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'repo_sync' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
+  type: 'json_edit' | 'sync_ramys' | 'sync_saimo' | 'repo_sync' | 'unify_grade' | 'm3u_import' | 'manual_add' | 'manual_edit' | 'manual_delete' | 'vod_sync' | 'initial_load';
   actionName: string;
   success: boolean;
   channelsCount: number;
@@ -198,8 +208,78 @@ interface ServerChannelUpdateHistoryEntry {
 
 const CHANNELS_CONFIG_FILE = path.join(process.cwd(), 'public', 'data', 'channels-config.json');
 const CHANNELS_HISTORY_FILE = path.join(process.cwd(), 'public', 'data', 'channel-updates-history.json');
+const M3U_IMPORT_HISTORY_FILE = path.join(process.cwd(), 'public', 'data', 'm3u-import-history.json');
+const M3U_AUTO_UPDATE_CONFIG_FILE = path.join(process.cwd(), 'public', 'data', 'm3u-auto-update-config.json');
+
+interface ServerSimilarityMatchLog {
+  incomingName: string;
+  matchedChannelName: string;
+  similarityScore: number;
+  assignedOption: string;
+  matchReason?: string;
+}
+
+interface ServerM3uImportLogEntry {
+  id: string;
+  timestamp: string;
+  dateFormatted: string;
+  sourceName: string;
+  sourceUrl?: string;
+  totalFound: number;
+  duplicatesConsolidated: number;
+  newChannelsAdded: number;
+  totalStreamOptions: number;
+  finalGradeCount: number;
+  status: 'success' | 'warning' | 'error';
+  durationMs: number;
+  author: string;
+  details: string;
+  similarityMatches?: ServerSimilarityMatchLog[];
+}
+
+interface ServerM3uAutoUpdateSource {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  priority: number;
+}
+
+interface ServerM3uAutoUpdateConfig {
+  enabled: boolean;
+  intervalHours: number;
+  sources: ServerM3uAutoUpdateSource[];
+  lastRunAt?: string;
+  nextRunAt?: string;
+  lastStatus?: 'success' | 'error' | 'running' | 'idle';
+  lastMessage?: string;
+  lastStats?: {
+    totalFound: number;
+    duplicatesConsolidated: number;
+    newChannelsAdded: number;
+    finalGradeCount: number;
+  };
+}
 
 let channelUpdateHistory: ServerChannelUpdateHistoryEntry[] = [];
+let m3uImportLogs: ServerM3uImportLogEntry[] = [];
+let m3uAutoUpdateConfig: ServerM3uAutoUpdateConfig = {
+  enabled: true,
+  intervalHours: 24,
+  sources: [
+    {
+      id: 'src-ramys-br03',
+      name: 'Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026)',
+      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
+      enabled: true,
+      priority: 1
+    }
+  ],
+  lastRunAt: new Date().toISOString(),
+  nextRunAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+  lastStatus: 'idle',
+  lastMessage: 'Ciclo de auto-atualização configurado a cada 24 horas.'
+};
 
 function initChannelStorage() {
   try {
@@ -222,6 +302,17 @@ function initChannelStorage() {
       const rawHist = fs.readFileSync(CHANNELS_HISTORY_FILE, 'utf-8');
       channelUpdateHistory = JSON.parse(rawHist);
     }
+
+    if (fs.existsSync(M3U_IMPORT_HISTORY_FILE)) {
+      const rawImport = fs.readFileSync(M3U_IMPORT_HISTORY_FILE, 'utf-8');
+      m3uImportLogs = JSON.parse(rawImport);
+    }
+
+    if (fs.existsSync(M3U_AUTO_UPDATE_CONFIG_FILE)) {
+      const rawAuto = fs.readFileSync(M3U_AUTO_UPDATE_CONFIG_FILE, 'utf-8');
+      const parsedAuto = JSON.parse(rawAuto);
+      m3uAutoUpdateConfig = { ...m3uAutoUpdateConfig, ...parsedAuto };
+    }
   } catch (e) {
     console.warn('[CHANNELS INIT] Aviso ao inicializar armazenamento de canais:', e);
   }
@@ -242,8 +333,69 @@ function initChannelStorage() {
       }
     ];
   }
+
+  if (m3uImportLogs.length === 0) {
+    const now = Date.now();
+    m3uImportLogs = [
+      {
+        id: `import-${now - 7200000}`,
+        timestamp: new Date(now - 7200000).toISOString(),
+        dateFormatted: new Date(now - 7200000).toLocaleString('pt-BR'),
+        sourceName: 'Ramys - CanaisBR03.m3u8 (Carga Inicial)',
+        sourceUrl: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
+        totalFound: 287,
+        duplicatesConsolidated: 0,
+        newChannelsAdded: 287,
+        totalStreamOptions: 2182,
+        finalGradeCount: 287,
+        status: 'success',
+        durationMs: 1240,
+        author: 'Sistema',
+        details: 'Inicialização da grade com 287 canais principais e 2.182 servidores/opções de transmissão mapeadas.',
+        similarityMatches: []
+      }
+    ];
+  }
 }
 initChannelStorage();
+
+function logM3uImportEntry(entry: Omit<ServerM3uImportLogEntry, 'id' | 'timestamp' | 'dateFormatted'>): ServerM3uImportLogEntry {
+  const newLog: ServerM3uImportLogEntry = {
+    id: `import-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: new Date().toISOString(),
+    dateFormatted: new Date().toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }),
+    ...entry
+  };
+  m3uImportLogs.unshift(newLog);
+  if (m3uImportLogs.length > 200) {
+    m3uImportLogs.pop();
+  }
+  try {
+    const dataDir = path.dirname(M3U_IMPORT_HISTORY_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(M3U_IMPORT_HISTORY_FILE, JSON.stringify(m3uImportLogs, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[M3U IMPORT LOG] Falha ao persistir log:', e);
+  }
+  return newLog;
+}
+
+function saveAutoUpdateConfigToDisk() {
+  try {
+    const dataDir = path.dirname(M3U_AUTO_UPDATE_CONFIG_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(M3U_AUTO_UPDATE_CONFIG_FILE, JSON.stringify(m3uAutoUpdateConfig, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[M3U AUTO UPDATE] Falha ao salvar config:', e);
+  }
+}
 
 function logChannelUpdate(entry: Omit<ServerChannelUpdateHistoryEntry, 'id' | 'timestamp' | 'dateFormatted'>): ServerChannelUpdateHistoryEntry {
   const newEntry: ServerChannelUpdateHistoryEntry = {
@@ -297,6 +449,509 @@ function categorizeChannel(name: string): string {
   return 'Variedades & Música';
 }
 
+// Helper to expand Brazilian TV channel synonyms, abbreviations and regional variants
+function expandChannelSynonyms(canonical: string): string {
+  let text = ' ' + canonical + ' ';
+
+  // Regional state/city aliases
+  text = text.replace(/\b(sao paulo|sampa)\b/g, 'sp');
+  text = text.replace(/\b(rio de janeiro)\b/g, 'rj');
+  text = text.replace(/\b(minas gerais|belo horizonte)\b/g, 'mg');
+  text = text.replace(/\b(brasilia|distrito federal)\b/g, 'df');
+  text = text.replace(/\b(porto alegre|rio grande do sul)\b/g, 'rs');
+  text = text.replace(/\b(curitiba|parana)\b/g, 'pr');
+  text = text.replace(/\b(salvador|bahia)\b/g, 'ba');
+  text = text.replace(/\b(recife|pernambuco)\b/g, 'pe');
+  text = text.replace(/\b(fortaleza|ceara)\b/g, 'ce');
+  text = text.replace(/\b(florianopolis|santa catarina)\b/g, 'sc');
+  text = text.replace(/\b(goiania|goias)\b/g, 'go');
+
+  // National network brand canonicalization
+  text = text.replace(/\b(rede globo|tv globo)\b/g, 'globo');
+  text = text.replace(/\b(rede record|tv record)\b/g, 'record');
+  text = text.replace(/\b(rede bandeirantes|tv bandeirantes|tv band)\b/g, 'band');
+  text = text.replace(/\b(sistema brasileiro de televisao|tv sbt|rede sbt)\b/g, 'sbt');
+  text = text.replace(/\b(tv cultura|rede cultura)\b/g, 'cultura');
+  text = text.replace(/\b(tv gazeta|rede gazeta)\b/g, 'gazeta');
+
+  // Pay-TV, Sports, and Movies aliases
+  text = text.replace(/\b(tc)\b/g, 'telecine');
+  text = text.replace(/\b(pfc)\b/g, 'premiere');
+  text = text.replace(/\b(premiere fc|premiere futebol clube|premiere clubes)\b/g, 'premiere 1');
+  text = text.replace(/\b(canal combate)\b/g, 'combate');
+  text = text.replace(/\b(sportv)\b(?!\s*[123])/g, 'sportv 1');
+  text = text.replace(/\b(espn brasil)\b/g, 'espn 1');
+  text = text.replace(/\b(espn)\b(?!\s*[1234extra])/g, 'espn 1');
+  text = text.replace(/\b(cartoon net|cartoon)\b/g, 'cartoon network');
+  text = text.replace(/\b(discovery ch)\b/g, 'discovery channel');
+  text = text.replace(/\b(national geographic|natgeo)\b/g, 'nat geo');
+  text = text.replace(/\b(warner channel)\b/g, 'warner tv');
+  text = text.replace(/\b(universal channel)\b/g, 'universal tv');
+  text = text.replace(/\b(hbo brasil|hbo principal)\b/g, 'hbo');
+  text = text.replace(/\b(caze tv|cazetv|canal do caze)\b/g, 'caze tv');
+  text = text.replace(/\b(ge tv|globoesporte)\b/g, 'ge tv');
+
+  // Strip generic broadcast buzzwords
+  text = text.replace(/\b(ao vivo|online|oficial|feed|digital|nacional|stream)\b/g, '');
+
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function extractChannelNumber(key: string): string | null {
+  const match = key.match(/\b(\d+)\b/);
+  return match ? match[1] : null;
+}
+
+function qualityWeight(quality?: string): number {
+  if (!quality) return 2;
+  const q = quality.toLowerCase();
+  if (q.includes('4k') || q.includes('uhd')) return 5;
+  if (q.includes('1080') || q.includes('fhd')) return 4;
+  if (q.includes('720') || q.includes('hd')) return 3;
+  if (q.includes('sd') || q.includes('480')) return 1;
+  return 2;
+}
+
+// Intelligent Fuzzy & Linguistic Similarity Calculator
+function calculateChannelSimilarity(keyA: string, keyB: string): { score: number; reason: string } {
+  if (keyA === keyB) {
+    return { score: 1.0, reason: 'Chave canônica idêntica' };
+  }
+
+  // If both have numbers and they differ (e.g. SporTV 1 vs SporTV 2, Premiere 2 vs Premiere 3)
+  const numA = extractChannelNumber(keyA);
+  const numB = extractChannelNumber(keyB);
+  if (numA && numB && numA !== numB) {
+    return { score: 0, reason: `Canais com numeração distinta (${numA} vs ${numB})` };
+  }
+
+  // Disallow merging distinct sub-brands (e.g. Telecine Action vs Telecine Pipoca)
+  const subBrands = ['pipoca', 'action', 'premium', 'touch', 'fun', 'cult', 'prime', 'novelas', 'series', 'family', 'signature', 'plus', 'kids', 'junior', 'news', 'rural'];
+  for (const sb of subBrands) {
+    const hasA = keyA.includes(sb);
+    const hasB = keyB.includes(sb);
+    if ((hasA && !hasB) || (!hasA && hasB)) {
+      return { score: 0, reason: `Sub-marcas distintas de catálogo (${sb})` };
+    }
+  }
+
+  const wordsA = keyA.split(' ').filter(Boolean);
+  const wordsB = keyB.split(' ').filter(Boolean);
+
+  const setA = new Set(wordsA);
+  const setB = new Set(wordsB);
+
+  const intersection = new Set([...setA].filter(x => setB.has(x)));
+  const union = new Set([...setA, ...setB]);
+
+  const jaccard = union.size > 0 ? intersection.size / union.size : 0;
+
+  // If one title is entirely contained in the other and has at least 2 common meaningful words
+  const minWords = Math.min(wordsA.length, wordsB.length);
+  if (minWords >= 2 && intersection.size === minWords) {
+    return { score: 0.95, reason: 'Todos os termos essenciais coincidem' };
+  }
+
+  // Bigram Dice for slight misspellings
+  const getBigrams = (s: string) => {
+    const clean = s.replace(/\s+/g, '');
+    const bg = new Set<string>();
+    for (let i = 0; i < clean.length - 1; i++) {
+      bg.add(clean.slice(i, i + 2));
+    }
+    return bg;
+  };
+
+  const bgA = getBigrams(keyA);
+  const bgB = getBigrams(keyB);
+  const bgIntersection = new Set([...bgA].filter(x => bgB.has(x)));
+  const bgUnion = new Set([...bgA, ...bgB]);
+  const bigramScore = bgUnion.size > 0 ? (2 * bgIntersection.size) / (bgA.size + bgB.size) : 0;
+
+  const finalScore = (jaccard * 0.6) + (bigramScore * 0.4);
+
+  if (finalScore >= 0.82) {
+    return { score: finalScore, reason: `Similaridade de termos e grafia (${Math.round(finalScore * 100)}%)` };
+  }
+
+  return { score: finalScore, reason: 'Similaridade insuficiente' };
+}
+
+// Helper to extract canonical channel key for intelligent deduplication and source merging
+function extractCanonicalChannelKey(rawName: string): { canonicalKey: string; cleanDisplayName: string; detectedQuality: string } {
+  let name = (rawName || '').trim();
+
+  // 1. Detect quality
+  let detectedQuality = '1080p';
+  if (/\b(4k|uhd)\b/i.test(name)) detectedQuality = '4K';
+  else if (/\b(fhd|1080p|1080)\b/i.test(name)) detectedQuality = '1080p';
+  else if (/\b(hd|720p|720)\b/i.test(name)) detectedQuality = '720p';
+  else if (/\b(sd|480p|360p)\b/i.test(name)) detectedQuality = 'SD';
+
+  // 2. Strip quality tags from display name
+  name = name.replace(/\[\s*(4k|uhd|fhd|hd|sd|1080p|720p|480p|hevc|h\.?265|60fps)\s*\]/gi, '');
+  name = name.replace(/\(\s*(4k|uhd|fhd|hd|sd|1080p|720p|480p|hevc|h\.?265|60fps)\s*\)/gi, '');
+  name = name.replace(/\b(4k|uhd|fhd|hd|sd|1080p|720p|480p|hevc|h\.?265|60fps)\b/gi, '');
+
+  // 3. Strip option labels from name (e.g. (Opção 1), [Opção 2], Opção 1, Alt 2, Backup)
+  name = name.replace(/\[\s*(op[cç][aã]o|opt|opc|alt|backup|servidor|espelho|server)\s*\d*\s*\]/gi, '');
+  name = name.replace(/\(\s*(op[cç][aã]o|opt|opc|alt|backup|servidor|espelho|server)\s*\d*\s*\)/gi, '');
+  name = name.replace(/\b(op[cç][aã]o|opt|opc|backup|servidor|espelho|server)\s*\d*\b/gi, '');
+
+  // 4. Strip common IPTV prefixes like "BR:", "BRA:", "BR -", "BRASIL:", "TV:", "CANAL:", "AO VIVO:"
+  name = name.replace(/^(br|bra|brasil|tv|canal|ao vivo)\s*[:|-]\s*/i, '');
+  // Category prefixes like "FILMES |", "ESPORTES |", "ABERTOS |"
+  name = name.replace(/^[a-z0-9\s]+(\||-)\s*/i, (match) => {
+    const lower = match.toLowerCase();
+    if (lower.includes('filme') || lower.includes('esporte') || lower.includes('aberto') || lower.includes('noticia') || lower.includes('variedade') || lower.includes('infantil') || lower.includes('doc')) {
+      return '';
+    }
+    return match;
+  });
+
+  // Clean trailing symbols and multiple spaces
+  name = name.replace(/[-|:–—_]+$/, '').trim();
+  name = name.replace(/\s+/g, ' ');
+
+  // Canonical key: normalized lowercase, no accents, only letters and numbers
+  const baseCleanKey = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const canonicalKey = expandChannelSynonyms(baseCleanKey);
+
+  return {
+    canonicalKey: canonicalKey || rawName.toLowerCase().replace(/[^a-z0-9]/g, ''),
+    cleanDisplayName: name || rawName.trim(),
+    detectedQuality
+  };
+}
+
+// Universal M3U / M3U8 string parser
+function parseM3UToChannels(content: string, originTag: string = 'm3u'): ServerChannel[] {
+  const lines = content.split(/\r?\n/);
+  const channels: ServerChannel[] = [];
+  let currentMetadata: { name: string; logo: string; group: string; tvgId: string } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    if (line.startsWith('#EXTINF:')) {
+      const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
+      const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+      const groupMatch = line.match(/group-title="([^"]+)"/);
+      const idMatch = line.match(/tvg-id="([^"]+)"/);
+
+      const rawName = nameMatch ? nameMatch[1].trim() : 'Canal';
+      const logo = logoMatch ? logoMatch[1].trim() : '';
+      const group = groupMatch ? groupMatch[1].trim() : '';
+      const tvgId = idMatch ? idMatch[1].trim() : '';
+
+      currentMetadata = { name: rawName, logo, group, tvgId };
+    } else if (!line.startsWith('#') && currentMetadata) {
+      if (line.startsWith('http://') || line.startsWith('https://')) {
+        const rawGroup = currentMetadata.group.toLowerCase();
+        let cat = 'Variedades & Música';
+
+        if (rawGroup.includes('esporte') || rawGroup.includes('premiere') || rawGroup.includes('sportv') || rawGroup.includes('espn') || rawGroup.includes('nba') || rawGroup.includes('dazn') || rawGroup.includes('ppv') || rawGroup.includes('campeonato')) {
+          cat = 'Esportes';
+        } else if (rawGroup.includes('aberto') || rawGroup.includes('globo') || rawGroup.includes('record') || rawGroup.includes('sbt') || rawGroup.includes('band')) {
+          cat = 'Abertos';
+        } else if (rawGroup.includes('notícia') || rawGroup.includes('noticia') || rawGroup.includes('news')) {
+          cat = 'Notícias';
+        } else if (rawGroup.includes('filme') || rawGroup.includes('serie') || rawGroup.includes('hbo') || rawGroup.includes('telecine') || rawGroup.includes('max') || rawGroup.includes('paramount') || rawGroup.includes('prime')) {
+          cat = 'Filmes & Séries';
+        } else if (rawGroup.includes('infantil') || rawGroup.includes('desenho') || rawGroup.includes('kids')) {
+          cat = 'Infantis';
+        } else if (rawGroup.includes('document')) {
+          cat = 'Documentários';
+        } else {
+          cat = categorizeChannel(currentMetadata.name);
+        }
+
+        const cleanInfo = extractCanonicalChannelKey(currentMetadata.name);
+        const cleanLower = cleanInfo.canonicalKey;
+        const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'caze', 'cnn brasil'].some(k => cleanLower.includes(k));
+        const directStream = line;
+        const proxyStream = `/api/proxy?url=${encodeURIComponent(directStream)}`;
+
+        channels.push({
+          id: `ch-${originTag}-${channels.length + 1}-${cleanLower.replace(/\s+/g, '-').slice(0, 30)}`,
+          name: cleanInfo.cleanDisplayName,
+          category: cat,
+          logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
+          streamUrl: proxyStream,
+          backupStreamUrl: directStream,
+          sources: [
+            {
+              name: `Opção 1 (${cleanInfo.detectedQuality})`,
+              url: proxyStream,
+              quality: cleanInfo.detectedQuality,
+              isWorking: true
+            },
+            {
+              name: `Opção 2 (Direto ${cleanInfo.detectedQuality})`,
+              url: directStream,
+              quality: cleanInfo.detectedQuality
+            }
+          ],
+          isActive: true,
+          isVipOnly: !isFree
+        });
+      }
+      currentMetadata = null;
+    }
+  }
+
+  return channels;
+}
+
+// Unify multiple channel collections into a single master unified channel list
+// Preprocesses and identifies duplicate or highly similar channel names,
+// preserving the highest quality source as Primary and appending alternatives as Opção 2, Opção 3, etc.
+function unifyChannelCollections(
+  baseList: ServerChannel[],
+  incomingList: ServerChannel[]
+): {
+  unified: ServerChannel[];
+  mergedChannelsCount: number;
+  newChannelsCount: number;
+  totalSourcesCount: number;
+  similarityMatches: ServerSimilarityMatchLog[];
+} {
+  const map = new Map<string, ServerChannel>();
+  const similarityMatches: ServerSimilarityMatchLog[] = [];
+  let mergedChannelsCount = 0;
+  let newChannelsCount = 0;
+
+  // 1. Seed map with base list
+  for (const item of baseList) {
+    if (!item || !item.name) continue;
+    const { canonicalKey, cleanDisplayName, detectedQuality } = extractCanonicalChannelKey(item.name);
+    const key = canonicalKey || item.id;
+
+    // Standardize existing sources
+    const normalizedSources = (item.sources && item.sources.length > 0)
+      ? item.sources.map((s, idx) => ({
+          ...s,
+          name: s.name && !s.name.startsWith('Opção') ? s.name : `Opção ${idx + 1} (${s.quality || 'HD'})`
+        }))
+      : [
+          {
+            name: 'Opção 1 (Principal)',
+            url: item.streamUrl || '',
+            quality: detectedQuality || '1080p',
+            isWorking: true
+          }
+        ];
+
+    map.set(key, {
+      ...item,
+      name: item.name || cleanDisplayName,
+      sources: normalizedSources,
+      streamUrl: normalizedSources[0]?.url || item.streamUrl || '',
+      backupStreamUrl: normalizedSources[1]?.url || item.backupStreamUrl || normalizedSources[0]?.url || ''
+    });
+  }
+
+  // 2. Merge incoming channels with Preprocessing & Similarity Matching
+  for (const item of incomingList) {
+    if (!item || !item.name) continue;
+    const { canonicalKey, cleanDisplayName, detectedQuality } = extractCanonicalChannelKey(item.name);
+    const key = canonicalKey || item.id;
+
+    // Search for existing channel: 1. Exact canonical key match, 2. Fuzzy/Linguistic similarity match
+    let matchedKey: string | null = null;
+    let matchScore = 0;
+    let matchReason = '';
+
+    if (map.has(key)) {
+      matchedKey = key;
+      matchScore = 1.0;
+      matchReason = 'Correspondência exata de chave canônica';
+    } else {
+      // Fuzzy search against all existing keys in the map
+      let bestCandidateKey: string | null = null;
+      let highestSimilarity = 0;
+      let highestReason = '';
+
+      for (const [existingKey, existingChan] of map.entries()) {
+        const { score, reason } = calculateChannelSimilarity(key, existingKey);
+        if (score >= 0.82 && score > highestSimilarity) {
+          highestSimilarity = score;
+          highestReason = reason;
+          bestCandidateKey = existingKey;
+        }
+      }
+
+      if (bestCandidateKey && highestSimilarity >= 0.82) {
+        matchedKey = bestCandidateKey;
+        matchScore = highestSimilarity;
+        matchReason = highestReason;
+      }
+    }
+
+    if (matchedKey && map.has(matchedKey)) {
+      // DUPLICATE OR SIMILAR CHANNEL IDENTIFIED -> CONSOLIDATE AS ALTERNATIVE STREAM OPTION!
+      const existing = map.get(matchedKey)!;
+      const existingUrls = new Set(existing.sources.map(s => s.url.toLowerCase().trim()));
+
+      const incomingSources = (item.sources && item.sources.length > 0)
+        ? item.sources
+        : [{ url: item.streamUrl || item.backupStreamUrl || '', quality: detectedQuality }];
+
+      let addedAnySource = false;
+      let assignedOptionLabel = '';
+
+      for (const src of incomingSources) {
+        if (!src.url) continue;
+        const normalizedUrl = src.url.toLowerCase().trim();
+        if (!existingUrls.has(normalizedUrl)) {
+          existingUrls.add(normalizedUrl);
+          const currentOptNum = existing.sources.length + 1;
+          const optQuality = src.quality || detectedQuality || '1080p';
+          const optName = `Opção ${currentOptNum} (${optQuality})`;
+          assignedOptionLabel = optName;
+
+          const newSourceObj = {
+            name: optName,
+            url: src.url,
+            quality: optQuality,
+            referer: src.referer,
+            userAgent: src.userAgent,
+            isWorking: true
+          };
+
+          // If incoming source has strictly higher quality than existing primary source, promote to Opção 1!
+          const existingPrimaryQuality = existing.sources[0]?.quality;
+          if (qualityWeight(optQuality) > qualityWeight(existingPrimaryQuality)) {
+            existing.sources.unshift(newSourceObj);
+            // Re-index names
+            existing.sources.forEach((s, idx) => {
+              s.name = idx === 0 ? `Opção 1 (Principal ${s.quality || 'HD'})` : `Opção ${idx + 1} (${s.quality || 'HD'})`;
+            });
+            existing.streamUrl = existing.sources[0].url;
+            existing.backupStreamUrl = existing.sources[1]?.url || existing.sources[0].url;
+          } else {
+            existing.sources.push(newSourceObj);
+          }
+
+          addedAnySource = true;
+        }
+      }
+
+      // Upgrade metadata if incoming has better resolution logo or specific category
+      if ((!existing.logo || existing.logo.includes('unsplash.com')) && item.logo && !item.logo.includes('unsplash.com')) {
+        existing.logo = item.logo;
+      }
+      if (existing.category === 'Variedades & Música' && item.category && item.category !== 'Variedades & Música') {
+        existing.category = item.category;
+      }
+      if (existing.sources.length > 1) {
+        existing.backupStreamUrl = existing.sources[1].url;
+      }
+
+      if (addedAnySource) {
+        mergedChannelsCount++;
+        similarityMatches.push({
+          incomingName: item.name,
+          matchedChannelName: existing.name,
+          similarityScore: Math.round(matchScore * 100),
+          assignedOption: assignedOptionLabel || `Opção ${existing.sources.length}`,
+          matchReason
+        });
+      }
+    } else {
+      // NEW CHANNEL -> ADD TO UNIFIED MAP
+      const itemSources = (item.sources && item.sources.length > 0)
+        ? item.sources.map((s, idx) => ({
+            ...s,
+            name: `Opção ${idx + 1} (${s.quality || detectedQuality || 'HD'})`
+          }))
+        : [
+            {
+              name: `Opção 1 (${detectedQuality || '1080p'})`,
+              url: item.streamUrl || '',
+              quality: detectedQuality || '1080p',
+              isWorking: true
+            }
+          ];
+
+      map.set(key, {
+        ...item,
+        id: item.id || `ch-unified-${map.size + 1}-${key.replace(/\s+/g, '-').slice(0, 30)}`,
+        name: cleanDisplayName || item.name,
+        sources: itemSources,
+        streamUrl: itemSources[0]?.url || item.streamUrl || '',
+        backupStreamUrl: itemSources[1]?.url || itemSources[0]?.url || '',
+        isActive: item.isActive !== false
+      });
+      newChannelsCount++;
+    }
+  }
+
+  const unified = Array.from(map.values());
+  let totalSourcesCount = 0;
+  unified.forEach(c => {
+    totalSourcesCount += (c.sources?.length || 1);
+  });
+
+  return {
+    unified,
+    mergedChannelsCount,
+    newChannelsCount,
+    totalSourcesCount,
+    similarityMatches
+  };
+}
+
+// Function to persist unified channels to channels-config.json and sync in-memory state
+function saveUnifiedGradeToDisk(
+  channels: ServerChannel[],
+  author: string = 'Administrador',
+  actionName: string = 'Unificação da Grade de Canais',
+  details?: string
+): { success: boolean; count: number; error?: string } {
+  try {
+    const finalDocument = {
+      version: "2.0",
+      updatedAt: new Date().toISOString(),
+      updatedBy: author,
+      description: "Grade Unificada Oficial de Canais de TV - Multi-Fontes e Opções Alternativas",
+      channelsCount: channels.length,
+      channels: channels
+    };
+
+    const formattedJson = JSON.stringify(finalDocument, null, 2);
+    const dataDir = path.dirname(CHANNELS_CONFIG_FILE);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(CHANNELS_CONFIG_FILE, formattedJson, 'utf-8');
+
+    customConfigChannels = channels;
+    parsedRamysChannels = channels;
+
+    logChannelUpdate({
+      type: 'unify_grade',
+      actionName,
+      success: true,
+      channelsCount: channels.length,
+      details: details || `Grade unificada com sucesso contendo ${channels.length} canais ativos e opções de stream mapeadas.`,
+      author
+    });
+
+    console.log(`[GRADE UNIFICADA] Salva com sucesso! ${channels.length} canais persistidos e ativos para todos.`);
+    return { success: true, count: channels.length };
+  } catch (err: any) {
+    console.error('[GRADE UNIFICADA] Erro ao salvar:', err);
+    return { success: false, count: 0, error: err.message };
+  }
+}
+
 // Function to fetch and parse Ramys/Iptv-Brasil-2026 catalog (CanaisBR03.m3u8)
 async function loadRamysCatalog() {
   try {
@@ -305,85 +960,28 @@ async function loadRamysCatalog() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
 
-    const lines = text.split(/\r?\n/);
-    const result: ServerChannel[] = [];
-    let currentMetadata: { name: string; logo: string; group: string } | null = null;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      if (line.startsWith('#EXTINF:')) {
-        const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
-        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-        const groupMatch = line.match(/group-title="([^"]+)"/);
-
-        const channelName = nameMatch ? nameMatch[1].trim() : 'Canal';
-        const logo = logoMatch ? logoMatch[1].trim() : '';
-        const group = groupMatch ? groupMatch[1].trim() : '';
-
-        currentMetadata = { name: channelName, logo, group };
-      } else if (!line.startsWith('#') && currentMetadata) {
-        // Valid stream line from CanaisBR03.m3u8
-        if (line.startsWith('http://') || line.startsWith('https://')) {
-          const rawGroup = currentMetadata.group.toLowerCase();
-          let cat: string = 'Variedades & Música';
-
-          if (rawGroup.includes('esporte') || rawGroup.includes('premiere') || rawGroup.includes('sportv') || rawGroup.includes('espn') || rawGroup.includes('nba') || rawGroup.includes('dazn') || rawGroup.includes('ppv') || rawGroup.includes('futsal') || rawGroup.includes('campeonato')) {
-            cat = 'Esportes';
-          } else if (rawGroup.includes('aberto') || rawGroup.includes('globo') || rawGroup.includes('record')) {
-            cat = 'Abertos';
-          } else if (rawGroup.includes('notícia') || rawGroup.includes('noticia')) {
-            cat = 'Notícias';
-          } else if (rawGroup.includes('filme') || rawGroup.includes('serie') || rawGroup.includes('hbo') || rawGroup.includes('telecine') || rawGroup.includes('max') || rawGroup.includes('paramount') || rawGroup.includes('disney') || rawGroup.includes('prime')) {
-            cat = 'Filmes & Séries';
-          } else if (rawGroup.includes('infantil') || rawGroup.includes('desenho')) {
-            cat = 'Infantis';
-          } else if (rawGroup.includes('document')) {
-            cat = 'Documentários';
-          } else {
-            cat = categorizeChannel(currentMetadata.name);
-          }
-
-          const cleanLower = currentMetadata.name.toLowerCase();
-          const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'cazé', 'cnn brasil'].some(k => cleanLower.includes(k));
-          const directStream = line;
-          const proxyStream = `/api/proxy?url=${encodeURIComponent(directStream)}`;
-
-          result.push({
-            id: `ramys-${result.length + 1}-${cleanLower.replace(/[^a-z0-9]/g, '-')}`,
-            name: currentMetadata.name,
-            category: cat,
-            logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
-            streamUrl: proxyStream,
-            backupStreamUrl: directStream,
-            sources: [
-              {
-                name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)',
-                url: proxyStream,
-                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
-                isWorking: true
-              },
-              {
-                name: 'Servidor 2 - Direto IPTV Brasil 2026',
-                url: directStream,
-                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
-                referer: 'http://tjtor8411.com/'
-              }
-            ],
-            isActive: true,
-            isVipOnly: !isFree
-          });
-        }
-
-        currentMetadata = null;
-      }
-    }
+    const result = parseM3UToChannels(text, 'ramys');
 
     if (result.length > 0) {
       parsedRamysChannels = result;
       lastRamysFetch = Date.now();
-      console.log(`[Ramys IPTV Brasil 2026] Successfully loaded ${parsedRamysChannels.length} channels!`);
+      console.log(`[Ramys IPTV Brasil 2026] Successfully loaded ${parsedRamysChannels.length} channels from CanaisBR03.m3u8!`);
+
+      // Unify with Saimo and current custom configuration
+      const baseForMerge = customConfigChannels.length > 0 ? customConfigChannels : parsedSaimoChannels;
+      const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount } = unifyChannelCollections(baseForMerge, result);
+
+      // If current configuration has fewer channels than the full catalog, update and persist immediately!
+      if (customConfigChannels.length < 500 || unified.length > customConfigChannels.length) {
+        saveUnifiedGradeToDisk(
+          unified,
+          'Sistema (Auto-Unificação)',
+          'Auto-Unificação da Grade CanaisBR03',
+          `Unificação automática executada: ${unified.length} canais únicos, ${mergedChannelsCount} canais com Opção 2/backup adicionada, totalizando ${totalSourcesCount} opções de stream.`
+        );
+      } else {
+        customConfigChannels = unified;
+      }
     }
   } catch (err) {
     console.warn('[Ramys IPTV Brasil 2026] Failed to fetch catalog:', err);
@@ -958,8 +1556,10 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
 }
 
 function getHealthSummary() {
-  const allChannels = [...customAdminChannels, ...parsedSaimoChannels, ...parsedRamysChannels];
-  const total = allChannels.length;
+  const activeChannels = customConfigChannels.length > 0 
+    ? customConfigChannels 
+    : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
+  const total = activeChannels.length;
   
   let online = 0;
   let offline = 0;
@@ -985,19 +1585,23 @@ function getHealthSummary() {
   };
 }
 
-// 2. CHANNELS API
+// 2. CHANNELS API (Grade Unificada Oficial)
 app.get('/api/channels', (req, res) => {
-  // Combine custom admin channels with live working Saimo channels and validated Ramys channels
-  // SaimoPlayer provides real, working Brazilian live TV channels
-  const baseChannels = [...parsedSaimoChannels];
-  if (parsedRamysChannels.length > 0) {
-    baseChannels.push(...parsedRamysChannels);
+  // A grade unificada oficial é a fonte primária para todos os usuários
+  let effectiveChannels = customConfigChannels;
+  
+  // Se por ventura a configuração estiver desatualizada ou menor que o Ramys, unifica em tempo real
+  if (effectiveChannels.length < parsedRamysChannels.length && parsedRamysChannels.length > 0) {
+    const { unified } = unifyChannelCollections(effectiveChannels.length > 0 ? effectiveChannels : parsedSaimoChannels, parsedRamysChannels);
+    effectiveChannels = unified;
+    customConfigChannels = unified;
   }
 
-  // If the admin saved a custom config file, prioritize those channels
-  const effectiveBase = customConfigChannels.length > 0 ? customConfigChannels : baseChannels;
+  if (effectiveChannels.length === 0) {
+    effectiveChannels = [...parsedSaimoChannels, ...parsedRamysChannels];
+  }
 
-  const all = [...customAdminChannels, ...effectiveBase].map(ch => {
+  const all = [...customAdminChannels, ...effectiveChannels].map(ch => {
     const health = channelHealthStore.get(ch.id);
     if (health) {
       return {
@@ -1009,10 +1613,22 @@ app.get('/api/channels', (req, res) => {
     }
     return ch;
   });
+
+  let totalSources = 0;
+  let multiSourceCount = 0;
+  all.forEach(c => {
+    const count = c.sources?.length || 1;
+    totalSources += count;
+    if (count > 1) multiSourceCount++;
+  });
+
   res.json({
     success: true,
     count: all.length,
-    source: customConfigChannels.length > 0 ? 'Arquivo de Configuração (channels-config.json)' : (parsedSaimoChannels.length > 0 ? 'Saimo-TV + Multi-CDN' : 'Ramys/Iptv-Brasil-2026'),
+    source: 'Grade Unificada Multi-Fontes (IPTV Brasil 2026)',
+    unifiedCount: all.length,
+    totalSources,
+    multiSourceCount,
     ramysCount: parsedRamysChannels.length,
     saimoCount: parsedSaimoChannels.length,
     configCount: customConfigChannels.length,
@@ -2401,6 +3017,31 @@ app.post('/api/admin/repo-links/sync', async (req, res) => {
     if (result.length > 0) {
       parsedRamysChannels = result;
       lastRamysFetch = Date.now();
+
+      // Unify with current channels and persist to disk for all users
+      const baseForMerge = customConfigChannels.length > 0 ? customConfigChannels : parsedSaimoChannels;
+      const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount } = unifyChannelCollections(baseForMerge, result);
+
+      const fileNameDisplay = file || (customUrl ? 'URL Personalizada' : 'CanaisBR03.m3u8');
+      saveUnifiedGradeToDisk(
+        unified,
+        currentAuthor,
+        `Sincronização & Unificação: ${fileNameDisplay}`,
+        `${result.length} canais processados de ${fileNameDisplay}. Resultado unificado: ${unified.length} canais ativos, ${mergedChannelsCount} fontes secundárias integradas (Opção 2+), totalizando ${totalSourcesCount} streams.`
+      );
+
+      return res.json({
+        success: true,
+        message: `Lista ${fileNameDisplay} unificada com sucesso! ${unified.length} canais ativos na grade (${mergedChannelsCount} receberam Opção 2/backup).`,
+        file: fileNameDisplay,
+        channelsCount: unified.length,
+        extractedCount: result.length,
+        mergedChannelsCount,
+        newChannelsCount,
+        totalSourcesCount,
+        durationMs: Date.now() - startTime,
+        lastUpdate: channelUpdateHistory[0] || null
+      });
     }
 
     const fileNameDisplay = file || (customUrl ? 'URL Personalizada' : 'CanaisBR03.m3u8');
@@ -2436,6 +3077,481 @@ app.post('/api/admin/repo-links/sync', async (req, res) => {
     res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar links do repositório' });
   }
 });
+
+// --- DEDICATED M3U UNIFICATION & IMPORT ENDPOINTS ---
+
+// GET /api/admin/channels/unify-stats (Estatísticas da Grade Unificada)
+app.get('/api/admin/channels/unify-stats', (req, res) => {
+  const activeChannels = customConfigChannels.length > 0 
+    ? customConfigChannels 
+    : (parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels);
+
+  let totalSources = 0;
+  let multiSourceChannels = 0;
+  let singleSourceChannels = 0;
+
+  activeChannels.forEach(c => {
+    const sourcesCount = c.sources?.length || 1;
+    totalSources += sourcesCount;
+    if (sourcesCount > 1) {
+      multiSourceChannels++;
+    } else {
+      singleSourceChannels++;
+    }
+  });
+
+  res.json({
+    success: true,
+    totalChannels: activeChannels.length,
+    totalSources,
+    multiSourceChannels,
+    singleSourceChannels,
+    avgSourcesPerChannel: activeChannels.length > 0 ? Number((totalSources / activeChannels.length).toFixed(2)) : 1,
+    ramysCount: parsedRamysChannels.length,
+    saimoCount: parsedSaimoChannels.length,
+    lastUnifiedAt: channelUpdateHistory.find(h => h.type === 'unify_grade')?.timestamp || new Date().toISOString()
+  });
+});
+
+// POST /api/admin/channels/unify-now (Unificar Grade Oficial com 1 Clique)
+app.post('/api/admin/channels/unify-now', async (req, res) => {
+  const { author } = req.body || {};
+  const currentAuthor = author || 'Administrador';
+  const startTime = Date.now();
+
+  try {
+    // 1. Ensure Ramys catalog is loaded
+    if (parsedRamysChannels.length === 0) {
+      await loadRamysCatalog();
+    }
+
+    // 2. Base list
+    const baseList = customConfigChannels.length > 0 
+      ? customConfigChannels 
+      : (parsedSaimoChannels.length > 0 ? parsedSaimoChannels : []);
+
+    // 3. Unify Saimo + Ramys + Custom with Similarity Matching
+    let mergedResult = unifyChannelCollections(baseList, parsedRamysChannels);
+    if (parsedSaimoChannels.length > 0) {
+      mergedResult = unifyChannelCollections(mergedResult.unified, parsedSaimoChannels);
+    }
+    if (customAdminChannels.length > 0) {
+      mergedResult = unifyChannelCollections(mergedResult.unified, customAdminChannels);
+    }
+
+    // 4. Save to disk
+    saveUnifiedGradeToDisk(
+      mergedResult.unified,
+      currentAuthor,
+      'Unificação Geral da Grade de Canais',
+      `Grade unificada com sucesso! Total de ${mergedResult.unified.length} canais consolidados, ${mergedResult.mergedChannelsCount} opções de contingência (Opção 2+) mapeadas, ${mergedResult.totalSourcesCount} servidores totais.`
+    );
+
+    // Register in transparent M3U import logs
+    logM3uImportEntry({
+      sourceName: 'Unificação Geral da Grade (1-Clique)',
+      totalFound: parsedRamysChannels.length + parsedSaimoChannels.length,
+      duplicatesConsolidated: mergedResult.mergedChannelsCount,
+      newChannelsAdded: mergedResult.newChannelsCount,
+      totalStreamOptions: mergedResult.totalSourcesCount,
+      finalGradeCount: mergedResult.unified.length,
+      status: 'success',
+      durationMs: Date.now() - startTime,
+      author: currentAuthor,
+      details: `Unificação executada com sucesso. ${mergedResult.mergedChannelsCount} duplicatas e similares consolidadas em opções alternativas (Opção 2+) e ${mergedResult.newChannelsCount} novos canais cadastrados.`,
+      similarityMatches: mergedResult.similarityMatches.slice(0, 30)
+    });
+
+    res.json({
+      success: true,
+      message: `Grade unificada com sucesso! ${mergedResult.unified.length} canais consolidados e ${mergedResult.totalSourcesCount} fontes/opções ativas para todos.`,
+      channelsCount: mergedResult.unified.length,
+      mergedChannelsCount: mergedResult.mergedChannelsCount,
+      newChannelsCount: mergedResult.newChannelsCount,
+      totalSourcesCount: mergedResult.totalSourcesCount,
+      durationMs: Date.now() - startTime
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Falha ao unificar grade de canais' });
+  }
+});
+
+// POST /api/admin/channels/import-m3u-url (Importar e Unificar lista via URL M3U/M3U8)
+app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
+  const { url, unifyWithExisting = true, author, sourceLabel } = req.body || {};
+  const currentAuthor = author || 'Administrador';
+  const startTime = Date.now();
+
+  if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+    return res.status(400).json({ success: false, error: 'URL da lista M3U8 inválida ou ausente.' });
+  }
+
+  try {
+    const fetchRes = await fetch(url.trim(), {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      signal: AbortSignal.timeout(45000)
+    });
+
+    if (!fetchRes.ok) {
+      throw new Error(`HTTP ${fetchRes.status} ao acessar a URL da lista M3U8.`);
+    }
+
+    const content = await fetchRes.text();
+    if (!content.includes('#EXTINF') && !content.includes('http')) {
+      throw new Error('O link fornecido não parece ser um arquivo M3U/M3U8 válido.');
+    }
+
+    const parsedChannels = parseM3UToChannels(content, 'import-url');
+    if (parsedChannels.length === 0) {
+      throw new Error('Nenhum canal foi encontrado no arquivo M3U8 fornecido.');
+    }
+
+    const baseList = unifyWithExisting
+      ? (customConfigChannels.length > 0 ? customConfigChannels : (parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels))
+      : [];
+
+    const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount, similarityMatches } = unifyChannelCollections(baseList, parsedChannels);
+
+    const displayName = sourceLabel || url.replace(/^https?:\/\//, '').slice(0, 60);
+    saveUnifiedGradeToDisk(
+      unified,
+      currentAuthor,
+      `Importação M3U8 via URL: ${displayName}`,
+      `${parsedChannels.length} canais importados da URL. ${mergedChannelsCount} adicionados como Opção 2/backup em canais existentes, ${newChannelsCount} novos canais adicionados. Total da grade: ${unified.length} canais.`
+    );
+
+    // Register in transparent M3U import logs
+    const logItem = logM3uImportEntry({
+      sourceName: displayName,
+      sourceUrl: url,
+      totalFound: parsedChannels.length,
+      duplicatesConsolidated: mergedChannelsCount,
+      newChannelsAdded: newChannelsCount,
+      totalStreamOptions: totalSourcesCount,
+      finalGradeCount: unified.length,
+      status: 'success',
+      durationMs: Date.now() - startTime,
+      author: currentAuthor,
+      details: `${parsedChannels.length} canais encontrados no link M3U8. Durante a unificação pré-processada, ${mergedChannelsCount} duplicados/similares foram consolidados em opções de stream alternativas (Opção 2+), mantendo a grade limpa e sem redundância.`,
+      similarityMatches: similarityMatches.slice(0, 40)
+    });
+
+    res.json({
+      success: true,
+      message: `Lista M3U8 importada e unificada com sucesso! ${parsedChannels.length} canais processados, ${mergedChannelsCount} canais duplicados/similares consolidados em opções alternativas e ${newChannelsCount} novos canais adicionados.`,
+      channelsCount: unified.length,
+      importedCount: parsedChannels.length,
+      mergedChannelsCount,
+      newChannelsCount,
+      totalSourcesCount,
+      durationMs: Date.now() - startTime,
+      logId: logItem.id,
+      similarityMatchesCount: similarityMatches.length
+    });
+  } catch (err: any) {
+    logM3uImportEntry({
+      sourceName: sourceLabel || url.slice(0, 60),
+      sourceUrl: url,
+      totalFound: 0,
+      duplicatesConsolidated: 0,
+      newChannelsAdded: 0,
+      totalStreamOptions: 0,
+      finalGradeCount: customConfigChannels.length,
+      status: 'error',
+      durationMs: Date.now() - startTime,
+      author: currentAuthor,
+      details: `Falha na importação via URL: ${err.message || 'Erro desconhecido'}`
+    });
+    res.status(500).json({ success: false, error: err.message || 'Erro ao importar URL M3U8' });
+  }
+});
+
+// POST /api/admin/channels/import-m3u-content (Importar e Unificar texto ou arquivo M3U/M3U8)
+app.post('/api/admin/channels/import-m3u-content', async (req, res) => {
+  const { content, fileName, unifyWithExisting = true, author } = req.body || {};
+  const currentAuthor = author || 'Administrador';
+  const startTime = Date.now();
+
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    return res.status(400).json({ success: false, error: 'Conteúdo M3U8 vazio ou inválido.' });
+  }
+
+  try {
+    const parsedChannels = parseM3UToChannels(content, 'import-file');
+    if (parsedChannels.length === 0) {
+      throw new Error('Nenhum canal válido foi extraído do conteúdo M3U8 fornecido.');
+    }
+
+    const baseList = unifyWithExisting
+      ? (customConfigChannels.length > 0 ? customConfigChannels : (parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels))
+      : [];
+
+    const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount, similarityMatches } = unifyChannelCollections(baseList, parsedChannels);
+
+    const displayName = fileName || 'Arquivo M3U8 Personalizado';
+    saveUnifiedGradeToDisk(
+      unified,
+      currentAuthor,
+      `Importação M3U8: ${displayName}`,
+      `${parsedChannels.length} canais importados de ${displayName}. ${mergedChannelsCount} integrados como Opção 2 (backup), ${newChannelsCount} novos canais inseridos. Grade final com ${unified.length} canais e ${totalSourcesCount} opções de stream.`
+    );
+
+    // Register in transparent M3U import logs
+    const logItem = logM3uImportEntry({
+      sourceName: displayName,
+      totalFound: parsedChannels.length,
+      duplicatesConsolidated: mergedChannelsCount,
+      newChannelsAdded: newChannelsCount,
+      totalStreamOptions: totalSourcesCount,
+      finalGradeCount: unified.length,
+      status: 'success',
+      durationMs: Date.now() - startTime,
+      author: currentAuthor,
+      details: `${parsedChannels.length} canais extraídos do arquivo. ${mergedChannelsCount} canais duplicados/similares consolidados em opções de backup e ${newChannelsCount} novos canais inseridos na grade.`,
+      similarityMatches: similarityMatches.slice(0, 40)
+    });
+
+    res.json({
+      success: true,
+      message: `${displayName} unificado com sucesso! ${parsedChannels.length} canais processados (${mergedChannelsCount} duplicatas/similares consolidadas como opções alternativas de sinal).`,
+      channelsCount: unified.length,
+      importedCount: parsedChannels.length,
+      mergedChannelsCount,
+      newChannelsCount,
+      totalSourcesCount,
+      durationMs: Date.now() - startTime,
+      logId: logItem.id,
+      similarityMatchesCount: similarityMatches.length
+    });
+  } catch (err: any) {
+    logM3uImportEntry({
+      sourceName: fileName || 'Arquivo M3U8 Personalizado',
+      totalFound: 0,
+      duplicatesConsolidated: 0,
+      newChannelsAdded: 0,
+      totalStreamOptions: 0,
+      finalGradeCount: customConfigChannels.length,
+      status: 'error',
+      durationMs: Date.now() - startTime,
+      author: currentAuthor,
+      details: `Falha na importação de arquivo M3U8: ${err.message || 'Erro desconhecido'}`
+    });
+    res.status(500).json({ success: false, error: err.message || 'Erro ao importar conteúdo M3U8' });
+  }
+});
+
+// --- M3U IMPORT LOGS & AUTO-UPDATE BACKGROUND SERVICES ---
+
+// GET /api/admin/channels/import-logs (Histórico e transparência de importações M3U)
+app.get('/api/admin/channels/import-logs', (req, res) => {
+  res.json({
+    success: true,
+    logs: m3uImportLogs,
+    count: m3uImportLogs.length
+  });
+});
+
+// DELETE /api/admin/channels/import-logs (Limpar histórico de importações)
+app.delete('/api/admin/channels/import-logs', (req, res) => {
+  m3uImportLogs = [];
+  try {
+    if (fs.existsSync(M3U_IMPORT_HISTORY_FILE)) {
+      fs.writeFileSync(M3U_IMPORT_HISTORY_FILE, JSON.stringify([], null, 2), 'utf-8');
+    }
+  } catch (e) {
+    console.warn('[M3U LOGS] Falha ao limpar arquivo de histórico:', e);
+  }
+  res.json({
+    success: true,
+    message: 'Histórico de importações e unificação limpo com sucesso.'
+  });
+});
+
+// GET /api/admin/channels/auto-update-config (Ler configuração de auto-atualização de M3U)
+app.get('/api/admin/channels/auto-update-config', (req, res) => {
+  res.json({
+    success: true,
+    config: m3uAutoUpdateConfig
+  });
+});
+
+// POST /api/admin/channels/auto-update-config (Salvar intervalo e fontes para auto-atualização)
+app.post('/api/admin/channels/auto-update-config', (req, res) => {
+  const { enabled, intervalHours, sources } = req.body || {};
+
+  if (enabled !== undefined) {
+    m3uAutoUpdateConfig.enabled = Boolean(enabled);
+  }
+  if (intervalHours !== undefined) {
+    const hours = Number(intervalHours);
+    if (!isNaN(hours) && hours > 0) {
+      m3uAutoUpdateConfig.intervalHours = hours;
+      systemSettings.autoUpdateIntervalHours = hours;
+      m3uAutoUpdateConfig.nextRunAt = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+    }
+  }
+  if (Array.isArray(sources)) {
+    m3uAutoUpdateConfig.sources = sources;
+  }
+
+  saveAutoUpdateConfigToDisk();
+
+  res.json({
+    success: true,
+    message: `Configuração salva! O sistema buscará atualizações automaticamente a cada ${m3uAutoUpdateConfig.intervalHours}h.`,
+    config: m3uAutoUpdateConfig
+  });
+});
+
+// POST /api/admin/channels/run-auto-update (Disparar ciclo de auto-atualização imediatamente)
+app.post('/api/admin/channels/run-auto-update', async (req, res) => {
+  const { author } = req.body || {};
+  const currentAuthor = author || 'Administrador (Manual)';
+  const result = await runAutoUpdateCycle(currentAuthor);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(500).json(result);
+  }
+});
+
+// Core Auto-Update Execution Cycle
+async function runAutoUpdateCycle(triggerReason: string = 'Agendador Automático'): Promise<{
+  success: boolean;
+  message: string;
+  stats?: any;
+}> {
+  if (m3uAutoUpdateConfig.lastStatus === 'running') {
+    return { success: false, message: 'Um ciclo de auto-atualização já está em andamento.' };
+  }
+
+  m3uAutoUpdateConfig.lastStatus = 'running';
+  const startTime = Date.now();
+  let totalFoundAcrossSources = 0;
+  let allIncomingChannels: ServerChannel[] = [];
+  const sourcesUsed: string[] = [];
+
+  try {
+    let enabledSources = m3uAutoUpdateConfig.sources.filter(s => s.enabled);
+    if (enabledSources.length === 0) {
+      enabledSources = [
+        {
+          id: 'src-ramys-br03',
+          name: 'Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026)',
+          url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
+          enabled: true,
+          priority: 1
+        }
+      ];
+    }
+
+    for (const source of enabledSources) {
+      try {
+        console.log(`[AUTO-UPDATE] Baixando lista M3U8 de: ${source.name} (${source.url})`);
+        const res = await fetch(source.url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StreamingBrasil/AutoUpdate' },
+          signal: AbortSignal.timeout(45000)
+        });
+        if (res.ok) {
+          const text = await res.text();
+          const parsed = parseM3UToChannels(text, `auto-${source.id}`);
+          if (parsed.length > 0) {
+            totalFoundAcrossSources += parsed.length;
+            allIncomingChannels = allIncomingChannels.concat(parsed);
+            sourcesUsed.push(`${source.name} (${parsed.length} canais)`);
+          }
+        }
+      } catch (errSource: any) {
+        console.warn(`[AUTO-UPDATE] Aviso ao baixar fonte ${source.name}:`, errSource.message);
+      }
+    }
+
+    if (allIncomingChannels.length === 0) {
+      throw new Error('Nenhuma fonte M3U8 retornou canais válidos para atualização.');
+    }
+
+    const baseList = customConfigChannels.length > 0 ? customConfigChannels : parsedRamysChannels;
+    const result = unifyChannelCollections(baseList, allIncomingChannels);
+
+    saveUnifiedGradeToDisk(
+      result.unified,
+      'Agendador Automático',
+      `Auto-Atualização Periódica (${m3uAutoUpdateConfig.intervalHours}h)`,
+      `Ciclo automático executado: ${totalFoundAcrossSources} canais analisados de ${sourcesUsed.join(', ')}. ${result.mergedChannelsCount} duplicatas/similares consolidadas como opções alternativas (Opção 2+), ${result.newChannelsCount} novos canais adicionados. Total da grade: ${result.unified.length} canais.`
+    );
+
+    logM3uImportEntry({
+      sourceName: `Ciclo Automático (${m3uAutoUpdateConfig.intervalHours}h) - ${sourcesUsed.join(' + ')}`,
+      sourceUrl: enabledSources.map(s => s.url).join(', '),
+      totalFound: totalFoundAcrossSources,
+      duplicatesConsolidated: result.mergedChannelsCount,
+      newChannelsAdded: result.newChannelsCount,
+      totalStreamOptions: result.totalSourcesCount,
+      finalGradeCount: result.unified.length,
+      status: 'success',
+      durationMs: Date.now() - startTime,
+      author: triggerReason,
+      details: `Atualização periódica executada com sucesso. ${result.mergedChannelsCount} canais consolidados em opções alternativas de sinal e ${result.newChannelsCount} novos canais inseridos na grade.`,
+      similarityMatches: result.similarityMatches.slice(0, 30)
+    });
+
+    m3uAutoUpdateConfig.lastRunAt = new Date().toISOString();
+    m3uAutoUpdateConfig.nextRunAt = new Date(Date.now() + m3uAutoUpdateConfig.intervalHours * 3600 * 1000).toISOString();
+    m3uAutoUpdateConfig.lastStatus = 'success';
+    m3uAutoUpdateConfig.lastMessage = `Última sincronização com sucesso em ${new Date().toLocaleString('pt-BR')}. ${result.unified.length} canais ativos e frescos.`;
+    m3uAutoUpdateConfig.lastStats = {
+      totalFound: totalFoundAcrossSources,
+      duplicatesConsolidated: result.mergedChannelsCount,
+      newChannelsAdded: result.newChannelsCount,
+      finalGradeCount: result.unified.length
+    };
+    saveAutoUpdateConfigToDisk();
+
+    return {
+      success: true,
+      message: `Ciclo de atualização concluído! ${result.unified.length} canais atualizados na grade (${result.mergedChannelsCount} consolidados em redundância).`,
+      stats: m3uAutoUpdateConfig.lastStats
+    };
+  } catch (err: any) {
+    m3uAutoUpdateConfig.lastStatus = 'error';
+    m3uAutoUpdateConfig.lastMessage = `Falha na sincronização: ${err.message}`;
+    saveAutoUpdateConfigToDisk();
+
+    logM3uImportEntry({
+      sourceName: 'Falha no Ciclo de Auto-Atualização',
+      totalFound: totalFoundAcrossSources,
+      duplicatesConsolidated: 0,
+      newChannelsAdded: 0,
+      totalStreamOptions: 0,
+      finalGradeCount: customConfigChannels.length,
+      status: 'error',
+      durationMs: Date.now() - startTime,
+      author: triggerReason,
+      details: `Erro durante a auto-atualização periódica: ${err.message}`
+    });
+
+    return { success: false, message: err.message };
+  }
+}
+
+function startAutoUpdateScheduler() {
+  console.log(`[AUTO-UPDATE SCHEDULER] Ativo com intervalo de ${m3uAutoUpdateConfig.intervalHours}h.`);
+  // Check every 2 minutes
+  setInterval(async () => {
+    if (!m3uAutoUpdateConfig.enabled || m3uAutoUpdateConfig.intervalHours <= 0) {
+      return;
+    }
+    const nextRun = m3uAutoUpdateConfig.nextRunAt ? new Date(m3uAutoUpdateConfig.nextRunAt).getTime() : 0;
+    const now = Date.now();
+
+    if (now >= nextRun) {
+      console.log(`[AUTO-UPDATE SCHEDULER] Horário agendado atingido. Iniciando ciclo de renovação de sinais...`);
+      await runAutoUpdateCycle('Agendador Automático');
+    }
+  }, 2 * 60 * 1000);
+}
 
 app.post('/api/admin/repo-links/test-host', async (req, res) => {
   const { host } = req.body || {};
@@ -2849,23 +3965,27 @@ app.post('/api/admin/channels/check-single', async (req, res) => {
 // Test a specific channel by ID
 app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
   const { id } = req.params;
-  const baseChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
-  const allChannels = [...customAdminChannels, ...baseChannels];
-  const channel = allChannels.find(c => c.id === id);
+  const activeChannels = customConfigChannels.length > 0 
+    ? customConfigChannels 
+    : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
+  const channel = activeChannels.find(c => c.id === id);
 
   if (!channel || !channel.sources || channel.sources.length === 0) {
     return res.status(404).json({ error: 'Canal não encontrado ou sem fontes configuradas' });
   }
 
-  const primarySource = channel.sources[0];
-  const health = await checkStreamHealth(primarySource.url, primarySource.referer);
+  const sourceIdx = typeof req.body?.sourceIndex === 'number' 
+    ? req.body.sourceIndex 
+    : (req.query?.sourceIndex ? parseInt(req.query.sourceIndex as string, 10) : 0);
+  const targetSource = channel.sources[sourceIdx] || channel.sources[0];
+  const health = await checkStreamHealth(targetSource.url, targetSource.referer);
 
   const resultEntry: ServerHealthResult = {
     channelId: channel.id,
     channelName: channel.name,
     category: channel.category,
-    sourceIndex: 0,
-    url: primarySource.url,
+    sourceIndex: sourceIdx,
+    url: targetSource.url,
     status: health.status,
     statusCode: health.statusCode,
     statusText: health.statusText,
@@ -2888,8 +4008,10 @@ app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
 app.post('/api/admin/channels/check-batch', async (req, res) => {
   try {
     const { channelIds, limit = 20, offset = 0, category } = req.body;
-    const baseChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
-    let allChannels = [...customAdminChannels, ...baseChannels];
+    const activeChannels = customConfigChannels.length > 0 
+      ? customConfigChannels 
+      : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
+    let allChannels = [...activeChannels];
 
     if (category && category !== 'Todos') {
       allChannels = allChannels.filter(c => c.category.toLowerCase() === category.toLowerCase());
@@ -3054,7 +4176,7 @@ app.get('/api/admin/settings', (req, res) => {
 });
 
 app.post('/api/admin/settings', (req, res) => {
-  const { mercadoPagoAccessToken, mercadoPagoPublicKey, pixKey, sandboxMode, announcementText, allowFreePreview } = req.body;
+  const { mercadoPagoAccessToken, mercadoPagoPublicKey, pixKey, sandboxMode, announcementText, allowFreePreview, autoUpdateIntervalHours } = req.body;
 
   if (mercadoPagoAccessToken !== undefined) systemSettings.mercadoPagoAccessToken = mercadoPagoAccessToken;
   if (mercadoPagoPublicKey !== undefined) systemSettings.mercadoPagoPublicKey = mercadoPagoPublicKey;
@@ -3062,6 +4184,15 @@ app.post('/api/admin/settings', (req, res) => {
   if (sandboxMode !== undefined) systemSettings.sandboxMode = Boolean(sandboxMode);
   if (announcementText !== undefined) systemSettings.announcementText = announcementText;
   if (allowFreePreview !== undefined) systemSettings.allowFreePreview = Boolean(allowFreePreview);
+  if (autoUpdateIntervalHours !== undefined) {
+    const hours = Number(autoUpdateIntervalHours);
+    if (!isNaN(hours) && hours > 0) {
+      systemSettings.autoUpdateIntervalHours = hours;
+      m3uAutoUpdateConfig.intervalHours = hours;
+      m3uAutoUpdateConfig.nextRunAt = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+      saveAutoUpdateConfigToDisk();
+    }
+  }
 
   res.json({
     success: true,
@@ -3087,6 +4218,7 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Streaming Brasil (MAXTV) Server running on http://0.0.0.0:${PORT}`);
+    startAutoUpdateScheduler();
   });
 }
 

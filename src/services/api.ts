@@ -1,4 +1,4 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig } from '../types';
 
 export const api = {
   // Channels
@@ -308,11 +308,92 @@ export const api = {
     }
   },
 
-  // Repository Links (IPTV Brasil 2026 - Ramys)
+  // Repository Links & M3U8 Unification (IPTV Brasil 2026)
   async getRepoLinksInfo(): Promise<{ success: boolean } & RepoLinksInfo> {
     const res = await fetch('/api/admin/repo-links/info');
     if (!res.ok) throw new Error('Falha ao obter dados do repositório IPTV Brasil 2026');
     return await res.json();
+  },
+
+  async getUnifyStats(): Promise<{ success: boolean } & UnifyGradeStats> {
+    const res = await fetch('/api/admin/channels/unify-stats');
+    if (!res.ok) throw new Error('Falha ao obter estatísticas da grade unificada');
+    return await res.json();
+  },
+
+  async unifyChannelsNow(author?: string): Promise<{
+    success: boolean;
+    message: string;
+    channelsCount: number;
+    mergedChannelsCount: number;
+    newChannelsCount: number;
+    totalSourcesCount: number;
+    durationMs?: number;
+  }> {
+    const res = await fetch('/api/admin/channels/unify-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao unificar grade de canais');
+    }
+    return data;
+  },
+
+  async importM3uUrl(payload: {
+    url: string;
+    unifyWithExisting?: boolean;
+    author?: string;
+    sourceLabel?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    channelsCount: number;
+    importedCount: number;
+    mergedChannelsCount: number;
+    newChannelsCount: number;
+    totalSourcesCount: number;
+    durationMs?: number;
+  }> {
+    const res = await fetch('/api/admin/channels/import-m3u-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao importar URL M3U8');
+    }
+    return data;
+  },
+
+  async importM3uContent(payload: {
+    content: string;
+    fileName?: string;
+    unifyWithExisting?: boolean;
+    author?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    channelsCount: number;
+    importedCount: number;
+    mergedChannelsCount: number;
+    newChannelsCount: number;
+    totalSourcesCount: number;
+    durationMs?: number;
+  }> {
+    const res = await fetch('/api/admin/channels/import-m3u-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao importar conteúdo M3U8');
+    }
+    return data;
   },
 
   async syncRepoLinks(payload: { file: string; customUrl?: string; author?: string }): Promise<{
@@ -351,6 +432,52 @@ export const api = {
       body: JSON.stringify({ host })
     });
     return await res.json();
+  },
+
+  // M3U Import Logs & Transparency
+  async getM3uImportLogs(): Promise<{ success: boolean; logs: M3uImportLogEntry[]; count: number }> {
+    const res = await fetch('/api/admin/channels/import-logs');
+    if (!res.ok) throw new Error('Falha ao obter logs de importação');
+    return await res.json();
+  },
+
+  async clearM3uImportLogs(): Promise<{ success: boolean; message: string }> {
+    const res = await fetch('/api/admin/channels/import-logs', { method: 'DELETE' });
+    if (!res.ok) throw new Error('Falha ao limpar histórico de importações');
+    return await res.json();
+  },
+
+  // M3U Auto-Update Scheduler
+  async getM3uAutoUpdateConfig(): Promise<{ success: boolean; config: M3uAutoUpdateConfig }> {
+    const res = await fetch('/api/admin/channels/auto-update-config');
+    if (!res.ok) throw new Error('Falha ao obter configurações de auto-atualização');
+    return await res.json();
+  },
+
+  async saveM3uAutoUpdateConfig(payload: Partial<M3uAutoUpdateConfig>): Promise<{ success: boolean; config: M3uAutoUpdateConfig; message: string }> {
+    const res = await fetch('/api/admin/channels/auto-update-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao salvar configurações de auto-atualização');
+    }
+    return data;
+  },
+
+  async runM3uAutoUpdateNow(author?: string): Promise<{ success: boolean; message: string; stats?: any }> {
+    const res = await fetch('/api/admin/channels/run-auto-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao executar ciclo de atualização');
+    }
+    return data;
   },
 
   async getSettings(): Promise<{ success: boolean; settings: SystemSettings }> {
@@ -400,9 +527,11 @@ export const api = {
     return await res.json();
   },
 
-  async checkChannelHealth(channelId: string): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
+  async checkChannelHealth(channelId: string, sourceIndex?: number): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
     const res = await fetch(`/api/admin/channels/check-channel/${channelId}`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceIndex: sourceIndex ?? 0 })
     });
     if (!res.ok) throw new Error('Falha ao verificar canal');
     return await res.json();

@@ -5,7 +5,7 @@ import {
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
-  Activity, Film, WifiOff, FileCode, GitBranch
+  Activity, Film, WifiOff, FileCode, GitBranch, Layers
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
@@ -13,13 +13,14 @@ import { ChannelHealthChecker } from './ChannelHealthChecker';
 import { ChannelConfigEditor } from './ChannelConfigEditor';
 import { ChannelUpdateHistory } from './ChannelUpdateHistory';
 import { RepoLinksUpdater } from './RepoLinksUpdater';
+import { M3uUnifierManager } from './M3uUnifierManager';
 
 interface AdminPanelProps {
   onClose: () => void;
   onPreviewChannel: (channel: Channel) => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'channels' | 'channels-config' | 'channels-history' | 'repo-sync' | 'transactions' | 'settings';
+type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'unify-m3u' | 'channels' | 'channels-config' | 'channels-history' | 'repo-sync' | 'transactions' | 'settings';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -351,6 +352,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
     if (!settings) return;
     try {
       const res = await api.updateSettings(settings);
+      if (settings.autoUpdateIntervalHours) {
+        await api.saveM3uAutoUpdateConfig({ intervalHours: settings.autoUpdateIntervalHours }).catch(() => null);
+      }
       if (res.success) {
         showFeedback('Configurações salvas e aplicadas com sucesso!');
       }
@@ -568,6 +572,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   : 'bg-white/10 text-slate-400'
               }`}>
                 {channelReports.length}
+              </span>
+            </button>
+
+            {/* UNIFICADOR DE M3U8 MULTI-FONTES */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('unify-m3u')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'unify-m3u'
+                  ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/30 ring-2 ring-emerald-400/50'
+                  : 'text-teal-300 bg-teal-950/20 border border-teal-500/20 hover:bg-teal-950/40'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 text-teal-400" />
+                <span>Unificar M3U8 (Grade Única)</span>
+              </div>
+              <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30">
+                Multi-Fontes
               </span>
             </button>
 
@@ -1513,6 +1536,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             </div>
           )}
 
+          {/* TAB: UNIFICADOR DE M3U8 MULTI-FONTES */}
+          {activeTab === 'unify-m3u' && (
+            <M3uUnifierManager
+              currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
+              onRefreshChannels={async () => {
+                try {
+                  const [cRes, hRes] = await Promise.all([
+                    api.getChannels(),
+                    api.getChannelUpdateHistory()
+                  ]);
+                  if (cRes.channels) setChannels(cRes.channels);
+                  if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
+                  setHistoryRefreshTrigger(prev => prev + 1);
+                } catch {
+                  // Handled
+                }
+              }}
+              onPreviewChannel={onPreviewChannel}
+            />
+          )}
+
           {/* TAB 5: GRADE DE CANAIS */}
           {activeTab === 'channels' && (
             <div className="space-y-6">
@@ -1898,6 +1942,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                       onChange={e => setSettings({ ...settings, announcementText: e.target.value })}
                       className="w-full bg-slate-950 text-xs text-white rounded-2xl px-4 py-3 border border-white/10 focus:outline-none focus:border-indigo-500"
                     />
+                  </div>
+
+                  {/* AUTO-UPDATE FREQUENCY M3U8 */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-teal-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-teal-400" />
+                        <span className="text-xs font-bold text-white">
+                          Intervalo de Auto-Atualização de Fontes M3U8
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('unify-m3u')}
+                        className="text-[11px] font-semibold text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1"
+                      >
+                        <span>Gerenciar Fontes & Logs</span>
+                        <ArrowUpRight className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Define a cada quantas horas o servidor fará requisições automáticas para os links M3U8 cadastrados (ex: CanaisBR03 oficial do Ramys e backups), consolidando novos canais e gerando opções de backup na grade.
+                    </p>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {[
+                        { label: '6h', hours: 6 },
+                        { label: '12h', hours: 12 },
+                        { label: '24h (Padrão Recomendado)', hours: 24 },
+                        { label: '48h (2 dias)', hours: 48 },
+                        { label: '72h (3 dias)', hours: 72 }
+                      ].map(item => (
+                        <button
+                          key={item.hours}
+                          type="button"
+                          onClick={() => setSettings({ ...settings, autoUpdateIntervalHours: item.hours })}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                            (settings.autoUpdateIntervalHours || 24) === item.hours
+                              ? 'bg-teal-600 text-white border-teal-400 shadow-md shadow-teal-600/30'
+                              : 'bg-slate-900 text-slate-400 border-white/10 hover:text-white'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="pt-4">
