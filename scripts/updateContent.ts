@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
+import readline from 'readline';
 
 /**
  * ==============================================================================
@@ -103,79 +105,88 @@ const RELIABLE_BACKUPS = [
 ];
 
 /**
- * Baixa e analisa lista M3U (ex: Ramys IPTV Brasil 2026)
+ * Baixa e analisa lista M3U / M3U8 de forma ultra-rápida via Streaming
+ * Não carrega arquivos de 80MB inteiros na memória, evitando estouro de timeout
  */
 export async function fetchRamysM3U(url: string = RAMYS_M3U_URL, limit: number = 200): Promise<ExtractedVodItem[]> {
-  console.log(`[Ramys IPTV Brasil] Baixando M3U: ${url}...`);
+  console.log(`[Ramys IPTV Brasil] Baixando M3U/M3U8 via streaming: ${url}...`);
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      signal: AbortSignal.timeout(35000)
+      signal: AbortSignal.timeout(18000)
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const lines = text.split(/\r?\n/);
 
     const items: ExtractedVodItem[] = [];
     let currentMeta: { rawName: string; logo: string; group: string } | null = null;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    if (res.body) {
+      const rl = readline.createInterface({
+        input: Readable.fromWeb(res.body as any),
+        crlfDelay: Infinity
+      });
 
-      if (line.startsWith('#EXTINF:')) {
-        const logoMatch = line.match(/tvg-logo="([^"]*)"/i);
-        const groupMatch = line.match(/group-title="([^"]*)"/i);
-        const commaIndex = line.lastIndexOf(',');
-        const rawName = commaIndex !== -1 ? line.substring(commaIndex + 1).trim() : 'Sem Título';
+      for await (const lineRaw of rl) {
+        const line = lineRaw.trim();
+        if (!line) continue;
 
-        currentMeta = {
-          rawName,
-          logo: logoMatch ? logoMatch[1] : '',
-          group: groupMatch ? groupMatch[1] : 'Filmes'
-        };
-      } else if (line.startsWith('http://') || line.startsWith('https://')) {
-        if (currentMeta) {
-          const { title, year } = cleanTitle(currentMeta.rawName);
-          const isSeries = currentMeta.group.toLowerCase().includes('serie') || currentMeta.rawName.toLowerCase().includes('temporada');
-          const genres = detectGenre(currentMeta.group, currentMeta.rawName);
-          const realStream = line;
-          const proxyStream = `/api/proxy?url=${encodeURIComponent(realStream)}`;
+        if (line.startsWith('#EXTINF:')) {
+          const logoMatch = line.match(/tvg-logo="([^"]*)"/i);
+          const groupMatch = line.match(/group-title="([^"]*)"/i);
+          const commaIndex = line.lastIndexOf(',');
+          const rawName = commaIndex !== -1 ? line.substring(commaIndex + 1).trim() : 'Sem Título';
 
-          const id = `vod-ramys-${items.length + 1}-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-          const poster = currentMeta.logo && currentMeta.logo.startsWith('http')
-            ? currentMeta.logo
-            : 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80';
+          currentMeta = {
+            rawName,
+            logo: logoMatch ? logoMatch[1] : '',
+            group: groupMatch ? groupMatch[1] : 'Filmes'
+          };
+        } else if (line.startsWith('http://') || line.startsWith('https://')) {
+          if (currentMeta) {
+            const { title, year } = cleanTitle(currentMeta.rawName);
+            const isSeries = currentMeta.group.toLowerCase().includes('serie') || currentMeta.rawName.toLowerCase().includes('temporada');
+            const genres = detectGenre(currentMeta.group, currentMeta.rawName);
+            const realStream = line;
+            const proxyStream = `/api/proxy?url=${encodeURIComponent(realStream)}`;
 
-          items.push({
-            id,
-            title,
-            type: isSeries ? 'series' : 'movie',
-            year,
-            duration: isSeries ? 'Temporada Completa' : '1h 52m',
-            rating: year >= 2024 ? '14+' : '12+',
-            genre: genres,
-            bannerUrl: poster,
-            posterUrl: poster,
-            synopsis: `Disponível no catálogo MAXTV em alta definição (${genres.join(', ')}). Áudio original e dublado sem travamentos.`,
-            streamUrl: proxyStream,
-            backupStreamUrl: realStream,
-            sources: [
-              { name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)', url: proxyStream, quality: '1080p' },
-              { name: 'Servidor 2 - Direto IPTV Brasil 2026', url: realStream, quality: '1080p' }
-            ],
-            featured: items.length < 8,
-            isVipOnly: items.length >= 35
-          });
+            const id = `vod-ramys-${items.length + 1}-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            const poster = currentMeta.logo && currentMeta.logo.startsWith('http')
+              ? currentMeta.logo
+              : 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80';
 
-          if (items.length >= limit) break;
+            items.push({
+              id,
+              title,
+              type: isSeries ? 'series' : 'movie',
+              year,
+              duration: isSeries ? 'Temporada Completa' : '1h 52m',
+              rating: year >= 2024 ? '14+' : '12+',
+              genre: genres,
+              bannerUrl: poster,
+              posterUrl: poster,
+              synopsis: `Disponível no catálogo MAXTV em alta definição (${genres.join(', ')}). Áudio original e dublado sem travamentos.`,
+              streamUrl: proxyStream,
+              backupStreamUrl: realStream,
+              sources: [
+                { name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)', url: proxyStream, quality: '1080p' },
+                { name: 'Servidor 2 - Direto IPTV Brasil 2026', url: realStream, quality: '1080p' }
+              ],
+              featured: items.length < 8,
+              isVipOnly: items.length >= 35
+            });
+
+            if (items.length >= limit) {
+              rl.close();
+              break;
+            }
+          }
+          currentMeta = null;
         }
-        currentMeta = null;
       }
     }
 
-    console.log(`[Ramys IPTV Brasil] Extraídos ${items.length} títulos.`);
+    console.log(`[Ramys IPTV Brasil] Extraídos ${items.length} títulos com sucesso.`);
     return items;
   } catch (err: any) {
     console.warn(`[Ramys IPTV Brasil] Erro ao carregar:`, err.message);
@@ -184,7 +195,7 @@ export async function fetchRamysM3U(url: string = RAMYS_M3U_URL, limit: number =
 }
 
 /**
- * Baixa e analisa o catálogo VOD do Gabriel Saimo (SaimoPlayer / Saimo-TV)
+ * Baixa e analisa o catálogo VOD do Gabriel Saimo (SaimoPlayer / Saimo-TV) em paralelo
  */
 export async function fetchSaimoVod(limitPerLetter: number = 25): Promise<ExtractedVodItem[]> {
   console.log(`[Gabriel Saimo VOD] Baixando índice de servidores VOD...`);
@@ -192,7 +203,7 @@ export async function fetchSaimoVod(limitPerLetter: number = 25): Promise<Extrac
     // 1. Baixar índice de servidores base
     const indiceRes = await fetch(`${SAIMO_VOD_BASE}/indice.txt`, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(10000)
     });
     if (!indiceRes.ok) throw new Error(`HTTP ${indiceRes.status}`);
     const indiceText = await indiceRes.text();
@@ -209,88 +220,94 @@ export async function fetchSaimoVod(limitPerLetter: number = 25): Promise<Extrac
     console.log(`[Gabriel Saimo VOD] Servidores base identificados:`, Object.keys(bases));
 
     const letters = ['A', 'B', 'C', 'D', 'M', 'S', 'V', 'T'];
-    const items: ExtractedVodItem[] = [];
+    const letterResults = await Promise.allSettled(
+      letters.map(async (letter) => {
+        try {
+          const fileUrl = `${SAIMO_VOD_BASE}/filmes-${letter}.txt`;
+          const res = await fetch(fileUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(8000)
+          });
+          if (!res.ok) return [];
 
-    for (const letter of letters) {
-      try {
-        const fileUrl = `${SAIMO_VOD_BASE}/filmes-${letter}.txt`;
-        const res = await fetch(fileUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          signal: AbortSignal.timeout(15000)
-        });
-        if (!res.ok) continue;
+          const content = await res.text();
+          const lines = content.split(/\r?\n/);
+          const letterItems: ExtractedVodItem[] = [];
 
-        const content = await res.text();
-        const lines = content.split(/\r?\n/);
-        let countForLetter = 0;
+          for (const line of lines) {
+            const parts = line.split('\t');
+            if (parts.length < 2) continue;
 
-        for (const line of lines) {
-          const parts = line.split('\t');
-          if (parts.length < 2) continue;
+            const rawTitle = parts[0].trim();
+            const streamDef = parts[1].trim();
+            if (!rawTitle || !streamDef) continue;
 
-          const rawTitle = parts[0].trim();
-          const streamDef = parts[1].trim();
-          if (!rawTitle || !streamDef) continue;
+            const sources: { name: string; url: string; quality?: string }[] = [];
+            const serverPairs = streamDef.replace(/^dub=/i, '').replace(/^leg=/i, '').split(',');
 
-          // Exemplo: dub=2:95978,4:653559
-          const sources: { name: string; url: string; quality?: string }[] = [];
-          const serverPairs = streamDef.replace(/^dub=/i, '').replace(/^leg=/i, '').split(',');
-
-          for (let p = 0; p < serverPairs.length; p++) {
-            const pair = serverPairs[p].trim();
-            const colonIdx = pair.indexOf(':');
-            if (colonIdx !== -1) {
-              const baseId = pair.substring(0, colonIdx);
-              const fileId = pair.substring(colonIdx + 1);
-              const baseUrl = bases[baseId];
-              if (baseUrl && fileId) {
-                const streamFullUrl = `${baseUrl}${fileId}.mp4`;
-                sources.push({
-                  name: `Servidor ${sources.length + 1} - Saimo CDN (${baseId === '2' ? 'TJTOR' : baseId === '4' ? 'Hubby' : 'Kiwi'})`,
-                  url: streamFullUrl,
-                  quality: '1080p'
-                });
+            for (let p = 0; p < serverPairs.length; p++) {
+              const pair = serverPairs[p].trim();
+              const colonIdx = pair.indexOf(':');
+              if (colonIdx !== -1) {
+                const baseId = pair.substring(0, colonIdx);
+                const fileId = pair.substring(colonIdx + 1);
+                const baseUrl = bases[baseId];
+                if (baseUrl && fileId) {
+                  const streamFullUrl = `${baseUrl}${fileId}.mp4`;
+                  sources.push({
+                    name: `Servidor ${sources.length + 1} - Saimo CDN (${baseId === '2' ? 'TJTOR' : baseId === '4' ? 'Hubby' : 'Kiwi'})`,
+                    url: streamFullUrl,
+                    quality: '1080p'
+                  });
+                }
               }
             }
+
+            if (sources.length === 0) continue;
+
+            const { title, year } = cleanTitle(rawTitle);
+            const genres = detectGenre('Filmes', title);
+            const fallback = RELIABLE_BACKUPS[letterItems.length % RELIABLE_BACKUPS.length];
+
+            sources.push({
+              name: `Servidor ${sources.length + 1} - Backup Global`,
+              url: fallback,
+              quality: '1080p'
+            });
+
+            const poster = `https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80`;
+
+            letterItems.push({
+              id: `vod-saimo-${letter}-${letterItems.length + 1}-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+              title,
+              type: 'movie',
+              year,
+              duration: '1h 48m',
+              rating: '14+',
+              genre: genres,
+              bannerUrl: poster,
+              posterUrl: poster,
+              synopsis: `Filme ${title} (${year}) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.`,
+              streamUrl: sources[0].url,
+              backupStreamUrl: sources[1]?.url || fallback,
+              sources,
+              featured: letterItems.length < 3,
+              isVipOnly: letterItems.length >= 15
+            });
+
+            if (letterItems.length >= limitPerLetter) break;
           }
-
-          if (sources.length === 0) continue;
-
-          const { title, year } = cleanTitle(rawTitle);
-          const genres = detectGenre('Filmes', title);
-          const fallback = RELIABLE_BACKUPS[items.length % RELIABLE_BACKUPS.length];
-
-          sources.push({
-            name: `Servidor ${sources.length + 1} - Backup Global`,
-            url: fallback,
-            quality: '1080p'
-          });
-
-          const poster = `https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80`;
-
-          items.push({
-            id: `vod-saimo-${items.length + 1}-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-            title,
-            type: 'movie',
-            year,
-            duration: '1h 48m',
-            rating: '14+',
-            genre: genres,
-            bannerUrl: poster,
-            posterUrl: poster,
-            synopsis: `Filme ${title} (${year}) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.`,
-            streamUrl: sources[0].url,
-            backupStreamUrl: sources[1]?.url || fallback,
-            sources,
-            featured: items.length < 6,
-            isVipOnly: items.length >= 25
-          });
-
-          countForLetter++;
-          if (countForLetter >= limitPerLetter) break;
+          return letterItems;
+        } catch {
+          return [];
         }
-      } catch (letterErr) {
-        // Ignorar letra individual se falhar
+      })
+    );
+
+    const items: ExtractedVodItem[] = [];
+    for (const r of letterResults) {
+      if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+        items.push(...r.value);
       }
     }
 
@@ -417,7 +434,8 @@ export async function updateCatalogFromM3U(options?: { targetUrl?: string; sourc
       count: items.length,
       moviesCount: movies.length,
       seriesCount: series.length,
-      outputDir
+      outputDir,
+      items
     };
   } catch (error: any) {
     console.error(`Erro ao atualizar catálogo:`, error.message || error);

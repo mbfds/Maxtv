@@ -33,7 +33,10 @@ import {
   Calendar,
   X,
   Eye,
-  Info
+  Info,
+  AlertTriangle,
+  Database,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Channel, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig, M3uAutoUpdateSource, SimilarityMatchLog } from '../types';
@@ -73,6 +76,15 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
   const [isRunningAutoUpdate, setIsRunningAutoUpdate] = useState<boolean>(false);
   const [newSourceUrl, setNewSourceUrl] = useState<string>('');
   const [newSourceName, setNewSourceName] = useState<string>('');
+  const [isValidatingSourceUrl, setIsValidatingSourceUrl] = useState<boolean>(false);
+  const [sourceValidationResult, setSourceValidationResult] = useState<{
+    tested: boolean;
+    valid: boolean;
+    error?: string;
+    statusCode?: number;
+    latencyMs?: number;
+    channelsCount?: number;
+  } | null>(null);
 
   // Import Logs State
   const [importLogs, setImportLogs] = useState<M3uImportLogEntry[]>([]);
@@ -193,6 +205,32 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
     }
   };
 
+  // Validate URL on server before adding
+  const handleValidateNewSourceUrl = async () => {
+    if (!newSourceUrl.trim()) return;
+    setIsValidatingSourceUrl(true);
+    setSourceValidationResult(null);
+    try {
+      const res = await api.validateM3uUrl(newSourceUrl.trim());
+      setSourceValidationResult({
+        tested: true,
+        valid: Boolean(res.valid),
+        error: res.error,
+        statusCode: res.statusCode,
+        latencyMs: res.latencyMs,
+        channelsCount: res.channelsCount
+      });
+    } catch (err: any) {
+      setSourceValidationResult({
+        tested: true,
+        valid: false,
+        error: err.message || 'Falha de comunicação com o servidor'
+      });
+    } finally {
+      setIsValidatingSourceUrl(false);
+    }
+  };
+
   // Add a new M3U source to periodic monitoring
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,18 +250,25 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
         }
         setNewSourceUrl('');
         setNewSourceName('');
+        setSourceValidationResult(null);
         setResultMessage({
           type: 'success',
-          title: 'Fonte M3U8 Salva com Sucesso!',
-          details: res.message || 'URL registrada e salva permanentemente no disco para monitoramento.'
+          title: 'Fonte M3U8 Validada e Salva no Banco SQLite!',
+          details: res.message || 'URL acessível, validada pelo servidor e persistida com sucesso em data/maxtv.db.'
         });
         await loadData();
       }
     } catch (err: any) {
+      const errorMsg = err.message || 'Falha ao validar ou gravar link M3U';
+      setSourceValidationResult({
+        tested: true,
+        valid: false,
+        error: errorMsg
+      });
       setResultMessage({
         type: 'error',
-        title: 'Erro ao Salvar Fonte M3U8',
-        details: err.message || 'Falha ao salvar fonte'
+        title: 'Falha na Validação da URL (Registrado no Log de Erros)',
+        details: `${errorMsg}. O link não foi gravado na lista ativa para evitar dados corrompidos, e o erro foi persistido no banco SQLite para diagnóstico.`
       });
     } finally {
       setIsSavingAutoUpdate(false);
@@ -1330,24 +1375,100 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                     />
                   </div>
 
-                  <div className="sm:col-span-2 flex gap-2">
+                  <div className="sm:col-span-2 flex flex-wrap gap-2">
                     <input
                       type="url"
                       required
                       placeholder="https://raw.githubusercontent.com/.../lista.m3u8"
                       value={newSourceUrl}
-                      onChange={(e) => setNewSourceUrl(e.target.value)}
-                      className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
+                      onChange={(e) => {
+                        setNewSourceUrl(e.target.value);
+                        if (sourceValidationResult) setSourceValidationResult(null);
+                      }}
+                      className="flex-1 min-w-[200px] bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
                     />
                     <button
-                      type="submit"
-                      disabled={isSavingAutoUpdate || !newSourceUrl.trim()}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white transition-all disabled:opacity-50 shrink-0"
+                      type="button"
+                      onClick={handleValidateNewSourceUrl}
+                      disabled={isValidatingSourceUrl || isSavingAutoUpdate || !newSourceUrl.trim()}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-all disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                      title="Testar acessibilidade e conteúdo no servidor antes de gravar"
                     >
-                      Adicionar
+                      {isValidatingSourceUrl ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-400" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      )}
+                      <span>{isValidatingSourceUrl ? 'Testando...' : 'Validar'}</span>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingAutoUpdate || isValidatingSourceUrl || !newSourceUrl.trim()}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white transition-all disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                    >
+                      {isSavingAutoUpdate ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isSavingAutoUpdate ? 'Gravando...' : 'Salvar Fonte'}</span>
                     </button>
                   </div>
                 </div>
+
+                {/* Real-time Validation Feedback - Interface Limpa no Erro */}
+                {sourceValidationResult && (
+                  <div className={`p-4 rounded-xl border text-xs animate-in fade-in duration-200 ${
+                    sourceValidationResult.valid
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                      : 'bg-rose-950/40 border-rose-500/40 text-rose-100 shadow-lg'
+                  }`}>
+                    {sourceValidationResult.valid ? (
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <span className="font-semibold block text-white">
+                            Link M3U8 Acessível e Válido! ({sourceValidationResult.channelsCount ?? 0} canais identificados em {sourceValidationResult.latencyMs}ms)
+                          </span>
+                          {sourceValidationResult.error && (
+                            <p className="text-[11px] opacity-90">{sourceValidationResult.error}</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Layout Limpo de Erro: apenas a mensagem e o botão Tentar Novamente */
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                          <div>
+                            <span className="font-bold text-white block">Falha na Validação da URL</span>
+                            <p className="text-[11px] text-rose-200/90 mt-0.5">
+                              {sourceValidationResult.error || 'O servidor da URL não respondeu ou retornou formato inválido.'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                          <button
+                            type="button"
+                            onClick={handleValidateNewSourceUrl}
+                            disabled={isValidatingSourceUrl}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs shadow transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isValidatingSourceUrl ? 'animate-spin' : ''}`} />
+                            <span>Tentar Novamente</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSourceValidationResult(null)}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                          >
+                            Fechar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </form>
             </div>
           </div>

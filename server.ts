@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
@@ -32,7 +33,12 @@ import {
   sqliteDeleteFavorite,
   sqliteSaveTransaction,
   sqliteGetAllTransactions,
-  sqliteRecordSessionHeartbeat
+  sqliteRecordSessionHeartbeat,
+  sqliteCheckpointAndGetDbPath,
+  sqliteGetDatabaseStats,
+  sqliteSaveUrlErrorLog,
+  sqliteGetUrlErrorLogs,
+  sqliteClearUrlErrorLogs
 } from './serverSqlite';
 
 dotenv.config();
@@ -210,6 +216,160 @@ const transactions: ServerTransaction[] = [];
 
 // In-memory VIP grants log
 const grantHistory: ServerGrant[] = [];
+
+// ==========================================
+// 2.3 ADMIN AUTH & SESSION RBAC SYSTEM
+// ==========================================
+export interface AdminSession {
+  token: string;
+  userId: string;
+  email: string;
+  role: 'admin';
+  createdAt: number;
+  expiresAt: number;
+  lastActiveAt: number;
+  ip?: string;
+  method: 'pin' | 'credentials' | 'login';
+}
+
+const adminSessions = new Map<string, AdminSession>();
+const ADMIN_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours validity
+const MASTER_PINS = ['admin123', '1302', '2026', 'maxtv2026'];
+
+function generateAdminToken(userId: string): string {
+  const randomPart = crypto.randomBytes(24).toString('hex');
+  return `adm_${userId}_${Date.now()}_${randomPart}`;
+}
+
+function createAdminSession(user: ServerUser, ip?: string, method: 'pin' | 'credentials' | 'login' = 'pin'): AdminSession {
+  const token = generateAdminToken(user.id);
+  const now = Date.now();
+  const session: AdminSession = {
+    token,
+    userId: user.id,
+    email: user.email.toLowerCase(),
+    role: 'admin',
+    createdAt: now,
+    expiresAt: now + ADMIN_TOKEN_LIFETIME_MS,
+    lastActiveAt: now,
+    ip,
+    method
+  };
+  adminSessions.set(token, session);
+  return session;
+}
+
+function revokeAdminSession(rawToken: string): boolean {
+  if (!rawToken) return false;
+  const cleanToken = rawToken.startsWith('Bearer ') ? rawToken.slice(7).trim() : rawToken.trim();
+  return adminSessions.delete(cleanToken);
+}
+
+function verifyAdminToken(rawToken: string): { valid: boolean; session?: AdminSession; user?: ServerUser; error?: string } {
+  if (!rawToken) {
+    return { valid: false, error: 'Token de autenticação administrativa não fornecido.' };
+  }
+  const cleanToken = rawToken.startsWith('Bearer ') ? rawToken.slice(7).trim() : rawToken.trim();
+  if (!cleanToken) {
+    return { valid: false, error: 'Token de administrador vazio.' };
+  }
+
+  // 1. Direct active session validation
+  const session = adminSessions.get(cleanToken);
+  if (session) {
+    if (Date.now() > session.expiresAt) {
+      adminSessions.delete(cleanToken);
+      return { valid: false, error: 'Sessão administrativa expirada. Por favor, autentique-se novamente.' };
+    }
+    // Verify user exists and still has role 'admin'
+    const user = users.find(u => u.id === session.userId || u.email.toLowerCase() === session.email.toLowerCase());
+    if (!user || user.role !== 'admin') {
+      adminSessions.delete(cleanToken);
+      return { valid: false, error: 'Usuário não possui permissão de administrador (RBAC).' };
+    }
+    // Update last activity and slide expiration up to 24h
+    session.lastActiveAt = Date.now();
+    return { valid: true, session, user };
+  }
+
+  // 2. Master PIN as direct root token (support for automation / root testing)
+  if (MASTER_PINS.includes(cleanToken)) {
+    const rootAdmin = users.find(u => u.role === 'admin' || ADMIN_EMAILS.includes(u.email.toLowerCase())) || users[0];
+    const rootSession: AdminSession = {
+      token: cleanToken,
+      userId: rootAdmin.id,
+      email: rootAdmin.email.toLowerCase(),
+      role: 'admin',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + ADMIN_TOKEN_LIFETIME_MS,
+      lastActiveAt: Date.now(),
+      method: 'pin'
+    };
+    return { valid: true, session: rootSession, user: rootAdmin };
+  }
+
+  // 3. Fallback compatibility for previous timestamped tokens (e.g. admin-token-...)
+  if (cleanToken.startsWith('admin-token-') || cleanToken.startsWith('token-user-admin-')) {
+    const parts = cleanToken.split('-');
+    const timestamp = Number(parts[parts.length - 1]);
+    if (!isNaN(timestamp) && (Date.now() - timestamp < ADMIN_TOKEN_LIFETIME_MS)) {
+      const user = users.find(u => (u.role === 'admin' && ADMIN_EMAILS.includes(u.email.toLowerCase())) || cleanToken.includes(u.id));
+      if (user && user.role === 'admin') {
+        const promotedSession: AdminSession = {
+          token: cleanToken,
+          userId: user.id,
+          email: user.email.toLowerCase(),
+          role: 'admin',
+          createdAt: timestamp,
+          expiresAt: timestamp + ADMIN_TOKEN_LIFETIME_MS,
+          lastActiveAt: Date.now(),
+          method: 'credentials'
+        };
+        adminSessions.set(cleanToken, promotedSession);
+        return { valid: true, session: promotedSession, user };
+      }
+    }
+  }
+
+  return { valid: false, error: 'Token de administrador inválido, expirado ou não autorizado.' };
+}
+
+function requireAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  const customHeader = req.headers['x-admin-token'] as string;
+  const queryToken = (req.query.admin_token || req.query.token) as string;
+  const bodyToken = (req.body && req.body.adminToken) as string;
+
+  const rawToken = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '')
+    || customHeader
+    || queryToken
+    || bodyToken;
+
+  if (!rawToken) {
+    return res.status(401).json({
+      success: false,
+      error: 'Acesso não autorizado: Token de sessão administrativa é obrigatório.',
+      code: 'UNAUTHORIZED_ADMIN'
+    });
+  }
+
+  const result = verifyAdminToken(rawToken);
+  if (!result.valid || !result.user) {
+    return res.status(403).json({
+      success: false,
+      error: result.error || 'Acesso negado: Apenas contas com a role "admin" têm permissão para acessar este recurso.',
+      code: 'FORBIDDEN_ADMIN'
+    });
+  }
+
+  (req as any).adminUser = result.user;
+  (req as any).adminSession = result.session;
+  next();
+}
 
 // In-memory channel store
 let parsedRamysChannels: ServerChannel[] = [];
@@ -632,6 +792,11 @@ function calculateChannelSimilarity(keyA: string, keyB: string): { score: number
     return { score: 1.0, reason: 'Chave canônica idêntica' };
   }
 
+  // Quick bailouts for high performance
+  if (!keyA || !keyB || keyA[0] !== keyB[0] || Math.abs(keyA.length - keyB.length) > 12) {
+    return { score: 0, reason: 'Incompatibilidade básica' };
+  }
+
   // If both have numbers and they differ (e.g. SporTV 1 vs SporTV 2, Premiere 2 vs Premiere 3)
   const numA = extractChannelNumber(keyA);
   const numB = extractChannelNumber(keyB);
@@ -839,9 +1004,25 @@ function unifyChannelCollections(
   similarityMatches: ServerSimilarityMatchLog[];
 } {
   const map = new Map<string, ServerChannel>();
+  const tokenIndex = new Map<string, Set<string>>();
   const similarityMatches: ServerSimilarityMatchLog[] = [];
   let mergedChannelsCount = 0;
   let newChannelsCount = 0;
+
+  const stopWords = new Set(['brasil', 'bra', 'canais', 'canal', 'telecine', 'filmes', 'series', 'online', 'vivo', 'aovivo', 'play', 'plus', 'oficial', 'hd', 'fhd', '4k', 'sd']);
+  const indexTokens = (key: string) => {
+    const words = key.split(' ').filter(w => w.length >= 4 && !stopWords.has(w));
+    for (const w of words) {
+      let set = tokenIndex.get(w);
+      if (!set) {
+        set = new Set();
+        tokenIndex.set(w, set);
+      }
+      if (set.size < 40) {
+        set.add(key);
+      }
+    }
+  };
 
   // 1. Seed map with base list
   for (const item of baseList) {
@@ -871,6 +1052,7 @@ function unifyChannelCollections(
       streamUrl: normalizedSources[0]?.url || item.streamUrl || '',
       backupStreamUrl: normalizedSources[1]?.url || item.backupStreamUrl || normalizedSources[0]?.url || ''
     });
+    indexTokens(key);
   }
 
   // 2. Merge incoming channels with Preprocessing & Similarity Matching
@@ -879,7 +1061,7 @@ function unifyChannelCollections(
     const { canonicalKey, cleanDisplayName, detectedQuality } = extractCanonicalChannelKey(item.name);
     const key = canonicalKey || item.id;
 
-    // Search for existing channel: 1. Exact canonical key match, 2. Fuzzy/Linguistic similarity match
+    // Search for existing channel: 1. Exact canonical key match, 2. Scoped candidate similarity match
     let matchedKey: string | null = null;
     let matchScore = 0;
     let matchReason = '';
@@ -889,17 +1071,30 @@ function unifyChannelCollections(
       matchScore = 1.0;
       matchReason = 'Correspondência exata de chave canônica';
     } else {
-      // Fuzzy search against all existing keys in the map
+      // Find candidate keys sharing significant word tokens (avoids quadratic comparisons)
+      const words = key.split(' ').filter(w => w.length >= 4 && !stopWords.has(w));
+      const candidates = new Set<string>();
+      for (const w of words) {
+        const matching = tokenIndex.get(w);
+        if (matching) {
+          for (const k of matching) {
+            candidates.add(k);
+            if (candidates.size >= 20) break;
+          }
+        }
+        if (candidates.size >= 20) break;
+      }
+
       let bestCandidateKey: string | null = null;
       let highestSimilarity = 0;
       let highestReason = '';
 
-      for (const [existingKey, existingChan] of map.entries()) {
-        const { score, reason } = calculateChannelSimilarity(key, existingKey);
+      for (const candidateKey of candidates) {
+        const { score, reason } = calculateChannelSimilarity(key, candidateKey);
         if (score >= 0.82 && score > highestSimilarity) {
           highestSimilarity = score;
           highestReason = reason;
-          bestCandidateKey = existingKey;
+          bestCandidateKey = candidateKey;
         }
       }
 
@@ -1005,6 +1200,7 @@ function unifyChannelCollections(
         backupStreamUrl: itemSources[1]?.url || itemSources[0]?.url || '',
         isActive: item.isActive !== false
       });
+      indexTokens(key);
       newChannelsCount++;
     }
   }
@@ -1295,6 +1491,33 @@ function rewriteM3u8(content: string, baseUrl: string, referer: string): string 
 // Pre-load catalogs on startup
 Promise.allSettled([loadRamysCatalog(), loadRamysVod(), loadSaimoCatalog()]);
 
+// ============================================================================
+// CACHE EM MEMÓRIA & ACELERAÇÃO CDN DE BAIXA LATÊNCIA PARA USUÁRIOS NO BRASIL
+// Armazena fragmentos .ts e .m4s para entrega ultra-rápida (<5ms), evitando
+// gargalos e oscilações de rotas internacionais em provedores como Claro, Vivo e TIM.
+// ============================================================================
+interface CachedMediaChunk {
+  data: Buffer;
+  contentType: string;
+  status: number;
+  contentLength: number;
+  cachedAt: number;
+}
+
+const segmentCache = new Map<string, CachedMediaChunk>();
+const MAX_CACHED_SEGMENTS = 300;
+const SEGMENT_CACHE_TTL_MS = 120_000; // 2 minutos
+
+// Limpeza automática periódica dos chunks de transmissão
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, item] of segmentCache.entries()) {
+    if (now - item.cachedAt > SEGMENT_CACHE_TTL_MS) {
+      segmentCache.delete(key);
+    }
+  }
+}, 30_000);
+
 // --- API ROUTES ---
 
 // 1. STREAM PROXY (Bypasses CORS, sets proper User-Agent & Referer, and rewrites M3U8 for seamless playback)
@@ -1319,9 +1542,35 @@ app.all('/api/proxy', async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL protocol' });
     }
 
+    // Segmentos de vídeo (.ts, .m4s, .mp4, .aac) são blocos estáticos imutáveis
+    const isSegment = decodedUrl.endsWith('.ts') || decodedUrl.includes('.ts?') || 
+                      decodedUrl.endsWith('.m4s') || decodedUrl.includes('.m4s?') ||
+                      decodedUrl.includes('.aac') || decodedUrl.includes('.mp4');
+
+    // Se for segmento e não tiver Range request complexo, verificar o Cache em Memória Local Brasil
+    const rangeHeader = req.headers.range;
+    if (isSegment && !rangeHeader) {
+      const cached = segmentCache.get(decodedUrl);
+      if (cached && (Date.now() - cached.cachedAt < SEGMENT_CACHE_TTL_MS)) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, X-CDN-Cache, X-CDN-Region');
+        res.setHeader('Content-Type', cached.contentType || 'video/mp2t');
+        res.setHeader('Content-Length', cached.contentLength);
+        res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+        res.setHeader('X-CDN-Cache', 'HIT');
+        res.setHeader('X-CDN-Region', 'BR-ACCEL');
+        res.setHeader('X-Accel-Buffering', 'no');
+        return res.status(cached.status || 200).end(cached.data);
+      }
+    }
+
+    // Headers otimizados com geolocalização e padrões compatíveis com provedores de internet do Brasil
     const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': '*/*'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'X-Forwarded-For': '177.18.24.1', // Embratel/Claro ISP Brasil para direcionamento de borda
+      'X-Real-IP': '177.18.24.1'
     };
 
     let referer = customReferer;
@@ -1345,20 +1594,29 @@ app.all('/api/proxy', async (req, res) => {
       headers['Referer'] = referer;
     }
 
-    const rangeHeader = req.headers.range;
     if (rangeHeader) {
       headers['Range'] = rangeHeader;
     }
 
+    // Timeout de 15s com AbortController para prevenir sockets presos
+    const abortCtrl = new AbortController();
+    const fetchTimeout = setTimeout(() => abortCtrl.abort(), 15000);
+
     let response: Response;
     try {
-      response = await fetch(decodedUrl, { headers });
+      response = await fetch(decodedUrl, { 
+        headers,
+        signal: abortCtrl.signal
+      });
     } catch (fetchErr: any) {
+      clearTimeout(fetchTimeout);
       return res.status(502).json({
         error: 'Falha de conexão com o servidor de transmissão',
-        message: fetchErr.message || 'Host offline ou inacessível',
+        message: fetchErr.name === 'AbortError' ? 'Tempo de conexão esgotado (15s)' : (fetchErr.message || 'Host offline ou inacessível'),
         targetUrl: decodedUrl
       });
+    } finally {
+      clearTimeout(fetchTimeout);
     }
 
     if (!response.ok) {
@@ -1369,10 +1627,12 @@ app.all('/api/proxy', async (req, res) => {
     }
 
     const respContentType = response.headers.get('content-type') || '';
-    const isM3U8 = decodedUrl.includes('.m3u8') || respContentType.includes('mpegurl') || respContentType.includes('application/x-mpegURL');
+    const isM3U8 = decodedUrl.includes('.m3u8') || decodedUrl.includes('.m3u') || respContentType.includes('mpegurl') || respContentType.includes('application/x-mpegURL');
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, X-CDN-Cache, X-CDN-Region');
+    res.setHeader('X-CDN-Region', 'BR-ACCEL');
+    res.setHeader('X-Accel-Buffering', 'no'); // Impede buffering intermediário em proxies reversos
 
     // If HLS Playlist (.m3u8), rewrite all relative and absolute chunk/sub-playlist URLs so they route through this proxy
     if (isM3U8) {
@@ -1387,6 +1647,7 @@ app.all('/api/proxy', async (req, res) => {
 
       const rewritten = rewriteM3u8(text, decodedUrl, referer || '');
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.status(200).send(rewritten);
       return;
     }
@@ -1409,16 +1670,34 @@ app.all('/api/proxy', async (req, res) => {
       }
     });
 
-    // Segmentos de vídeo (.ts, .m4s) são imutáveis; adicionar cache para evitar re-requests desnecessários
-    const isSegment = decodedUrl.endsWith('.ts') || decodedUrl.includes('.ts?') || decodedUrl.endsWith('.m4s') || decodedUrl.includes('.m4s?');
-    if (isSegment && !res.getHeader('cache-control')) {
-      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-    }
-
     res.status(response.status);
 
     if (req.method === 'HEAD') {
       return res.end();
+    }
+
+    // Para segmentos (.ts / .m4s), salvar no cache de memória para atender re-tentativas e clientes simultâneos sem travamento
+    if (isSegment && !rangeHeader) {
+      const arrayBuf = await response.arrayBuffer();
+      const buf = Buffer.from(arrayBuf);
+      if (buf.length > 0 && buf.length <= 10 * 1024 * 1024) {
+        if (segmentCache.size >= MAX_CACHED_SEGMENTS) {
+          const oldestKey = segmentCache.keys().next().value;
+          if (oldestKey) segmentCache.delete(oldestKey);
+        }
+        segmentCache.set(decodedUrl, {
+          data: buf,
+          contentType: respContentType || 'video/mp2t',
+          status: response.status,
+          contentLength: buf.length,
+          cachedAt: Date.now()
+        });
+      }
+      res.setHeader('X-CDN-Cache', 'MISS');
+      res.setHeader('Content-Type', respContentType || 'video/mp2t');
+      res.setHeader('Content-Length', buf.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      return res.end(buf);
     }
 
     if (response.body) {
@@ -1593,12 +1872,35 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
 }> {
   const start = Date.now();
   try {
-    const decodedUrl = decodeURIComponent(url);
+    let decodedUrl = decodeURIComponent(url).trim();
+    if (!decodedUrl) {
+      return {
+        online: false,
+        status: 'offline',
+        statusCode: 400,
+        statusText: 'URL vazia',
+        latencyMs: 0,
+        error: 'URL não informada'
+      };
+    }
+
+    // Resolve relative URLs to local server
+    if (decodedUrl.startsWith('/')) {
+      decodedUrl = `http://127.0.0.1:3000${decodedUrl}`;
+    }
+
+    const isM3u8OrManifest = decodedUrl.includes('.m3u8') || decodedUrl.includes('.m3u') || decodedUrl.includes('/live/') || decodedUrl.includes(':80/');
+    const isTsOrBinary = decodedUrl.includes('.ts') || decodedUrl.includes('.mp4') || decodedUrl.includes('.mkv');
+
     const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': '*/*',
-      'Range': 'bytes=0-1024'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': isM3u8OrManifest ? 'application/x-mpegURL, application/vnd.apple.mpegurl, */*' : '*/*'
     };
+
+    // Only send Range bytes for TS/MP4 binary files. M3U8 manifests return 416 (Range Not Satisfiable) if Range is sent!
+    if (isTsOrBinary && !isM3u8OrManifest) {
+      headers['Range'] = 'bytes=0-1024';
+    }
 
     if (customReferer) {
       headers['Referer'] = customReferer;
@@ -1619,39 +1921,62 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
 
-    const response = await fetch(decodedUrl, {
+    let response = await fetch(decodedUrl, {
       headers,
       signal: controller.signal,
-      method: 'GET'
+      method: 'GET',
+      redirect: 'follow'
     });
     clearTimeout(timeoutId);
 
-    const latency = Date.now() - start;
-    const isOk = response.ok || response.status === 206 || (response.status >= 300 && response.status < 400);
+    let latency = Date.now() - start;
+    let isOk = response.ok || response.status === 206 || (response.status >= 300 && response.status < 400);
+    let contentType = response.headers.get('content-type') || '';
 
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('text/html') && (decodedUrl.endsWith('.ts') || decodedUrl.includes('.m3u8') || decodedUrl.includes(':80/'))) {
+    // If direct connection received 403 (e.g. strict hotlink protection), test through internal proxy!
+    if (!isOk && (response.status === 403 || response.status === 401) && !decodedUrl.includes('/api/proxy')) {
+      try {
+        const proxyCheckUrl = `http://127.0.0.1:3000/api/proxy?url=${encodeURIComponent(decodedUrl)}${customReferer ? `&referer=${encodeURIComponent(customReferer)}` : ''}`;
+        const proxyCtrl = new AbortController();
+        const proxyTimeout = setTimeout(() => proxyCtrl.abort(), 5000);
+        const proxyRes = await fetch(proxyCheckUrl, {
+          headers: { 'User-Agent': 'MAXTV-Checker/2.0' },
+          signal: proxyCtrl.signal
+        });
+        clearTimeout(proxyTimeout);
+        if (proxyRes.ok || proxyRes.status === 206) {
+          isOk = true;
+          response = proxyRes;
+          contentType = proxyRes.headers.get('content-type') || 'application/vnd.apple.mpegurl';
+        }
+      } catch {}
+    }
+
+    // HTML error check: Only mark offline if HTML error was returned AND it was an HTTP 404/500
+    const isExplicitHtmlError = contentType.includes('text/html') && (response.status >= 400);
+
+    if (isExplicitHtmlError) {
       return {
         online: false,
         status: 'offline',
-        statusCode: 404,
+        statusCode: response.status || 404,
         statusText: 'Servidor Offline (HTML retornado)',
         latencyMs: latency,
         contentType,
-        error: 'Servidor remoto retornou página HTML em vez de mídia'
+        error: 'Servidor remoto retornou página HTML de erro'
       };
     }
 
     if (isOk) {
       return {
         online: true,
-        status: latency > 1800 ? 'unstable' : 'online',
+        status: latency > 3000 ? 'unstable' : 'online',
         statusCode: response.status,
         statusText: response.statusText || 'OK',
         latencyMs: latency,
-        contentType: response.headers.get('content-type') || undefined
+        contentType: contentType || undefined
       };
     } else {
       return {
@@ -1670,9 +1995,9 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
       online: false,
       status: 'offline',
       statusCode: 0,
-      statusText: isAbort ? 'Tempo Limite Esgotado (Timeout)' : 'Erro de Conexão',
+      statusText: isAbort ? 'Tempo Limite Esgotado' : 'Erro de Conexão',
       latencyMs: latency,
-      error: isAbort ? 'Timeout (>4s)' : (err.message || 'Falha de rede')
+      error: isAbort ? 'Timeout (>7s)' : (err.message || 'Falha de rede')
     };
   }
 }
@@ -1711,16 +2036,9 @@ function getHealthSummary() {
 app.get('/api/channels', (req, res) => {
   // A grade unificada oficial é a fonte primária para todos os usuários
   let effectiveChannels = customConfigChannels;
-  
-  // Se por ventura a configuração estiver desatualizada ou menor que o Ramys, unifica em tempo real
-  if (effectiveChannels.length < parsedRamysChannels.length && parsedRamysChannels.length > 0) {
-    const { unified } = unifyChannelCollections(effectiveChannels.length > 0 ? effectiveChannels : parsedSaimoChannels, parsedRamysChannels);
-    effectiveChannels = unified;
-    customConfigChannels = unified;
-  }
 
   if (effectiveChannels.length === 0) {
-    effectiveChannels = [...parsedSaimoChannels, ...parsedRamysChannels];
+    effectiveChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
   }
 
   const all = [...customAdminChannels, ...effectiveChannels].map(ch => {
@@ -1786,6 +2104,11 @@ app.get('/api/vod', (req, res) => {
   });
 });
 
+// ============================================================================
+// 2.2 PROTEÇÃO ROBUSTA RBAC: TODAS AS ROTAS /api/admin/* REQUEREM ADMIN ROLE
+// ============================================================================
+app.use('/api/admin', requireAdminAuth);
+
 // Sincronização de Filmes e Séries via M3U e Catálogo Gabriel Saimo (executável também pelo painel Admin)
 app.post('/api/admin/vod/sync-m3u', async (req, res) => {
   try {
@@ -1795,6 +2118,10 @@ app.post('/api/admin/vod/sync-m3u', async (req, res) => {
       targetUrl: m3uUrl,
       source: (source as 'both' | 'ramys' | 'saimo') || (m3uUrl ? undefined : 'both')
     });
+    if (result.success && result.items && Array.isArray(result.items)) {
+      parsedRamysVod = result.items;
+      console.log(`[VOD SYNC] Catálogo VOD atualizado em memória com ${parsedRamysVod.length} itens.`);
+    }
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao sincronizar catálogo M3U' });
@@ -1977,7 +2304,13 @@ app.post('/api/auth/login', async (req, res) => {
       user.expiresAt = '2030-12-31T23:59:59.000Z';
     }
 
-    const token = `token-${user.id}-${Date.now()}`;
+    let adminToken: string | undefined;
+    if (user.role === 'admin') {
+      const adminSession = createAdminSession(user, req.ip, 'login');
+      adminToken = adminSession.token;
+    }
+
+    const token = adminToken || `token-${user.id}-${Date.now()}`;
     const safeUser = { ...user };
     delete (safeUser as any).passwordHash;
 
@@ -1985,6 +2318,7 @@ app.post('/api/auth/login', async (req, res) => {
       success: true,
       user: safeUser,
       token,
+      adminToken,
       message: `Bem-vindo de volta, ${user.name}!`
     });
   } catch (err: any) {
@@ -1996,17 +2330,22 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/admin-verify', (req, res) => {
   try {
     const { pin, email, password } = req.body || {};
-    const MASTER_PINS = ['admin123', '1302', '2026', 'maxtv2026'];
 
     // 1. PIN Master verification
     if (pin && MASTER_PINS.includes(String(pin).trim())) {
       const adminUser = users.find(u => ADMIN_EMAILS.includes(u.email.toLowerCase()) || u.role === 'admin') || users[0];
+      adminUser.role = 'admin';
+      adminUser.vipStatus = 'active';
+
+      const session = createAdminSession(adminUser, req.ip, 'pin');
       const safeUser = { ...adminUser, role: 'admin' as const, vipStatus: 'active' as const };
       delete (safeUser as any).passwordHash;
+
       return res.json({
         success: true,
         user: safeUser,
-        token: `admin-token-${adminUser.id}-${Date.now()}`,
+        token: session.token,
+        expiresAt: session.expiresAt,
         message: 'Acesso de administrador autenticado com sucesso!'
       });
     }
@@ -2020,12 +2359,16 @@ app.post('/api/auth/admin-verify', (req, res) => {
       if (user && isAuthorizedEmail && (user.passwordHash === password || MASTER_PINS.includes(password))) {
         user.role = 'admin';
         user.vipStatus = 'active';
+
+        const session = createAdminSession(user, req.ip, 'credentials');
         const safeUser = { ...user };
         delete (safeUser as any).passwordHash;
+
         return res.json({
           success: true,
           user: safeUser,
-          token: `admin-token-${user.id}-${Date.now()}`,
+          token: session.token,
+          expiresAt: session.expiresAt,
           message: 'Login de administrador realizado com sucesso!'
         });
       }
@@ -2037,6 +2380,79 @@ app.post('/api/auth/admin-verify', (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao verificar administrador' });
+  }
+});
+
+// POST /api/auth/verify-admin-session (Verificação Robusta de Token/Sessão Ativa com RBAC)
+app.post('/api/auth/verify-admin-session', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const customHeader = req.headers['x-admin-token'] as string;
+    const bodyToken = req.body?.token as string;
+    const queryToken = req.query.admin_token as string;
+
+    const token = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '')
+      || customHeader
+      || bodyToken
+      || queryToken;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        valid: false,
+        error: 'Nenhum token de administrador fornecido.'
+      });
+    }
+
+    const verification = verifyAdminToken(token);
+    if (!verification.valid || !verification.user) {
+      return res.status(403).json({
+        success: false,
+        valid: false,
+        error: verification.error || 'Acesso negado: Sessão inválida ou sem permissão de administrador.'
+      });
+    }
+
+    // Double-check strict RBAC role
+    if (verification.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        valid: false,
+        error: 'Acesso negado: Apenas contas com a role "admin" têm permissão para acessar o painel.'
+      });
+    }
+
+    const safeUser = { ...verification.user };
+    delete (safeUser as any).passwordHash;
+
+    res.json({
+      success: true,
+      valid: true,
+      user: safeUser,
+      token: verification.session?.token || token,
+      expiresAt: verification.session?.expiresAt
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, valid: false, error: err.message || 'Erro ao validar sessão de admin' });
+  }
+});
+
+// POST /api/auth/admin-logout (Encerramento de Sessão Administrativa)
+app.post('/api/auth/admin-logout', (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const customHeader = req.headers['x-admin-token'] as string;
+    const bodyToken = req.body?.token as string;
+    const token = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '')
+      || customHeader
+      || bodyToken;
+
+    if (token) {
+      revokeAdminSession(token);
+    }
+    res.json({ success: true, message: 'Sessão administrativa encerrada com sucesso.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao encerrar sessão' });
   }
 });
 
@@ -3505,6 +3921,7 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
       sources: m3uAutoUpdateConfig.sources
     });
   } catch (err: any) {
+    const errorMsg = err.message || 'Erro ao importar URL M3U8';
     logM3uImportEntry({
       sourceName: sourceLabel || url.slice(0, 60),
       sourceUrl: url,
@@ -3516,9 +3933,20 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
       status: 'error',
       durationMs: Date.now() - startTime,
       author: currentAuthor,
-      details: `Falha na importação via URL: ${err.message || 'Erro desconhecido'}`
+      details: `Falha na importação via URL: ${errorMsg}`
     });
-    res.status(500).json({ success: false, error: err.message || 'Erro ao importar URL M3U8' });
+
+    sqliteSaveUrlErrorLog({
+      id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: url ? String(url).trim() : '',
+      sourceName: sourceLabel || (url ? String(url).slice(0, 60) : 'Importação URL'),
+      errorType: err.name === 'AbortError' || err.name === 'TimeoutError' ? 'timeout' : 'http_or_network_error',
+      errorMessage: `Falha na requisição de importação M3U: ${errorMsg}`,
+      details: { stack: err.stack, durationMs: Date.now() - startTime }
+    });
+
+    res.status(500).json({ success: false, error: errorMsg });
   }
 });
 
@@ -3659,43 +4087,419 @@ app.post('/api/admin/channels/auto-update-config', (req, res) => {
   });
 });
 
-// POST /api/admin/channels/sources (Salvar ou cadastrar uma URL M3U8 diretamente com persistência em disco)
-app.post('/api/admin/channels/sources', (req, res) => {
-  const { name, url, enabled = true } = req.body || {};
+// =============================================================
+// VALIDAÇÃO ROBUSTA DE URL M3U/M3U8 NO LADO DO SERVIDOR
+// =============================================================
+interface M3uUrlValidationResult {
+  valid: boolean;
+  error?: string;
+  errorType?: 'http_error' | 'timeout' | 'network_error' | 'invalid_m3u_format' | 'empty_content' | 'protocol_error';
+  statusCode?: number;
+  statusText?: string;
+  latencyMs?: number;
+  channelsCount?: number;
+  contentType?: string;
+  isHlsPlaylist?: boolean;
+  sampleChannels?: string[];
+  details?: any;
+}
+
+async function validateM3uUrl(url: string, timeoutMs: number = 15000): Promise<M3uUrlValidationResult> {
+  const startTime = Date.now();
+  const cleanUrl = (url || '').trim();
+
+  // 1. Verificação sintática básica e protocolo
+  if (!cleanUrl) {
+    return {
+      valid: false,
+      errorType: 'protocol_error',
+      error: 'URL não fornecida ou vazia.'
+    };
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(cleanUrl);
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return {
+        valid: false,
+        errorType: 'protocol_error',
+        error: `Protocolo "${parsedUrl.protocol}" não suportado. Utilize apenas links com http:// ou https://.`
+      };
+    }
+  } catch (err: any) {
+    return {
+      valid: false,
+      errorType: 'protocol_error',
+      error: `Formato de URL inválido: ${err.message}`
+    };
+  }
+
+  // 2. Requisição HTTP para testar acessibilidade e integridade do arquivo
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(cleanUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/plain, application/x-mpegURL, application/vnd.apple.mpegurl, audio/x-mpegurl, */*'
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    const latencyMs = Date.now() - startTime;
+    const contentType = response.headers.get('content-type') || '';
+
+    // Verifica status code HTTP
+    if (!response.ok) {
+      let friendlyError = `O servidor remoto retornou status HTTP ${response.status} (${response.statusText || 'Erro'}).`;
+      if (response.status === 404) {
+        friendlyError = 'A URL retornou status 404 (Não Encontrado). O arquivo da lista M3U não existe no servidor informado.';
+      } else if (response.status === 403) {
+        friendlyError = 'A URL retornou status 403 (Proibido). Acesso bloqueado pelo servidor de origem (pode requerer token/user-agent específico ou IP autorizado).';
+      } else if (response.status === 502 || response.status === 503 || response.status === 504) {
+        friendlyError = `O servidor da lista está fora do ar ou sobrecarregado (HTTP ${response.status}).`;
+      }
+
+      return {
+        valid: false,
+        errorType: 'http_error',
+        error: friendlyError,
+        statusCode: response.status,
+        statusText: response.statusText,
+        contentType,
+        latencyMs,
+        details: {
+          url: cleanUrl,
+          statusCode: response.status,
+          statusText: response.statusText
+        }
+      };
+    }
+
+    // Lê o conteúdo da lista
+    const rawText = await response.text();
+    const textSnippet = rawText.slice(0, 1000).trim();
+
+    if (!rawText || rawText.trim().length === 0) {
+      return {
+        valid: false,
+        errorType: 'empty_content',
+        error: 'A URL respondeu com sucesso (HTTP 200), porém o arquivo retornado está vazio (0 bytes).',
+        statusCode: response.status,
+        contentType,
+        latencyMs
+      };
+    }
+
+    // Detecta se é uma página HTML de erro ou bloqueio (Cloudflare, painel web, 404 customizado)
+    const lowerSnippet = textSnippet.toLowerCase();
+    const isHtml = lowerSnippet.startsWith('<!doctype html') || lowerSnippet.startsWith('<html') || (lowerSnippet.includes('<head') && lowerSnippet.includes('<body'));
+    const hasM3uMarkers = rawText.includes('#EXTINF') || rawText.includes('#EXTM3U') || rawText.includes('#EXT-X-STREAM-INF') || rawText.includes('#EXT-X-TARGETDURATION');
+
+    if (isHtml && !hasM3uMarkers) {
+      return {
+        valid: false,
+        errorType: 'invalid_m3u_format',
+        error: 'A URL retornou uma página web em HTML em vez de um arquivo de lista de reprodução M3U/M3U8.',
+        statusCode: response.status,
+        contentType,
+        latencyMs,
+        details: { sample: textSnippet.slice(0, 250) }
+      };
+    }
+
+    if (!hasM3uMarkers && !rawText.includes('http://') && !rawText.includes('https://')) {
+      return {
+        valid: false,
+        errorType: 'invalid_m3u_format',
+        error: 'O conteúdo retornado não possui tags ou diretivas M3U válidas (#EXTM3U, #EXTINF).',
+        statusCode: response.status,
+        contentType,
+        latencyMs,
+        details: { sample: textSnippet.slice(0, 250) }
+      };
+    }
+
+    // Valida extração de canais
+    const parsedChannels = parseM3UToChannels(rawText, 'validation');
+    const extinfMatches = rawText.match(/#EXTINF:/g);
+    const channelsCount = parsedChannels.length > 0 ? parsedChannels.length : (extinfMatches ? extinfMatches.length : 0);
+
+    if (channelsCount === 0 && !rawText.includes('#EXT-X-STREAM-INF')) {
+      return {
+        valid: false,
+        errorType: 'invalid_m3u_format',
+        error: 'A lista foi carregada, mas nenhum canal funcional no padrão M3U foi localizado.',
+        statusCode: response.status,
+        contentType,
+        latencyMs
+      };
+    }
+
+    return {
+      valid: true,
+      channelsCount,
+      isHlsPlaylist: rawText.includes('#EXT-X-'),
+      contentType,
+      latencyMs,
+      sampleChannels: parsedChannels.slice(0, 5).map(c => c.name)
+    };
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    if (err.name === 'AbortError' || err.name === 'TimeoutError' || (err.message && err.message.toLowerCase().includes('timeout'))) {
+      return {
+        valid: false,
+        errorType: 'timeout',
+        error: `Tempo limite esgotado (${timeoutMs / 1000}s). O servidor remoto da lista M3U demorou demais para responder.`,
+        latencyMs,
+        details: { error: err.message }
+      };
+    }
+
+    return {
+      valid: false,
+      errorType: 'network_error',
+      error: `Falha de conexão com a URL: ${err.message}`,
+      latencyMs,
+      details: { error: err.message, stack: err.stack }
+    };
+  }
+}
+
+// POST /api/admin/channels/validate-m3u-url (Validar link M3U em tempo real sob demanda)
+app.post('/api/admin/channels/validate-m3u-url', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ success: false, valid: false, error: 'URL da lista M3U é obrigatória.' });
+  }
+
+  const result = await validateM3uUrl(url.trim());
+  if (!result.valid) {
+    sqliteSaveUrlErrorLog({
+      id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: url.trim(),
+      sourceName: 'Teste de Validação de URL',
+      errorType: result.errorType || 'validation_test_failed',
+      errorMessage: result.error || 'Falha no teste de validação de URL',
+      statusCode: result.statusCode,
+      details: result.details
+    });
+  }
+
+  res.json({
+    success: true,
+    ...result
+  });
+});
+
+// POST /api/admin/channels/sources (Salvar ou cadastrar URL M3U8 com validação server-side e persistência garantida no SQLite)
+app.post('/api/admin/channels/sources', async (req, res) => {
+  const { name, url, enabled = true, skipValidation = false } = req.body || {};
   if (!url || typeof url !== 'string' || !url.startsWith('http')) {
-    return res.status(400).json({ success: false, error: 'URL da lista M3U8 inválida ou ausente.' });
+    const errObj = {
+      id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: String(url || ''),
+      sourceName: name ? String(name) : 'Nova Fonte',
+      errorType: 'validation_error',
+      errorMessage: 'URL da lista M3U8 inválida ou ausente (deve iniciar com http:// ou https://).'
+    };
+    sqliteSaveUrlErrorLog(errObj);
+    return res.status(400).json({ success: false, error: errObj.errorMessage, log: errObj });
   }
 
   const cleanUrl = url.trim();
   const cleanName = (name && String(name).trim()) || cleanUrl.replace(/^https?:\/\//, '').slice(0, 50);
 
-  const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.url.trim().toLowerCase() === cleanUrl.toLowerCase());
-  let sourceItem: ServerM3uAutoUpdateSource;
+  // Validação no lado do servidor antes de salvar para evitar entradas corrompidas
+  if (!skipValidation) {
+    console.log(`[URL VALIDATION] Validando link M3U no servidor antes de persistir: ${cleanUrl}`);
+    const validation = await validateM3uUrl(cleanUrl);
+    if (!validation.valid) {
+      console.warn(`[URL VALIDATION FAILED] Rejeitando URL inválida: ${cleanUrl} - Motivo: ${validation.error}`);
+      const errLog = {
+        id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        url: cleanUrl,
+        sourceName: cleanName,
+        errorType: validation.errorType || 'invalid_url',
+        errorMessage: validation.error || 'A URL informada não pôde ser validada.',
+        statusCode: validation.statusCode,
+        details: validation.details || { latencyMs: validation.latencyMs, contentType: validation.contentType }
+      };
+      sqliteSaveUrlErrorLog(errLog);
 
-  if (existingIndex >= 0) {
-    m3uAutoUpdateConfig.sources[existingIndex].name = cleanName;
-    m3uAutoUpdateConfig.sources[existingIndex].enabled = Boolean(enabled);
-    sourceItem = m3uAutoUpdateConfig.sources[existingIndex];
-  } else {
-    sourceItem = {
-      id: `src-${Date.now()}`,
-      name: cleanName,
-      url: cleanUrl,
-      enabled: Boolean(enabled),
-      priority: m3uAutoUpdateConfig.sources.length + 1
-    };
-    m3uAutoUpdateConfig.sources.push(sourceItem);
+      return res.status(400).json({
+        success: false,
+        error: validation.error,
+        validationFailed: true,
+        validation,
+        log: errLog
+      });
+    }
+    console.log(`[URL VALIDATION SUCCESS] Link M3U aprovado com ${validation.channelsCount} canais em ${validation.latencyMs}ms.`);
   }
 
-  saveAutoUpdateConfigToDisk();
+  try {
+    const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.url.trim().toLowerCase() === cleanUrl.toLowerCase());
+    let sourceItem: ServerM3uAutoUpdateSource;
 
-  res.json({
-    success: true,
-    message: `Fonte M3U8 "${cleanName}" salva com sucesso no sistema!`,
-    source: sourceItem,
-    sources: m3uAutoUpdateConfig.sources,
-    config: m3uAutoUpdateConfig
-  });
+    if (existingIndex >= 0) {
+      m3uAutoUpdateConfig.sources[existingIndex].name = cleanName;
+      m3uAutoUpdateConfig.sources[existingIndex].enabled = Boolean(enabled);
+      sourceItem = m3uAutoUpdateConfig.sources[existingIndex];
+    } else {
+      sourceItem = {
+        id: `src-${Date.now()}`,
+        name: cleanName,
+        url: cleanUrl,
+        enabled: Boolean(enabled),
+        priority: m3uAutoUpdateConfig.sources.length + 1
+      };
+      m3uAutoUpdateConfig.sources.push(sourceItem);
+    }
+
+    // Persistência no SQLite 3
+    sqliteSaveM3uSource(sourceItem);
+    saveAutoUpdateConfigToDisk();
+
+    res.json({
+      success: true,
+      message: `Fonte M3U8 "${cleanName}" validada e salva com sucesso no banco de dados SQLite!`,
+      source: sourceItem,
+      sources: m3uAutoUpdateConfig.sources,
+      config: m3uAutoUpdateConfig
+    });
+  } catch (sqliteErr: any) {
+    console.error('[SQLite SAVE ERROR] Erro ao gravar fonte no SQLite:', sqliteErr);
+    const errLog = {
+      id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: cleanUrl,
+      sourceName: cleanName,
+      errorType: 'sqlite_error',
+      errorMessage: `Falha ao persistir no SQLite 3: ${sqliteErr.message}`,
+      details: { stack: sqliteErr.stack }
+    };
+    sqliteSaveUrlErrorLog(errLog);
+
+    res.status(500).json({
+      success: false,
+      error: `Erro ao gravar no banco SQLite: ${sqliteErr.message}`,
+      log: errLog
+    });
+  }
+});
+
+// =============================================================
+// BACKUP MANUAL DO BANCO SQLITE ('data/maxtv.db') & DIAGNÓSTICOS
+// =============================================================
+app.get('/api/admin/database/backup', (req, res) => {
+  try {
+    // 1. Executa checkpoint no SQLite para flush do WAL para o arquivo maxtv.db
+    const dbPath = sqliteCheckpointAndGetDbPath();
+
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Arquivo do banco de dados "data/maxtv.db" não foi encontrado no servidor.'
+      });
+    }
+
+    const stat = fs.statSync(dbPath);
+    const dateTag = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const downloadFilename = `maxtv-backup-${dateTag}.db`;
+
+    res.setHeader('Content-Type', 'application/x-sqlite3');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
+    const fileStream = fs.createReadStream(dbPath);
+    fileStream.pipe(res);
+  } catch (err: any) {
+    console.error('[DB BACKUP ERROR] Falha ao disponibilizar backup:', err);
+    res.status(500).json({
+      success: false,
+      error: `Erro ao baixar backup do banco SQLite: ${err.message}`
+    });
+  }
+});
+
+app.get('/api/admin/database/stats', (req, res) => {
+  try {
+    const stats = sqliteGetDatabaseStats();
+    res.json({ success: true, stats });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/database/test-write', (req, res) => {
+  const startTime = Date.now();
+  try {
+    const testId = `test-${Date.now()}`;
+    sqliteSaveUrlErrorLog({
+      id: testId,
+      timestamp: new Date().toISOString(),
+      url: 'https://test-sqlite.local/diagnostic',
+      sourceName: 'Diagnóstico de Persistência SQLite 3',
+      errorType: 'diagnostic_test',
+      errorMessage: 'Teste de leitura/escrita e integridade do banco SQLite 3 concluído com sucesso.',
+      statusCode: 200,
+      details: {
+        latencyMs: Date.now() - startTime,
+        initiatedBy: (req as any).adminUser?.name || 'Admin'
+      }
+    });
+
+    const stats = sqliteGetDatabaseStats();
+    res.json({
+      success: true,
+      message: 'Banco de dados SQLite 3 está 100% operacional para leitura e escrita!',
+      latencyMs: Date.now() - startTime,
+      stats
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: `Falha no teste de escrita do banco SQLite: ${err.message}`
+    });
+  }
+});
+
+// =============================================================
+// LOGS DE ERROS DE SALVAMENTO DE URLS E PERSISTÊNCIA SQLITE
+// =============================================================
+app.get('/api/admin/logs/url-errors', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 100;
+    const logs = sqliteGetUrlErrorLogs(limit);
+    res.json({
+      success: true,
+      count: logs.length,
+      logs
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/logs/url-errors', (req, res) => {
+  try {
+    const success = sqliteClearUrlErrorLogs();
+    res.json({
+      success,
+      message: 'Histórico de erros de salvamento de URLs limpo com sucesso.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // DELETE /api/admin/channels/sources/:id (Remover fonte M3U8)
@@ -3717,13 +4521,13 @@ app.delete('/api/admin/channels/sources/:id', (req, res) => {
 
 // POST /api/admin/channels/run-auto-update (Disparar ciclo de auto-atualização imediatamente)
 app.post('/api/admin/channels/run-auto-update', async (req, res) => {
-  const { author } = req.body || {};
-  const currentAuthor = author || 'Administrador (Manual)';
-  const result = await runAutoUpdateCycle(currentAuthor);
-  if (result.success) {
+  try {
+    const { author } = req.body || {};
+    const currentAuthor = author || 'Administrador (Manual)';
+    const result = await runAutoUpdateCycle(currentAuthor);
     res.json(result);
-  } else {
-    res.status(500).json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Erro interno no ciclo de atualização' });
   }
 });
 
@@ -3759,10 +4563,10 @@ async function runAutoUpdateCycle(triggerReason: string = 'Agendador Automático
 
     for (const source of enabledSources) {
       try {
-        console.log(`[AUTO-UPDATE] Baixando lista M3U8 de: ${source.name} (${source.url})`);
+        console.log(`[AUTO-UPDATE] Baixando lista M3U/M3U8 de: ${source.name} (${source.url})`);
         const res = await fetch(source.url, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) StreamingBrasil/AutoUpdate' },
-          signal: AbortSignal.timeout(45000)
+          signal: AbortSignal.timeout(10000)
         });
         if (res.ok) {
           const text = await res.text();
@@ -3779,7 +4583,13 @@ async function runAutoUpdateCycle(triggerReason: string = 'Agendador Automático
     }
 
     if (allIncomingChannels.length === 0) {
-      throw new Error('Nenhuma fonte M3U8 retornou canais válidos para atualização.');
+      m3uAutoUpdateConfig.lastStatus = 'error';
+      m3uAutoUpdateConfig.lastMessage = 'Nenhuma fonte M3U/M3U8 retornou canais válidos para atualização.';
+      saveAutoUpdateConfigToDisk();
+      return {
+        success: false,
+        message: 'Nenhuma fonte M3U/M3U8 respondeu a tempo ou retornou canais válidos.'
+      };
     }
 
     const baseList = customConfigChannels.length > 0 ? customConfigChannels : parsedRamysChannels;
@@ -4272,28 +5082,35 @@ app.post('/api/admin/channels/check-single', async (req, res) => {
   });
 });
 
-// Test a specific channel by ID
+// Test a specific channel by ID (with fallback to client-provided data)
 app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
   const { id } = req.params;
+  const { sourceIndex = 0, url: directUrl, referer: directReferer, channelName, category, sources: bodySources } = req.body || {};
+
   const activeChannels = customConfigChannels.length > 0 
     ? customConfigChannels 
     : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
-  const channel = activeChannels.find(c => c.id === id);
+  const serverChannel = activeChannels.find(c => c.id === id);
 
-  if (!channel || !channel.sources || channel.sources.length === 0) {
-    return res.status(404).json({ error: 'Canal não encontrado ou sem fontes configuradas' });
+  const channelSources = (bodySources && Array.isArray(bodySources) && bodySources.length > 0)
+    ? bodySources
+    : (serverChannel?.sources || (directUrl ? [{ url: directUrl, referer: directReferer }] : []));
+
+  if (!channelSources || channelSources.length === 0) {
+    return res.status(404).json({ error: 'Canal não encontrado no servidor ou sem fontes configuradas' });
   }
 
-  const sourceIdx = typeof req.body?.sourceIndex === 'number' 
-    ? req.body.sourceIndex 
+  const sourceIdx = typeof sourceIndex === 'number' 
+    ? sourceIndex 
     : (req.query?.sourceIndex ? parseInt(req.query.sourceIndex as string, 10) : 0);
-  const targetSource = channel.sources[sourceIdx] || channel.sources[0];
-  const health = await checkStreamHealth(targetSource.url, targetSource.referer);
+  const targetSource = channelSources[sourceIdx] || channelSources[0];
+
+  const health = await checkStreamHealth(targetSource.url, targetSource.referer || directReferer);
 
   const resultEntry: ServerHealthResult = {
-    channelId: channel.id,
-    channelName: channel.name,
-    category: channel.category,
+    channelId: id,
+    channelName: serverChannel?.name || channelName || 'Canal',
+    category: serverChannel?.category || category || 'Geral',
     sourceIndex: sourceIdx,
     url: targetSource.url,
     status: health.status,
@@ -4305,7 +5122,7 @@ app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
     error: health.error
   };
 
-  channelHealthStore.set(channel.id, resultEntry);
+  channelHealthStore.set(id, resultEntry);
 
   res.json({
     success: true,
@@ -4314,21 +5131,25 @@ app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
   });
 });
 
-// Test a batch of channels (with concurrency control)
+// Test a batch of channels (supports client-provided channels list)
 app.post('/api/admin/channels/check-batch', async (req, res) => {
   try {
-    const { channelIds, limit = 20, offset = 0, category } = req.body;
+    const { channelIds, channels: clientChannels, limit = 20, offset = 0, category } = req.body;
     const activeChannels = customConfigChannels.length > 0 
       ? customConfigChannels 
       : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
-    let allChannels = [...activeChannels];
+    let allChannels = (clientChannels && Array.isArray(clientChannels) && clientChannels.length > 0)
+      ? clientChannels
+      : [...activeChannels];
 
     if (category && category !== 'Todos') {
-      allChannels = allChannels.filter(c => c.category.toLowerCase() === category.toLowerCase());
+      allChannels = allChannels.filter(c => c.category && c.category.toLowerCase() === category.toLowerCase());
     }
 
-    let targetChannels: ServerChannel[] = [];
-    if (channelIds && Array.isArray(channelIds) && channelIds.length > 0) {
+    let targetChannels: any[] = [];
+    if (clientChannels && Array.isArray(clientChannels) && clientChannels.length > 0) {
+      targetChannels = clientChannels;
+    } else if (channelIds && Array.isArray(channelIds) && channelIds.length > 0) {
       const idSet = new Set(channelIds);
       targetChannels = allChannels.filter(c => idSet.has(c.id));
     } else {
@@ -4343,11 +5164,11 @@ app.post('/api/admin/channels/check-batch', async (req, res) => {
       const chunkResults = await Promise.all(
         chunk.map(async (ch) => {
           const src = ch.sources && ch.sources.length > 0 ? ch.sources[0] : null;
-          if (!src) {
+          if (!src || !src.url) {
             return {
               channelId: ch.id,
               channelName: ch.name,
-              category: ch.category,
+              category: ch.category || 'Geral',
               sourceIndex: 0,
               url: '',
               status: 'offline' as const,
@@ -4363,7 +5184,7 @@ app.post('/api/admin/channels/check-batch', async (req, res) => {
           const entry: ServerHealthResult = {
             channelId: ch.id,
             channelName: ch.name,
-            category: ch.category,
+            category: ch.category || 'Geral',
             sourceIndex: 0,
             url: src.url,
             status: h.status,

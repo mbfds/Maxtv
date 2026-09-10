@@ -7,25 +7,37 @@
       "name": "Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026)",
       "url": "https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8",
       "enabled": true,
-      "priority": 1
+      "priority": 1,
+      "createdAt": "2026-09-08T11:51:31.948Z",
+      "updatedAt": "2026-09-08T11:53:43.365Z"
     },
     {
       "id": "src-1788867612976",
       "name": "Teste Fonte Backup",
       "url": "https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8",
       "enabled": true,
-      "priority": 2
+      "priority": 2,
+      "createdAt": "2026-09-08T11:51:31.948Z",
+      "updatedAt": "2026-09-08T11:53:43.365Z"
     },
     {
-      "id": "src-1788868299358",
-      "name": "Lista Teste IPTV",
-      "url": "https://example.com/lista-teste.m3u8",
+      "id": "src-1788868423364",
+      "name": "123",
+      "url": "https://iptv-org.github.io/iptv/countries/br.m3u",
       "enabled": true,
-      "priority": 3
+      "priority": 4,
+      "createdAt": "2026-09-08T11:53:43.365Z",
+      "updatedAt": "2026-09-08T11:53:43.365Z"
     }
   ],
-  "lastRunAt": "2026-09-08T11:40:02.360Z",
-  "nextRunAt": "2026-09-09T11:40:02.361Z",
-  "lastStatus": "idle",
-  "lastMessage": "Ciclo de auto-atualização configurado a cada 24 horas."
+  "lastRunAt": "2026-09-08T12:17:32.727Z",
+  "nextRunAt": "2026-09-09T12:17:32.728Z",
+  "lastStatus": "success",
+  "lastMessage": "Última sincronização com sucesso em 08/09/2026, 12:17:32. 252104 canais ativos e frescos.",
+  "lastStats": {
+    "totalFound": 294334,
+    "duplicatesConsolidated": 41447,
+    "newChannelsAdded": 251514,
+    "finalGradeCount": 252104
+  }
 }

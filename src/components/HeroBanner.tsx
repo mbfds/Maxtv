@@ -128,6 +128,24 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       });
     }
 
+    // Slide 5: Recém Adicionado (Highlight newest catalog release)
+    const recentlyAdded = featuredVods.find(v => v.isRecentlyAdded && v.id !== featuredVod?.id && v.id !== secondVod?.id) || featuredVods.find(v => v.id === 'vod-7');
+    if (recentlyAdded) {
+      list.push({
+        id: `hero-recent-${recentlyAdded.id}`,
+        type: 'vod',
+        title: recentlyAdded.title,
+        synopsis: recentlyAdded.synopsis,
+        bannerUrl: recentlyAdded.bannerUrl,
+        isLive: false,
+        badgeLabel: 'Recém Adicionado',
+        qualityBadge: '4K Ultra HD',
+        audioBadge: 'Dolby Atmos',
+        highlightTag: 'Lançamento',
+        vod: recentlyAdded
+      });
+    }
+
     // Fallback if empty
     if (list.length === 0) {
       list.push({
@@ -226,6 +244,17 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       {/* Dark Vignettes & Gradients for contrast and readability */}
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/70 to-transparent z-10" />
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent z-10" />
+
+      {/* Top Banner Quick Badge: Recém Adicionados */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 hidden sm:flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 shadow-lg pointer-events-auto">
+        <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+        <span className="text-xs font-semibold text-slate-300">
+          Recém Adicionados:
+        </span>
+        <span className="text-xs font-bold text-emerald-400">
+          {featuredVods.filter(v => v.isRecentlyAdded || v.year >= 2024).length} Novidades
+        </span>
+      </div>
 
       {/* Navigation Arrow - Left */}
       {slides.length > 1 && (

@@ -1,5 +1,104 @@
 [
   {
+    "id": "hist-1788869852726-bpw8w",
+    "timestamp": "2026-09-08T12:17:32.726Z",
+    "dateFormatted": "08/09/2026, 12:17:32",
+    "type": "unify_grade",
+    "actionName": "Auto-Atualização Periódica (24h)",
+    "success": true,
+    "channelsCount": 252104,
+    "details": "Ciclo automático executado: 294334 canais analisados de Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026) (988 canais), Teste Fonte Backup (292953 canais), 123 (393 canais). 41447 duplicatas/similares consolidadas como opções alternativas (Opção 2+), 251514 novos canais adicionados. Total da grade: 252104 canais.",
+    "author": "Agendador Automático"
+  },
+  {
+    "id": "hist-1788869786224-b2w11",
+    "timestamp": "2026-09-08T12:16:26.224Z",
+    "dateFormatted": "08/09/2026, 12:16:26",
+    "type": "unify_grade",
+    "actionName": "Auto-Unificação da Grade CanaisBR03",
+    "success": true,
+    "channelsCount": 590,
+    "details": "Unificação automática executada: 590 canais únicos, 8 canais com Opção 2/backup adicionada, totalizando 2991 opções de stream.",
+    "author": "Sistema (Auto-Unificação)"
+  },
+  {
+    "id": "hist-1788868474889-suhmk",
+    "timestamp": "2026-09-08T11:54:34.889Z",
+    "dateFormatted": "08/09/2026, 11:54:34",
+    "type": "unify_grade",
+    "actionName": "Unificação Geral da Grade de Canais",
+    "success": true,
+    "channelsCount": 586,
+    "details": "Grade unificada com sucesso! Total de 586 canais consolidados, 0 opções de contingência (Opção 2+) mapeadas, 2967 servidores totais.",
+    "author": "Administrador"
+  },
+  {
+    "id": "hist-1788868423363-qnvi0",
+    "timestamp": "2026-09-08T11:53:43.363Z",
+    "dateFormatted": "08/09/2026, 11:53:43",
+    "type": "unify_grade",
+    "actionName": "Importação M3U8 via URL: 123",
+    "success": true,
+    "channelsCount": 586,
+    "details": "393 canais importados da URL. 73 adicionados como Opção 2/backup em canais existentes, 320 novos canais adicionados. Total da grade: 586 canais.",
+    "author": "Administrador"
+  },
+  {
+    "id": "hist-1788868323272-wcjfr",
+    "timestamp": "2026-09-08T11:52:03.272Z",
+    "dateFormatted": "08/09/2026, 11:52:03",
+    "type": "unify_grade",
+    "actionName": "Auto-Unificação da Grade CanaisBR03",
+    "success": true,
+    "channelsCount": 266,
+    "details": "Unificação automática executada: 266 canais únicos, 0 canais com Opção 2/backup adicionada, totalizando 2182 opções de stream.",
+    "author": "Sistema (Auto-Unificação)"
+  },
+  {
+    "id": "hist-1788868292485-49gry",
+    "timestamp": "2026-09-08T11:51:32.485Z",
+    "dateFormatted": "08/09/2026, 11:51:32",
+    "type": "unify_grade",
+    "actionName": "Auto-Unificação da Grade CanaisBR03",
+    "success": true,
+    "channelsCount": 266,
+    "details": "Unificação automática executada: 266 canais únicos, 0 canais com Opção 2/backup adicionada, totalizando 2182 opções de stream.",
+    "author": "Sistema (Auto-Unificação)"
+  },
+  {
+    "id": "hist-1788867621959-e8sgp",
+    "timestamp": "2026-09-08T11:40:21.959Z",
+    "dateFormatted": "08/09/2026, 11:40:21",
+    "type": "unify_grade",
+    "actionName": "Auto-Unificação da Grade CanaisBR03",
+    "success": true,
+    "channelsCount": 266,
+    "details": "Unificação automática executada: 266 canais únicos, 0 canais com Opção 2/backup adicionada, totalizando 2182 opções de stream.",
+    "author": "Sistema (Auto-Unificação)"
+  },
+  {
+    "id": "hist-1788867602874-z761u",
+    "timestamp": "2026-09-08T11:40:02.874Z",
+    "dateFormatted": "08/09/2026, 11:40:02",
+    "type": "unify_grade",
+    "actionName": "Auto-Unificação da Grade CanaisBR03",
+    "success": true,
+    "channelsCount": 266,
+    "details": "Unificação automática executada: 266 canais únicos, 0 canais com Opção 2/backup adicionada, totalizando 2182 opções de stream.",
+    "author": "Sistema (Auto-Unificação)"
+  },
+  {
+    "id": "hist-1788866828221-x7edt",
+    "timestamp": "2026-09-08T11:27:08.221Z",
+    "dateFormatted": "08/09/2026, 11:27:08",
+    "type": "unify_grade",
+    "actionName": "Auto-Unificação da Grade CanaisBR03",
+    "success": true,
+    "channelsCount": 266,
+    "details": "Unificação automática executada: 266 canais únicos, 825 canais com Opção 2/backup adicionada, totalizando 2182 opções de stream.",
+    "author": "Sistema (Auto-Unificação)"
+  },
+  {
     "id": "hist-1788747050112-qnlow",
     "timestamp": "2026-09-07T02:10:50.112Z",
     "dateFormatted": "07/09/2026, 02:10:50",

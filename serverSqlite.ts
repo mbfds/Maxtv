@@ -90,6 +90,17 @@ export interface SqliteSessionHeartbeatDoc {
   adblockDetected: boolean;
 }
 
+export interface SqliteUrlSaveErrorDoc {
+  id: string;
+  timestamp: string;
+  url: string;
+  sourceName?: string;
+  errorType: string;
+  errorMessage: string;
+  statusCode?: number;
+  details?: any;
+}
+
 let dbInstance: DatabaseSync | null = null;
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'maxtv.db');
@@ -280,6 +291,21 @@ export function initSqlite(): { success: boolean; dbPath: string; error?: string
         is_blocked INTEGER DEFAULT 0,
         adblock_detected INTEGER DEFAULT 0
       );
+    `);
+
+    // 11. URL Save Error Logs Table (Monitoramento de Falhas e Diagnóstico de Persistência)
+    dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS url_save_errors (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        url TEXT NOT NULL,
+        source_name TEXT,
+        error_type TEXT NOT NULL,
+        error_message TEXT NOT NULL,
+        status_code INTEGER,
+        details_json TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_url_err_time ON url_save_errors(timestamp);
     `);
 
     console.log('[SQLite] Banco de dados SQLite 3 inicializado com sucesso em:', DB_FILE);
@@ -982,3 +1008,133 @@ export function sqliteRecordSessionHeartbeat(hb: SqliteSessionHeartbeatDoc): voi
     hb.adblockDetected ? 1 : 0
   );
 }
+
+// -------------------------------------------------------------
+// BACKUP MANUAL E CHECKPOINT DO BANCO SQLITE (maxtv.db)
+// -------------------------------------------------------------
+export function sqliteCheckpointAndGetDbPath(): string {
+  const db = getSqliteDb();
+  try {
+    // Força o checkpoint completo do WAL para garantir que todas as transações
+    // estejam gravadas diretamente dentro do arquivo principal 'maxtv.db'
+    db.exec('PRAGMA wal_checkpoint(FULL);');
+    console.log('[SQLite 3] Checkpoint WAL executado com sucesso antes do backup.');
+  } catch (e) {
+    console.warn('[SQLite 3] Aviso ao executar wal_checkpoint:', e);
+  }
+  return DB_FILE;
+}
+
+export function sqliteGetDatabaseStats() {
+  const db = getSqliteDb();
+  let dbSizeBytes = 0;
+  let walSizeBytes = 0;
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      dbSizeBytes = fs.statSync(DB_FILE).size;
+    }
+    const walFile = `${DB_FILE}-wal`;
+    if (fs.existsSync(walFile)) {
+      walSizeBytes = fs.statSync(walFile).size;
+    }
+  } catch (e) {}
+
+  const counts: Record<string, number> = {};
+  const tables = [
+    'channels',
+    'm3u_sources',
+    'm3u_logs',
+    'url_save_errors',
+    'users',
+    'subscribers',
+    'transactions',
+    'watch_progress',
+    'user_favorites'
+  ];
+  for (const t of tables) {
+    try {
+      const res = db.prepare(`SELECT COUNT(*) as c FROM ${t}`).get() as any;
+      counts[t] = res?.c || 0;
+    } catch {
+      counts[t] = 0;
+    }
+  }
+
+  return {
+    dbFile: DB_FILE,
+    dbSizeBytes,
+    dbSizeFormatted: `${(dbSizeBytes / (1024 * 1024)).toFixed(2)} MB`,
+    walSizeBytes,
+    walSizeFormatted: `${(walSizeBytes / (1024 * 1024)).toFixed(2)} MB`,
+    counts,
+    timestamp: new Date().toISOString()
+  };
+}
+
+// -------------------------------------------------------------
+// URL SAVE ERROR LOGS (DIAGNÓSTICO DE FALHAS E PERSISTÊNCIA)
+// -------------------------------------------------------------
+export function sqliteSaveUrlErrorLog(entry: SqliteUrlSaveErrorDoc): void {
+  const db = getSqliteDb();
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO url_save_errors (
+        id, timestamp, url, source_name, error_type, error_message, status_code, details_json
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `);
+
+    stmt.run(
+      entry.id,
+      entry.timestamp,
+      entry.url,
+      entry.sourceName || null,
+      entry.errorType,
+      entry.errorMessage,
+      entry.statusCode || null,
+      entry.details ? JSON.stringify(entry.details) : null
+    );
+
+    // Mantém os 250 erros mais recentes para não inflar o banco
+    db.exec(`
+      DELETE FROM url_save_errors WHERE id NOT IN (
+        SELECT id FROM url_save_errors ORDER BY timestamp DESC LIMIT 250
+      );
+    `);
+  } catch (err) {
+    console.error('[SQLite 3] Erro ao gravar log de falha de URL:', err);
+  }
+}
+
+export function sqliteGetUrlErrorLogs(limit = 100): SqliteUrlSaveErrorDoc[] {
+  const db = getSqliteDb();
+  try {
+    const rows = db.prepare('SELECT * FROM url_save_errors ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
+    return rows.map(r => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      url: r.url,
+      sourceName: r.source_name || undefined,
+      errorType: r.error_type,
+      errorMessage: r.error_message,
+      statusCode: r.status_code || undefined,
+      details: r.details_json ? JSON.parse(r.details_json) : undefined
+    }));
+  } catch (err) {
+    console.warn('[SQLite 3] Erro ao ler logs de erros de URL:', err);
+    return [];
+  }
+}
+
+export function sqliteClearUrlErrorLogs(): boolean {
+  const db = getSqliteDb();
+  try {
+    db.exec('DELETE FROM url_save_errors;');
+    return true;
+  } catch (err) {
+    console.error('[SQLite 3] Erro ao limpar logs de erros de URL:', err);
+    return false;
+  }
+}
+

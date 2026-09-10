@@ -1,13 +1,167 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats } from '../types';
+
+const ONE_HOUR_MS = 60 * 60 * 1000; // 1 hour TTL
+const CHANNELS_CACHE_KEY = 'maxtv_cache_channels';
+const VOD_CACHE_KEY = 'maxtv_cache_vod_catalog';
+
+export const getCachedChannels = (): Channel[] | null => {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(CHANNELS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.data?.channels) && parsed.data.channels.length > 0) {
+      return parsed.data.channels;
+    }
+  } catch {}
+  return null;
+};
+
+export const getCachedVodCatalog = (): any[] | null => {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(VOD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.data?.items) && parsed.data.items.length > 0) {
+      return parsed.data.items;
+    }
+  } catch {}
+  return null;
+};
+
+export const getAdminToken = (): string => {
+  try {
+    return (
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('maxtv_admin_token')) ||
+      (typeof localStorage !== 'undefined' && (localStorage.getItem('maxtv_admin_token') || localStorage.getItem('maxtv_token'))) ||
+      ''
+    );
+  } catch {
+    return '';
+  }
+};
+
+export const setAdminToken = (token: string): void => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('maxtv_admin_token', token);
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('maxtv_admin_token', token);
+    }
+  } catch {}
+};
+
+export const clearAdminToken = (): void => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('maxtv_admin_token');
+      sessionStorage.removeItem('maxtv_admin_verified');
+      sessionStorage.removeItem('maxtv_admin_user');
+    }
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('maxtv_admin_token');
+    }
+  } catch {}
+};
+
+export const getAdminHeaders = (extraHeaders: Record<string, string> = {}): Record<string, string> => {
+  const token = getAdminToken();
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['x-admin-token'] = token;
+  }
+  return headers;
+};
+
+export async function adminFetch(url: string, init?: RequestInit): Promise<Response> {
+  const headers = getAdminHeaders((init?.headers as Record<string, string>) || {});
+  const res = await fetch(url, {
+    ...init,
+    headers
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('maxtv_admin_unauthorized', {
+        detail: { status: res.status, url }
+      }));
+    }
+  }
+
+  return res;
+}
 
 export const api = {
-  // Channels
-  async getChannels(): Promise<{ channels: Channel[]; count: number }> {
+  // Channels with localStorage cache & 1-hour background revalidation
+  async getChannels(options: { forceRefresh?: boolean } = {}): Promise<{ channels: Channel[]; count: number }> {
+    const now = Date.now();
+    let cachedEntry: { data: { channels: Channel[]; count: number }; timestamp: number } | null = null;
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(CHANNELS_CACHE_KEY);
+        if (raw) {
+          cachedEntry = JSON.parse(raw);
+        }
+      }
+    } catch {}
+
+    const isCacheValid = cachedEntry && Array.isArray(cachedEntry.data?.channels) && cachedEntry.data.channels.length > 0;
+    const isCacheFresh = isCacheValid && (now - cachedEntry!.timestamp < ONE_HOUR_MS);
+
+    // If cache is fresh and not forced, return immediately
+    if (isCacheFresh && !options.forceRefresh) {
+      return cachedEntry!.data;
+    }
+
+    // Background revalidator helper
+    const revalidateInBackground = () => {
+      fetch('/api/channels')
+        .then(res => {
+          if (!res.ok) throw new Error('Status ' + res.status);
+          return res.json();
+        })
+        .then(freshData => {
+          if (freshData?.channels && Array.isArray(freshData.channels) && freshData.channels.length > 0) {
+            try {
+              localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify({
+                data: freshData,
+                timestamp: Date.now()
+              }));
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', { detail: freshData }));
+            }
+          }
+        })
+        .catch(() => {});
+    };
+
+    // If we have cached channels (even if older than 1 hour), return them instantly to avoid UI delay and revalidate in background!
+    if (isCacheValid && !options.forceRefresh) {
+      revalidateInBackground();
+      return cachedEntry!.data;
+    }
+
+    // No cache or forceRefresh requested: fetch synchronously
     try {
       const res = await fetch('/api/channels');
       if (!res.ok) throw new Error('Falha ao carregar canais');
-      return await res.json();
+      const freshData = await res.json();
+      if (freshData?.channels && Array.isArray(freshData.channels) && freshData.channels.length > 0) {
+        try {
+          localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify({
+            data: freshData,
+            timestamp: Date.now()
+          }));
+        } catch {}
+      }
+      return freshData;
     } catch {
+      if (isCacheValid) return cachedEntry!.data;
       return { channels: [], count: 0 };
     }
   },
@@ -51,19 +205,19 @@ export const api = {
 
   // Admin
   async getAdminMetrics(): Promise<{ success: boolean; metrics: AdminMetrics }> {
-    const res = await fetch('/api/admin/metrics');
+    const res = await adminFetch('/api/admin/metrics');
     if (!res.ok) throw new Error('Falha ao obter métricas');
     return await res.json();
   },
 
   async getSubscribers(): Promise<{ success: boolean; subscribers: Subscriber[] }> {
-    const res = await fetch('/api/admin/subscribers');
+    const res = await adminFetch('/api/admin/subscribers');
     if (!res.ok) throw new Error('Falha ao listar assinantes');
     return await res.json();
   },
 
   async addSubscriber(data: Partial<Subscriber> & { days?: number }): Promise<{ success: boolean; subscriber: Subscriber }> {
-    const res = await fetch('/api/admin/subscribers', {
+    const res = await adminFetch('/api/admin/subscribers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -73,7 +227,7 @@ export const api = {
   },
 
   async updateSubscriber(id: string, data: { status?: string; addDays?: number; planName?: string }): Promise<{ success: boolean; subscriber: Subscriber }> {
-    const res = await fetch(`/api/admin/subscribers/${id}`, {
+    const res = await adminFetch(`/api/admin/subscribers/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -83,7 +237,7 @@ export const api = {
   },
 
   async deleteSubscriber(id: string): Promise<{ success: boolean }> {
-    const res = await fetch(`/api/admin/subscribers/${id}`, { method: 'DELETE' });
+    const res = await adminFetch(`/api/admin/subscribers/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Falha ao excluir assinante');
     return await res.json();
   },
@@ -98,7 +252,7 @@ export const api = {
     reason?: string;
     planName?: string;
   }): Promise<{ success: boolean; message: string; subscriber: Subscriber; grant: any }> {
-    const res = await fetch('/api/admin/subscribers/grant-months', {
+    const res = await adminFetch('/api/admin/subscribers/grant-months', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -108,7 +262,7 @@ export const api = {
   },
 
   async quickAddMonth(subscriberId: string): Promise<{ success: boolean; message: string; subscriber: Subscriber; grant: any }> {
-    const res = await fetch(`/api/admin/subscribers/${subscriberId}/quick-add-month`, {
+    const res = await adminFetch(`/api/admin/subscribers/${subscriberId}/quick-add-month`, {
       method: 'POST',
     });
     if (!res.ok) throw new Error('Falha ao liberar +1 mês');
@@ -116,25 +270,25 @@ export const api = {
   },
 
   async getGrantsHistory(): Promise<{ success: boolean; count: number; grants: any[] }> {
-    const res = await fetch('/api/admin/grants');
+    const res = await adminFetch('/api/admin/grants');
     if (!res.ok) throw new Error('Falha ao obter histórico de concessões');
     return await res.json();
   },
 
   async getTransactions(): Promise<{ success: boolean; transactions: PixTransaction[] }> {
-    const res = await fetch('/api/admin/transactions');
+    const res = await adminFetch('/api/admin/transactions');
     if (!res.ok) throw new Error('Falha ao listar transações');
     return await res.json();
   },
 
   async approveTransaction(id: string): Promise<{ success: boolean; transaction: PixTransaction }> {
-    const res = await fetch(`/api/admin/transactions/${id}/approve`, { method: 'POST' });
+    const res = await adminFetch(`/api/admin/transactions/${id}/approve`, { method: 'POST' });
     if (!res.ok) throw new Error('Falha ao aprovar transação');
     return await res.json();
   },
 
   async addCustomChannel(data: { name: string; category: string; logo: string; streamUrl: string; referer?: string; isVipOnly?: boolean }): Promise<{ success: boolean; channel: Channel }> {
-    const res = await fetch('/api/admin/channels', {
+    const res = await adminFetch('/api/admin/channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -144,7 +298,7 @@ export const api = {
   },
 
   async updateChannel(id: string, data: { name?: string; category?: string; logo?: string; streamUrl?: string; referer?: string; isVipOnly?: boolean }): Promise<{ success: boolean; channel: Channel; message?: string }> {
-    const res = await fetch(`/api/admin/channels/${id}`, {
+    const res = await adminFetch(`/api/admin/channels/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -154,7 +308,7 @@ export const api = {
   },
 
   async deleteChannel(id: string): Promise<{ success: boolean }> {
-    const res = await fetch(`/api/admin/channels/${id}`, { method: 'DELETE' });
+    const res = await adminFetch(`/api/admin/channels/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Falha ao remover canal');
     return await res.json();
   },
@@ -201,13 +355,13 @@ export const api = {
   },
 
   async syncRamysChannels(): Promise<{ success: boolean; channelsCount: number; vodCount: number; message: string }> {
-    const res = await fetch('/api/admin/channels/sync-ramys', { method: 'POST' });
+    const res = await adminFetch('/api/admin/channels/sync-ramys', { method: 'POST' });
     if (!res.ok) throw new Error('Falha ao sincronizar com Ramys/Iptv-Brasil-2026');
     return await res.json();
   },
 
   async syncSaimoChannels(): Promise<{ success: boolean; count: number; message: string }> {
-    const res = await fetch('/api/admin/channels/sync-saimo', { method: 'POST' });
+    const res = await adminFetch('/api/admin/channels/sync-saimo', { method: 'POST' });
     if (!res.ok) throw new Error('Falha ao sincronizar com Saimo-TV');
     return await res.json();
   },
@@ -215,7 +369,7 @@ export const api = {
   // Channels Configuration File (JSON Editor & Validation)
   async getChannelsConfig(): Promise<ChannelsConfigResponse> {
     try {
-      const res = await fetch('/api/admin/channels/config');
+      const res = await adminFetch('/api/admin/channels/config');
       if (!res.ok) throw new Error('Falha ao carregar arquivo de configuração de canais');
       return await res.json();
     } catch (err: any) {
@@ -231,7 +385,7 @@ export const api = {
     warnings?: string[];
     errors?: string[];
   }> {
-    const res = await fetch('/api/admin/channels/config/validate', {
+    const res = await adminFetch('/api/admin/channels/config/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -248,7 +402,7 @@ export const api = {
     config?: ChannelsConfigFile;
     rawJson?: string;
   }> {
-    const res = await fetch('/api/admin/channels/config', {
+    const res = await adminFetch('/api/admin/channels/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -268,7 +422,7 @@ export const api = {
     total: number;
   }> {
     try {
-      const res = await fetch('/api/admin/channels/history');
+      const res = await adminFetch('/api/admin/channels/history');
       if (!res.ok) throw new Error('Falha ao obter histórico de atualizações');
       return await res.json();
     } catch {
@@ -282,41 +436,105 @@ export const api = {
     history: ChannelUpdateHistoryEntry[];
     lastUpdate?: ChannelUpdateHistoryEntry;
   }> {
-    const res = await fetch('/api/admin/channels/history/clear', { method: 'POST' });
+    const res = await adminFetch('/api/admin/channels/history/clear', { method: 'POST' });
     if (!res.ok) throw new Error('Falha ao limpar histórico');
     return await res.json();
   },
 
   async syncVodM3U(options?: { m3uUrl?: string; source?: 'both' | 'ramys' | 'saimo' } | string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
     const payload = typeof options === 'string' ? { m3uUrl: options } : options || {};
-    const res = await fetch('/api/admin/vod/sync-m3u', {
+    const res = await adminFetch('/api/admin/vod/sync-m3u', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error('Falha ao sincronizar catálogo VOD M3U');
-    return await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error('Falha na resposta do servidor durante sincronização do catálogo VOD.');
+    }
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || data?.message || 'Falha ao sincronizar catálogo VOD M3U/M3U8');
+    }
+    return data;
   },
 
-  async getVodCatalog(): Promise<{ success: boolean; count: number; items: any[] }> {
+  async getVodCatalog(options: { forceRefresh?: boolean } = {}): Promise<{ success: boolean; count: number; items: any[] }> {
+    const now = Date.now();
+    let cachedEntry: { data: { success: boolean; count: number; items: any[] }; timestamp: number } | null = null;
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(VOD_CACHE_KEY);
+        if (raw) {
+          cachedEntry = JSON.parse(raw);
+        }
+      }
+    } catch {}
+
+    const isCacheValid = cachedEntry && Array.isArray(cachedEntry.data?.items) && cachedEntry.data.items.length > 0;
+    const isCacheFresh = isCacheValid && (now - cachedEntry!.timestamp < ONE_HOUR_MS);
+
+    if (isCacheFresh && !options.forceRefresh) {
+      return cachedEntry!.data;
+    }
+
+    const revalidateInBackground = () => {
+      fetch('/api/vod')
+        .then(res => {
+          if (!res.ok) throw new Error('Status ' + res.status);
+          return res.json();
+        })
+        .then(freshData => {
+          if (freshData?.items && Array.isArray(freshData.items) && freshData.items.length > 0) {
+            try {
+              localStorage.setItem(VOD_CACHE_KEY, JSON.stringify({
+                data: freshData,
+                timestamp: Date.now()
+              }));
+            } catch {}
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('maxtv_vod_revalidated', { detail: freshData }));
+            }
+          }
+        })
+        .catch(() => {});
+    };
+
+    if (isCacheValid && !options.forceRefresh) {
+      revalidateInBackground();
+      return cachedEntry!.data;
+    }
+
     try {
       const res = await fetch('/api/vod');
       if (!res.ok) throw new Error('Falha ao obter catálogo VOD');
-      return await res.json();
+      const freshData = await res.json();
+      if (freshData?.items && Array.isArray(freshData.items) && freshData.items.length > 0) {
+        try {
+          localStorage.setItem(VOD_CACHE_KEY, JSON.stringify({
+            data: freshData,
+            timestamp: Date.now()
+          }));
+        } catch {}
+      }
+      return freshData;
     } catch {
+      if (isCacheValid) return cachedEntry!.data;
       return { success: false, count: 0, items: [] };
     }
   },
 
   // Repository Links & M3U8 Unification (IPTV Brasil 2026)
   async getRepoLinksInfo(): Promise<{ success: boolean } & RepoLinksInfo> {
-    const res = await fetch('/api/admin/repo-links/info');
+    const res = await adminFetch('/api/admin/repo-links/info');
     if (!res.ok) throw new Error('Falha ao obter dados do repositório IPTV Brasil 2026');
     return await res.json();
   },
 
   async getUnifyStats(): Promise<{ success: boolean } & UnifyGradeStats> {
-    const res = await fetch('/api/admin/channels/unify-stats');
+    const res = await adminFetch('/api/admin/channels/unify-stats');
     if (!res.ok) throw new Error('Falha ao obter estatísticas da grade unificada');
     return await res.json();
   },
@@ -330,7 +548,7 @@ export const api = {
     totalSourcesCount: number;
     durationMs?: number;
   }> {
-    const res = await fetch('/api/admin/channels/unify-now', {
+    const res = await adminFetch('/api/admin/channels/unify-now', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author })
@@ -357,7 +575,7 @@ export const api = {
     totalSourcesCount: number;
     durationMs?: number;
   }> {
-    const res = await fetch('/api/admin/channels/import-m3u-url', {
+    const res = await adminFetch('/api/admin/channels/import-m3u-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -384,7 +602,7 @@ export const api = {
     totalSourcesCount: number;
     durationMs?: number;
   }> {
-    const res = await fetch('/api/admin/channels/import-m3u-content', {
+    const res = await adminFetch('/api/admin/channels/import-m3u-content', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -405,7 +623,7 @@ export const api = {
     durationMs?: number;
     lastUpdate?: ChannelUpdateHistoryEntry;
   }> {
-    const res = await fetch('/api/admin/repo-links/sync', {
+    const res = await adminFetch('/api/admin/repo-links/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -426,7 +644,7 @@ export const api = {
     message?: string;
     error?: string;
   }> {
-    const res = await fetch('/api/admin/repo-links/test-host', {
+    const res = await adminFetch('/api/admin/repo-links/test-host', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ host })
@@ -436,26 +654,26 @@ export const api = {
 
   // M3U Import Logs & Transparency
   async getM3uImportLogs(): Promise<{ success: boolean; logs: M3uImportLogEntry[]; count: number }> {
-    const res = await fetch('/api/admin/channels/import-logs');
+    const res = await adminFetch('/api/admin/channels/import-logs');
     if (!res.ok) throw new Error('Falha ao obter logs de importação');
     return await res.json();
   },
 
   async clearM3uImportLogs(): Promise<{ success: boolean; message: string }> {
-    const res = await fetch('/api/admin/channels/import-logs', { method: 'DELETE' });
+    const res = await adminFetch('/api/admin/channels/import-logs', { method: 'DELETE' });
     if (!res.ok) throw new Error('Falha ao limpar histórico de importações');
     return await res.json();
   },
 
   // M3U Auto-Update Scheduler
   async getM3uAutoUpdateConfig(): Promise<{ success: boolean; config: M3uAutoUpdateConfig }> {
-    const res = await fetch('/api/admin/channels/auto-update-config');
+    const res = await adminFetch('/api/admin/channels/auto-update-config');
     if (!res.ok) throw new Error('Falha ao obter configurações de auto-atualização');
     return await res.json();
   },
 
   async saveM3uAutoUpdateConfig(payload: Partial<M3uAutoUpdateConfig>): Promise<{ success: boolean; config: M3uAutoUpdateConfig; message: string }> {
-    const res = await fetch('/api/admin/channels/auto-update-config', {
+    const res = await adminFetch('/api/admin/channels/auto-update-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -467,46 +685,120 @@ export const api = {
     return data;
   },
 
-  async saveM3uSource(payload: { name?: string; url: string; enabled?: boolean }): Promise<{
+  async saveM3uSource(payload: { name?: string; url: string; enabled?: boolean; skipValidation?: boolean }): Promise<{
     success: boolean;
     source: any;
     sources: any[];
     config?: M3uAutoUpdateConfig;
     message: string;
+    validationFailed?: boolean;
+    validation?: any;
+    log?: any;
   }> {
-    const res = await fetch('/api/admin/channels/sources', {
+    const res = await adminFetch('/api/admin/channels/sources', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao salvar fonte M3U');
+      const err = new Error(data.error || 'Falha ao salvar fonte M3U');
+      (err as any).data = data;
+      throw err;
     }
     return data;
   },
 
+  // SQLite Database Backup & Diagnostics
+  async downloadDatabaseBackup(): Promise<Blob> {
+    const res = await adminFetch('/api/admin/database/backup');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha ao baixar cópia do banco SQLite' }));
+      throw new Error(err.error || 'Falha ao baixar cópia do banco SQLite');
+    }
+    return await res.blob();
+  },
+
+  getDatabaseBackupDownloadUrl(): string {
+    const token = getAdminToken();
+    return `/api/admin/database/backup${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  },
+
+  async getDatabaseStats(): Promise<{ success: boolean; stats: DatabaseStats }> {
+    const res = await adminFetch('/api/admin/database/stats');
+    if (!res.ok) throw new Error('Falha ao obter estatísticas do banco de dados');
+    return await res.json();
+  },
+
+  async testDatabaseWrite(): Promise<{ success: boolean; message: string; latencyMs: number; stats: DatabaseStats }> {
+    const res = await adminFetch('/api/admin/database/test-write', { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha no teste de escrita' }));
+      throw new Error(err.error || 'Falha no teste de escrita');
+    }
+    return await res.json();
+  },
+
+  // Logs de Erros em Requisições de URLs e Persistência SQLite
+  async getUrlErrorLogs(limit: number = 100): Promise<{ success: boolean; count: number; logs: UrlSaveErrorEntry[] }> {
+    const res = await adminFetch(`/api/admin/logs/url-errors?limit=${limit}`);
+    if (!res.ok) throw new Error('Falha ao carregar logs de erros de URLs');
+    return await res.json();
+  },
+
+  async clearUrlErrorLogs(): Promise<{ success: boolean; message: string }> {
+    const res = await adminFetch('/api/admin/logs/url-errors', { method: 'DELETE' });
+    if (!res.ok) throw new Error('Falha ao limpar logs de erros de URLs');
+    return await res.json();
+  },
+
+  // Validação Live de URL M3U no Servidor
+  async validateM3uUrl(url: string): Promise<{
+    success: boolean;
+    valid: boolean;
+    error?: string;
+    errorType?: string;
+    statusCode?: number;
+    latencyMs?: number;
+    channelsCount?: number;
+    contentType?: string;
+    sampleChannels?: string[];
+    details?: any;
+  }> {
+    const res = await adminFetch('/api/admin/channels/validate-m3u-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    return await res.json();
+  },
+
   async runM3uAutoUpdateNow(author?: string): Promise<{ success: boolean; message: string; stats?: any }> {
-    const res = await fetch('/api/admin/channels/run-auto-update', {
+    const res = await adminFetch('/api/admin/channels/run-auto-update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author })
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao executar ciclo de atualização');
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error('Falha na resposta do servidor durante auto-atualização periódica.');
+    }
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || data?.message || 'Falha ao executar ciclo de atualização');
     }
     return data;
   },
 
   async getSettings(): Promise<{ success: boolean; settings: SystemSettings }> {
-    const res = await fetch('/api/admin/settings');
+    const res = await adminFetch('/api/admin/settings');
     if (!res.ok) throw new Error('Falha ao carregar configurações');
     return await res.json();
   },
 
   async updateSettings(settings: Partial<SystemSettings>): Promise<{ success: boolean; settings: SystemSettings }> {
-    const res = await fetch('/api/admin/settings', {
+    const res = await adminFetch('/api/admin/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
@@ -518,7 +810,7 @@ export const api = {
   // --- Channel Health Check API ---
   async getChannelHealthStatus(): Promise<{ success: boolean; summary: ChannelHealthSummary; results: ChannelHealthResult[] }> {
     try {
-      const res = await fetch('/api/admin/channels/health-status');
+      const res = await adminFetch('/api/admin/channels/health-status');
       if (!res.ok) throw new Error('Falha ao obter status de saúde dos canais');
       return await res.json();
     } catch {
@@ -537,7 +829,7 @@ export const api = {
     channelName?: string;
     category?: string;
   }): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
-    const res = await fetch('/api/admin/channels/check-single', {
+    const res = await adminFetch('/api/admin/channels/check-single', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -546,11 +838,18 @@ export const api = {
     return await res.json();
   },
 
-  async checkChannelHealth(channelId: string, sourceIndex?: number): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
-    const res = await fetch(`/api/admin/channels/check-channel/${channelId}`, {
+  async checkChannelHealth(
+    channelId: string, 
+    sourceIndex?: number, 
+    extraData?: { url?: string; referer?: string; channelName?: string; category?: string; sources?: any[] }
+  ): Promise<{ success: boolean; result: ChannelHealthResult; summary?: ChannelHealthSummary }> {
+    const res = await adminFetch(`/api/admin/channels/check-channel/${channelId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sourceIndex: sourceIndex ?? 0 })
+      body: JSON.stringify({
+        sourceIndex: sourceIndex ?? 0,
+        ...extraData
+      })
     });
     if (!res.ok) throw new Error('Falha ao verificar canal');
     return await res.json();
@@ -558,11 +857,12 @@ export const api = {
 
   async checkBatchChannels(payload: {
     channelIds?: string[];
+    channels?: any[];
     limit?: number;
     offset?: number;
     category?: string;
   }): Promise<{ success: boolean; testedCount: number; results: ChannelHealthResult[]; summary: ChannelHealthSummary }> {
-    const res = await fetch('/api/admin/channels/check-batch', {
+    const res = await adminFetch('/api/admin/channels/check-batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -572,7 +872,7 @@ export const api = {
   },
 
   async toggleChannelActive(channelId: string): Promise<{ success: boolean; channelId: string; isActive: boolean; message: string }> {
-    const res = await fetch(`/api/admin/channels/${channelId}/toggle-active`, {
+    const res = await adminFetch(`/api/admin/channels/${channelId}/toggle-active`, {
       method: 'PATCH'
     });
     if (!res.ok) throw new Error('Falha ao alternar status do canal');
@@ -580,7 +880,7 @@ export const api = {
   },
 
   async disableOfflineChannels(): Promise<{ success: boolean; disabledCount: number; message: string }> {
-    const res = await fetch('/api/admin/channels/disable-offline', {
+    const res = await adminFetch('/api/admin/channels/disable-offline', {
       method: 'POST'
     });
     if (!res.ok) throw new Error('Falha ao desativar canais offline');
@@ -588,7 +888,7 @@ export const api = {
   },
 
   async enableAllChannels(): Promise<{ success: boolean; totalEnabled: number; message: string }> {
-    const res = await fetch('/api/admin/channels/enable-all', {
+    const res = await adminFetch('/api/admin/channels/enable-all', {
       method: 'POST'
     });
     if (!res.ok) throw new Error('Falha ao reativar todos os canais');
@@ -622,7 +922,7 @@ export const api = {
     return await res.json();
   },
 
-  async adminVerify(data: { pin?: string; email?: string; password?: string }): Promise<{ success: boolean; user: any; token: string; message?: string }> {
+  async adminVerify(data: { pin?: string; email?: string; password?: string }): Promise<{ success: boolean; user: any; token: string; expiresAt?: number; message?: string }> {
     const res = await fetch('/api/auth/admin-verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -630,9 +930,62 @@ export const api = {
     });
     const result = await res.json();
     if (!res.ok || !result.success) {
+      clearAdminToken();
       throw new Error(result.error || result.message || 'Falha na autenticação de administrador');
     }
+    if (result.token) {
+      setAdminToken(result.token);
+    }
     return result;
+  },
+
+  // Robust Admin Session Verification
+  async verifyAdminSession(token?: string): Promise<{ success: boolean; valid: boolean; user?: any; expiresAt?: number; error?: string }> {
+    try {
+      const activeToken = token || getAdminToken();
+      if (!activeToken) {
+        return { success: false, valid: false, error: 'Nenhum token de administrador encontrado.' };
+      }
+      const res = await fetch('/api/auth/verify-admin-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${activeToken}`,
+          'x-admin-token': activeToken
+        },
+        body: JSON.stringify({ token: activeToken })
+      });
+      const data = await res.json();
+      if (res.ok && data.valid && data.user?.role === 'admin') {
+        if (data.token) {
+          setAdminToken(data.token);
+        }
+        return { success: true, valid: true, user: data.user, expiresAt: data.expiresAt };
+      }
+      clearAdminToken();
+      return { success: false, valid: false, error: data.error || 'Sessão de administrador inválida ou não autorizada.' };
+    } catch (err: any) {
+      return { success: false, valid: false, error: err.message || 'Erro de conexão ao verificar sessão.' };
+    }
+  },
+
+  // Admin Logout
+  async adminLogout(token?: string): Promise<void> {
+    try {
+      const activeToken = token || getAdminToken();
+      if (activeToken) {
+        await fetch('/api/auth/admin-logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${activeToken}`,
+            'x-admin-token': activeToken
+          },
+          body: JSON.stringify({ token: activeToken })
+        });
+      }
+    } catch {}
+    clearAdminToken();
   },
 
   async getMe(token?: string, email?: string): Promise<{ success: boolean; user: any }> {

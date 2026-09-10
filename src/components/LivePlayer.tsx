@@ -14,6 +14,8 @@ import {
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { api } from '../services/api';
 import { checkStreamAvailability, reportChannelProblem } from '../utils/streamChecker';
+import { calculateDynamicBufferProfile, applyDynamicBufferToHls, getBrowserNetworkMetrics, getBufferedAheadSeconds, DynamicBufferConfig } from '../utils/smartBufferManager';
+import { isBrazilHostedUrl } from '../utils/sourcePrioritizer';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
 import { watchProgressStorage } from '../services/watchProgressStorage';
 import { ChannelTroubleshootModal } from './ChannelTroubleshootModal';
@@ -122,6 +124,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [showControls, setShowControls] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [splashAction, setSplashAction] = useState<'play' | 'pause' | 'rewind' | 'forward' | null>(null);
+
+  // Buffer Adaptativo & Failover Automático
+  const failedSourcesSetRef = useRef<Set<number>>(new Set());
+  const recentStallsRef = useRef<number>(0);
+  const lastFragSpeedMbpsRef = useRef<number | undefined>(undefined);
+  const [activeBufferProfileLabel, setActiveBufferProfileLabel] = useState<string>('Buffer Turbo BR Adaptativo');
 
   // Favorites & Watch Progress states
   const [isFav, setIsFav] = useState<boolean>(() => favoritesStorage.isFavorite(item.id, currentUser?.email));
@@ -313,19 +321,33 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasAutoTriggeredRef = useRef<boolean>(false);
 
-  // Build unified sources list with protocol metadata
-  const sources: { name: string; url: string; referer?: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4' }[] = React.useMemo(() => {
+  // Build unified sources list with protocol metadata e priorização de CDN Brasil com menor latência
+  const sources: { name: string; url: string; referer?: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4'; isBrazilCdn?: boolean }[] = React.useMemo(() => {
     if (type === 'channel') {
-      return (item as Channel).sources.map((s, idx) => {
+      const list = (item as Channel).sources.map((s, idx) => {
         const isDashUrl = s.url.includes('.mpd');
+        const isBr = isBrazilHostedUrl(s.url);
         return {
-          name: `Servidor ${idx + 1} (${isDashUrl ? 'DASH' : 'HLS'} ${s.quality || '1080p'})`,
+          name: isBr
+            ? `Servidor ${idx + 1} (CDN Brasil • Baixa Latência)`
+            : `Servidor ${idx + 1} (${isDashUrl ? 'DASH' : 'HLS'} ${s.quality || '1080p'})`,
           url: s.url,
           referer: s.referer,
           quality: s.quality || '1080p',
-          protocol: isDashUrl ? 'dash' : 'hls'
+          protocol: (isDashUrl ? 'dash' : 'hls') as 'dash' | 'hls',
+          isBrazilCdn: isBr
         };
       });
+
+      // Priorização de fontes: servidores com CDN brasileira no topo
+      if (list.length > 1) {
+        return [...list].sort((a, b) => {
+          if (a.isBrazilCdn && !b.isBrazilCdn) return -1;
+          if (!a.isBrazilCdn && b.isBrazilCdn) return 1;
+          return 0;
+        });
+      }
+      return list;
     }
 
     const vod = item as VodItem;
@@ -333,11 +355,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       return vod.sources.map(s => {
         const isDashUrl = s.url.includes('.mpd');
         const isHlsUrl = s.url.includes('.m3u8');
+        const isBr = isBrazilHostedUrl(s.url);
         return {
-          name: s.name,
+          name: isBr ? `${s.name} (CDN Brasil)` : s.name,
           url: s.url,
           quality: s.quality || '1080p',
-          protocol: isDashUrl ? 'dash' : (isHlsUrl ? 'hls' : 'mp4')
+          protocol: isDashUrl ? 'dash' : (isHlsUrl ? 'hls' : 'mp4'),
+          isBrazilCdn: isBr
         };
       });
     }
@@ -346,12 +370,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       ? currentEpisode.streamUrl
       : vod.streamUrl;
 
-    const list: { name: string; url: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4' }[] = [
+    const list: { name: string; url: string; quality?: string; protocol?: 'hls' | 'dash' | 'mp4'; isBrazilCdn?: boolean }[] = [
       { 
         name: 'Servidor 1 - Alta Velocidade (CDN)', 
         url: effectiveStreamUrl, 
         quality: '1080p', 
-        protocol: effectiveStreamUrl.includes('.mpd') ? 'dash' : (effectiveStreamUrl.includes('.m3u8') ? 'hls' : 'mp4') 
+        protocol: effectiveStreamUrl.includes('.mpd') ? 'dash' : (effectiveStreamUrl.includes('.m3u8') ? 'hls' : 'mp4'),
+        isBrazilCdn: isBrazilHostedUrl(effectiveStreamUrl)
       }
     ];
     if (vod.backupStreamUrl) {
@@ -359,7 +384,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         name: 'Servidor 2 - Backup Alternativo', 
         url: vod.backupStreamUrl, 
         quality: '1080p', 
-        protocol: vod.backupStreamUrl.includes('.mpd') ? 'dash' : (vod.backupStreamUrl.includes('.m3u8') ? 'hls' : 'mp4') 
+        protocol: vod.backupStreamUrl.includes('.mpd') ? 'dash' : (vod.backupStreamUrl.includes('.m3u8') ? 'hls' : 'mp4'),
+        isBrazilCdn: isBrazilHostedUrl(vod.backupStreamUrl)
       });
     }
     return list;
@@ -425,6 +451,53 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       setToastMessage(null);
     }, 2400);
   }, []);
+
+  // Mecanismo de failover automático para players: detecta falhas e alterna entre múltiplas fontes
+  const triggerAutomaticFailover = useCallback((reason: string): boolean => {
+    failedSourcesSetRef.current.add(currentSourceIndex);
+
+    // Identifica se há outra fonte configurada que ainda não falhou
+    let nextIndex = -1;
+    for (let i = 0; i < sources.length; i++) {
+      if (!failedSourcesSetRef.current.has(i)) {
+        nextIndex = i;
+        break;
+      }
+    }
+
+    if (nextIndex !== -1 && nextIndex !== currentSourceIndex) {
+      const nextSource = sources[nextIndex];
+      const nextName = nextSource?.name || `Servidor ${nextIndex + 1}`;
+      showToast(`Instabilidade detectada (${reason}). Alternando automaticamente para ${nextName}...`);
+      
+      setIsLoading(true);
+      setHasError(false);
+      setIsTimedOut(false);
+      setIsConnectionUnstable(false);
+      setStreamWarning(`Alternando para fonte resiliente: ${nextName}`);
+      autoRetryCountRef.current = 0;
+      setCurrentSourceIndex(nextIndex);
+      setReloadCounter(c => c + 1);
+      return true;
+    }
+
+    // Se todas as fontes falharam, mas ainda não testou o Proxy Acelerado Brasil
+    if (!usingProxy) {
+      showToast('Sinal instável em rotas diretas. Ativando Proxy Acelerador Brasil...');
+      setForceProxy(true);
+      failedSourcesSetRef.current.clear();
+      setCurrentSourceIndex(0);
+      setIsLoading(true);
+      setHasError(false);
+      setIsTimedOut(false);
+      setIsConnectionUnstable(false);
+      autoRetryCountRef.current = 0;
+      setReloadCounter(c => c + 1);
+      return true;
+    }
+
+    return false;
+  }, [sources, currentSourceIndex, usingProxy, showToast]);
 
   // Interrompe o vídeo, limpa cache/buffers do player e exibe o modal de assinatura ou login
   const terminatePlayerAndClearCache = useCallback(() => {
@@ -939,52 +1012,22 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
 
     const loadStream = async () => {
-      const isMp4 = type === 'vod' || rawUrl.includes('.mp4') || streamUrl.includes('.mp4') || rawUrl.includes('.webm') || (!rawUrl.includes('.m3u8') && !rawUrl.includes('.mpd'));
-      const isDash = !isMp4 && (compatibilityProtocol === 'dash' || streamUrl.includes('.mpd') || rawUrl.includes('.mpd'));
-      const isHls = !isMp4 && !isDash && (streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8') || (type === 'channel' && compatibilityProtocol === 'hls'));
+      const hasHlsExt = streamUrl.includes('.m3u8') || rawUrl.includes('.m3u8') || streamUrl.includes('.m3u') || rawUrl.includes('.m3u');
+      const hasDashExt = streamUrl.includes('.mpd') || rawUrl.includes('.mpd');
+      const hasMp4Ext = rawUrl.includes('.mp4') || streamUrl.includes('.mp4') || rawUrl.includes('.webm') || streamUrl.includes('.mkv');
+
+      const isDash = compatibilityProtocol === 'dash' || (!hasHlsExt && hasDashExt);
+      const isHls = !isDash && (compatibilityProtocol === 'hls' || hasHlsExt || (!hasMp4Ext && type === 'channel'));
+      const isMp4 = !isDash && !isHls && (hasMp4Ext || type === 'vod');
       const isTs = !isMp4 && !isDash && !isHls && (streamUrl.includes('.ts') || rawUrl.includes('.ts'));
 
-      // 1. Valida o status HTTP do stream usando fetch com método HEAD apenas para canais de TV ao vivo
-      if (!isMp4) {
-        const health = await checkChannelHealth(rawUrl);
-
-        if (isCancelled) return;
-
-        // Se identificar link morto instantaneamente
-        if (health.isDead) {
-          // Se ainda não esgotou as 3 tentativas automáticas
-          if (autoRetryCountRef.current < 3) {
-            const nextAttempt = autoRetryCountRef.current + 1;
-            autoRetryCountRef.current = nextAttempt;
-            setAutoRetryCount(nextAttempt);
-            connectionAttemptsRef.current += 1;
-            setConnectionAttempts(connectionAttemptsRef.current);
+      // 1. Diagnóstico não-bloqueante de latência em segundo plano (início instantâneo na TV Box e sem falsos positivos)
+      if (!isMp4 && rawUrl) {
+        checkChannelHealth(rawUrl).then(health => {
+          if (!isCancelled && health.isUnstable) {
             setIsConnectionUnstable(true);
-            setIsLoading(true);
-            setStreamWarning(`Link inativo identificado (HTTP HEAD). Tentando reconexão automática (${nextAttempt}/3)...`);
-
-            if (!usingProxy && nextAttempt === 2) {
-              setForceProxy(true);
-            }
-
-            setTimeout(() => {
-              if (!isCancelled) {
-                setReloadCounter(c => c + 1);
-              }
-            }, 600);
-            return;
-          } else {
-            // Esgotou as 3 tentativas automáticas iniciais - inicia backoff exponencial
-            setIsLoading(false);
-            setIsPlaying(false);
-            setHasError(true);
-            setIsTimedOut(true);
-            setIsConnectionUnstable(true);
-            setErrorMessage(`Link morto identificado instantaneamente via HTTP HEAD (${health.statusCode ? `Código HTTP ${health.statusCode}` : 'Servidor Inacessível'}) após 3 tentativas.`);
-            startExponentialBackoff();
-            return;
           }
-        }
+        }).catch(() => {});
       }
 
       // Timeout assíncrono (15s para VOD/filmes, 10s para canais ao vivo)
@@ -1016,7 +1059,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             } catch (e) {}
           }
 
-          if (autoRetryCountRef.current < 3) {
+          // Mecanismo de failover automático: tenta alternar para próxima fonte se disponível
+          if (triggerAutomaticFailover('Tempo limite esgotado')) {
+            return;
+          }
+
+          if (autoRetryCountRef.current < 2) {
             const nextAttempt = autoRetryCountRef.current + 1;
             autoRetryCountRef.current = nextAttempt;
             setAutoRetryCount(nextAttempt);
@@ -1024,9 +1072,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setConnectionAttempts(connectionAttemptsRef.current);
             setIsConnectionUnstable(true);
             setIsLoading(true);
-            setStreamWarning(`Tempo limite excedido. Tentando recarregar automaticamente (${nextAttempt}/3)...`);
+            setStreamWarning(`Tempo limite excedido. Tentando recarregar automaticamente (${nextAttempt}/2)...`);
 
-            if (!usingProxy && nextAttempt === 2) {
+            if (!usingProxy) {
               setForceProxy(true);
             }
 
@@ -1038,7 +1086,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setIsTimedOut(true);
             setIsConnectionUnstable(true);
             setErrorMessage(
-              'A inicialização da transmissão excedeu o limite após 3 tentativas consecutivas. Tente recarregar ou selecionar outro servidor.'
+              'A inicialização da transmissão excedeu o limite. Tente recarregar ou selecionar outro servidor.'
             );
             startExponentialBackoff();
           }
@@ -1111,9 +1159,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           });
 
           dashPlayer.on(dashjs.MediaPlayer.events.ERROR, () => {
+            if (triggerAutomaticFailover('Erro protocolo DASH')) {
+              return;
+            }
             if (!usingProxy) {
               setForceProxy(true);
-            } else if (autoRetryCountRef.current < 3) {
+            } else if (autoRetryCountRef.current < 2) {
               const nextAttempt = autoRetryCountRef.current + 1;
               autoRetryCountRef.current = nextAttempt;
               setAutoRetryCount(nextAttempt);
@@ -1121,8 +1172,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               setConnectionAttempts(connectionAttemptsRef.current);
               setIsConnectionUnstable(true);
               setReloadCounter(c => c + 1);
-            } else if (sources.length > 1 && currentSourceIndex < sources.length - 1) {
-              setCurrentSourceIndex(prev => prev + 1);
             } else {
               setHasError(true);
               setErrorMessage('Falha ao decodificar a transmissão via protocolo DASH. Tente alternar o Modo de Compatibilidade para HLS ou trocar de servidor.');
@@ -1136,27 +1185,27 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           video.play().catch(() => setIsPlaying(false));
         }
       } else if (isHls && Hls.isSupported()) {
-        // Configuração dinâmica e adaptativa de buffers baseada na latência detectada para máxima estabilidade
-        const isHighLatency = connectionLatency > 1500;
-        const isMediumLatency = connectionLatency > 600 && connectionLatency <= 1500;
-
-        const dynamicMaxBufferLength = isHighLatency ? 90 : isMediumLatency ? 60 : 45;
-        const dynamicMaxMaxBufferLength = isHighLatency ? 180 : isMediumLatency ? 120 : 90;
-        const dynamicMaxBufferSize = isHighLatency ? 150 * 1000 * 1000 : isMediumLatency ? 100 * 1000 * 1000 : 70 * 1000 * 1000;
-        const dynamicBackBufferLength = isHighLatency ? 90 : 60;
-        const dynamicLiveSyncDurationCount = isHighLatency ? 8 : isMediumLatency ? 6 : 4;
-        const dynamicLiveMaxLatency = isHighLatency ? 18 : isMediumLatency ? 14 : 10;
-        const dynamicFragTimeout = isHighLatency ? 25000 : 20000;
+        // Gerenciador de buffer dinâmico anti-travamento adaptado para redes do Brasil
+        const netMetrics = getBrowserNetworkMetrics();
+        const initialBufferConfig = calculateDynamicBufferProfile({
+          downlinkMbps: netMetrics.downlinkMbps,
+          rttMs: netMetrics.rttMs,
+          effectiveType: netMetrics.effectiveType,
+          measuredThroughputMbps: lastFragSpeedMbpsRef.current,
+          lastMeasuredLatencyMs: connectionLatency,
+          recentStallsCount: recentStallsRef.current,
+        });
+        setActiveBufferProfileLabel(initialBufferConfig.profileLabel);
 
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          backBufferLength: dynamicBackBufferLength,
-          maxBufferLength: dynamicMaxBufferLength,
-          maxMaxBufferLength: dynamicMaxMaxBufferLength,
-          maxBufferSize: dynamicMaxBufferSize,
-          liveSyncDurationCount: dynamicLiveSyncDurationCount,
-          liveMaxLatencyDurationCount: dynamicLiveMaxLatency,
+          backBufferLength: initialBufferConfig.backBufferLength,
+          maxBufferLength: initialBufferConfig.maxBufferLength,
+          maxMaxBufferLength: initialBufferConfig.maxMaxBufferLength,
+          maxBufferSize: initialBufferConfig.maxBufferSize,
+          liveSyncDurationCount: initialBufferConfig.liveSyncDurationCount,
+          liveMaxLatencyDurationCount: initialBufferConfig.liveMaxLatencyDurationCount,
           startFragPrefetch: true,
           progressive: true,
           highBufferWatchdogPeriod: 2,
@@ -1164,14 +1213,40 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           nudgeMaxRetry: 10,
           manifestLoadingTimeOut: 15000,
           manifestLoadingMaxRetry: 4,
-          fragLoadingTimeOut: dynamicFragTimeout,
-          fragLoadingMaxRetry: isHighLatency ? 6 : 4,
+          fragLoadingTimeOut: initialBufferConfig.fragLoadingTimeOutMs,
+          fragLoadingMaxRetry: initialBufferConfig.fragLoadingMaxRetry,
           levelLoadingTimeOut: 15000,
         });
 
         hlsRef.current = hls;
         hls.loadSource(streamUrl);
         hls.attachMedia(video);
+
+        hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+          const fragData = data as any;
+          const stats = fragData?.frag?.stats || fragData?.stats;
+          if (stats) {
+            const durationMs = (stats.tload || 0) - (stats.trequest || 0);
+            const loadedBytes = stats.loaded || stats.total || 0;
+            if (durationMs > 0 && loadedBytes > 0) {
+              const speedMbps = (loadedBytes * 8) / (durationMs * 1000);
+              lastFragSpeedMbpsRef.current = speedMbps;
+              
+              const updatedNet = getBrowserNetworkMetrics();
+              const dynamicCfg = calculateDynamicBufferProfile({
+                downlinkMbps: updatedNet.downlinkMbps,
+                rttMs: updatedNet.rttMs,
+                effectiveType: updatedNet.effectiveType,
+                measuredThroughputMbps: speedMbps,
+                lastMeasuredLatencyMs: connectionLatency,
+                recentStallsCount: recentStallsRef.current,
+              });
+
+              applyDynamicBufferToHls(hls, dynamicCfg);
+              setActiveBufferProfileLabel(dynamicCfg.profileLabel);
+            }
+          }
+        });
 
         hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
           setIsLoading(false);
@@ -1234,10 +1309,11 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
-          // Recuperação inteligente de micro-travamentos de buffer (Buffer Stalled) com expansão dinâmica
+          // Recuperação inteligente de micro-travamentos de buffer com expansão dinâmica
           if (!data.fatal && data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+            recentStallsRef.current += 1;
             if (hls.config) {
-              hls.config.maxBufferLength = Math.min(120, (hls.config.maxBufferLength || 60) + 15);
+              hls.config.maxBufferLength = Math.min(130, (hls.config.maxBufferLength || 60) + 20);
               hls.config.liveSyncDurationCount = Math.min(10, (hls.config.liveSyncDurationCount || 5) + 1);
             }
             if (video && !video.paused && video.readyState >= 2) {
@@ -1249,9 +1325,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
+                if (triggerAutomaticFailover('Instabilidade de rede HLS')) {
+                  return;
+                }
                 if (!usingProxy) {
                   setForceProxy(true);
-                } else if (autoRetryCountRef.current < 3) {
+                } else if (autoRetryCountRef.current < 2) {
                   const nextAttempt = autoRetryCountRef.current + 1;
                   autoRetryCountRef.current = nextAttempt;
                   setAutoRetryCount(nextAttempt);
@@ -1259,22 +1338,29 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   setConnectionAttempts(connectionAttemptsRef.current);
                   setIsConnectionUnstable(true);
                   setReloadCounter(c => c + 1);
-                } else if (currentSourceIndex < sources.length - 1) {
-                  setCurrentSourceIndex(prev => prev + 1);
                 } else {
                   setHasError(true);
-                  setErrorMessage('Falha na conexão de rede com a transmissão após 3 tentativas automáticas.');
+                  setErrorMessage('Falha na conexão de rede com a transmissão.');
                   setIsLoading(false);
                   setIsConnectionUnstable(true);
                   startExponentialBackoff();
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                hls.recoverMediaError();
+                try {
+                  hls.recoverMediaError();
+                } catch {
+                  if (triggerAutomaticFailover('Erro de decodificação HLS')) return;
+                }
                 break;
               default:
                 hls.destroy();
-                if (autoRetryCountRef.current < 3) {
+                if (triggerAutomaticFailover('Decodificação fatal')) {
+                  return;
+                }
+                if (!usingProxy) {
+                  setForceProxy(true);
+                } else if (autoRetryCountRef.current < 2) {
                   const nextAttempt = autoRetryCountRef.current + 1;
                   autoRetryCountRef.current = nextAttempt;
                   setAutoRetryCount(nextAttempt);
@@ -1282,11 +1368,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   setConnectionAttempts(connectionAttemptsRef.current);
                   setIsConnectionUnstable(true);
                   setReloadCounter(c => c + 1);
-                } else if (currentSourceIndex < sources.length - 1) {
-                  setCurrentSourceIndex(prev => prev + 1);
                 } else {
                   setHasError(true);
-                  setErrorMessage('O formato desta transmissão não pôde ser decodificado após 3 tentativas.');
+                  setErrorMessage('O formato desta transmissão não pôde ser decodificado.');
                   setIsLoading(false);
                   setIsConnectionUnstable(true);
                   startExponentialBackoff();
@@ -1325,9 +1409,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           }
 
           player.on(mpegts.Events.ERROR, () => {
+            if (triggerAutomaticFailover('Instabilidade MPEG-TS')) {
+              return;
+            }
             if (!usingProxy) {
               setForceProxy(true);
-            } else if (autoRetryCountRef.current < 3) {
+            } else if (autoRetryCountRef.current < 2) {
               const nextAttempt = autoRetryCountRef.current + 1;
               autoRetryCountRef.current = nextAttempt;
               setAutoRetryCount(nextAttempt);
@@ -1335,11 +1422,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               setConnectionAttempts(connectionAttemptsRef.current);
               setIsConnectionUnstable(true);
               setReloadCounter(c => c + 1);
-            } else if (currentSourceIndex < sources.length - 1) {
-              setCurrentSourceIndex(prev => prev + 1);
             } else {
               setHasError(true);
-              setErrorMessage('Transmissão ao vivo instável ou sinal fora do ar após 3 tentativas.');
+              setErrorMessage('Transmissão ao vivo instável ou sinal fora do ar.');
               setIsLoading(false);
               setIsConnectionUnstable(true);
               startExponentialBackoff();
@@ -1358,9 +1443,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           setIsPlaying(true);
           setIsLoading(false);
         }).catch(() => {
+          if (triggerAutomaticFailover('Erro reprodução direta')) {
+            return;
+          }
           if (!usingProxy && rawUrl.startsWith('http://')) {
             setForceProxy(true);
-          } else if (autoRetryCountRef.current < 3) {
+          } else if (autoRetryCountRef.current < 2) {
             const nextAttempt = autoRetryCountRef.current + 1;
             autoRetryCountRef.current = nextAttempt;
             setAutoRetryCount(nextAttempt);
@@ -2150,9 +2238,18 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             resetControlsTimer();
           }
           break;
+        case 'enter':
+          e.preventDefault();
+          togglePlay();
+          resetControlsTimer();
+          break;
         case 'escape':
+        case 'backspace':
+          e.preventDefault();
           if (activeMenu) {
             setActiveMenu(null);
+          } else {
+            onClose();
           }
           break;
       }
@@ -2160,7 +2257,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, toggleMute, toggleFullscreen, togglePiP, captureScreenshot, adjustVolumeBy, skipSeconds, type, activeMenu, resetControlsTimer, isSeries, nextEpisode, playNextEpisode]);
+  }, [togglePlay, toggleMute, toggleFullscreen, togglePiP, captureScreenshot, adjustVolumeBy, skipSeconds, type, activeMenu, resetControlsTimer, isSeries, nextEpisode, playNextEpisode, onClose]);
 
   const formatTime = (secs: number) => {
     if (!secs || isNaN(secs)) return '00:00';
@@ -2361,7 +2458,23 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               onEnded={handleVideoEnded}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
-              onWaiting={() => setIsLoading(true)}
+              onWaiting={() => {
+                setIsLoading(true);
+                recentStallsRef.current += 1;
+                if (hlsRef.current) {
+                  const net = getBrowserNetworkMetrics();
+                  const dyn = calculateDynamicBufferProfile({
+                    downlinkMbps: net.downlinkMbps,
+                    rttMs: net.rttMs,
+                    effectiveType: net.effectiveType,
+                    measuredThroughputMbps: lastFragSpeedMbpsRef.current,
+                    lastMeasuredLatencyMs: connectionLatency,
+                    recentStallsCount: recentStallsRef.current,
+                  });
+                  applyDynamicBufferToHls(hlsRef.current, dyn);
+                  setActiveBufferProfileLabel(dyn.profileLabel);
+                }
+              }}
               onPlaying={() => { 
                 hasCanPlayFiredRef.current = true;
                 if (canPlayTimeoutRef.current) {
@@ -2376,6 +2489,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 setBackoffSecondsLeft(null);
                 autoRetryCountRef.current = 0;
                 setAutoRetryCount(0);
+                failedSourcesSetRef.current.clear();
                 setIsLoading(false); 
                 setHasError(false); 
                 setIsTimedOut(false);
@@ -2529,141 +2643,56 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </div>
             )}
 
-            {/* Overlay Estilizado de Conexão Instável com Animação de Fade-In e Botão 'Tentar Novamente' Centralizado em Destaque */}
+            {/* Aviso Discreto de Conexão Instável (Limpo e Sem Poluição) */}
             {isConnectionUnstable && !hasError && (
               <div 
                 id="unstable-connection-overlay"
-                className="absolute inset-0 z-35 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fadeIn select-none"
+                className="absolute inset-0 z-35 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fadeIn select-none"
               >
-                {/* Ícone de Alerta em Destaque */}
-                <div className="relative mb-3.5">
-                  <div className="absolute -inset-3 bg-amber-500/25 rounded-full blur-xl animate-pulse" />
-                  <div className="relative w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/20">
-                    <AlertTriangle className="w-8 h-8 animate-bounce" />
-                  </div>
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-3 shadow-lg">
+                  <RefreshCw className="w-6 h-6 animate-spin text-amber-400" />
                 </div>
-
-                {/* Título e Badge de Latência */}
-                <div className="flex items-center gap-2 mb-1.5">
-                  <h4 className="text-xl font-bold text-white tracking-tight">
-                    Conexão Instável
-                  </h4>
-                  <span className="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    {connectionLatency > 0 ? `${connectionLatency}ms (> 10s)` : '> 10s'}
-                  </span>
-                </div>
-
-                {/* Mensagem Explicativa */}
-                <p className="text-xs sm:text-sm text-slate-300 max-w-md mb-3 leading-relaxed">
-                  {streamWarning || 'A resposta do sinal demorou mais de 10 segundos para carregar o vídeo. O canal pode estar com instabilidade temporária no servidor de origem.'}
+                <h4 className="text-base sm:text-lg font-bold text-white mb-1 tracking-tight">
+                  Restabelecendo Sinal...
+                </h4>
+                <p className="text-xs text-slate-300 max-w-xs mb-4">
+                  O fluxo teve uma oscilação na conexão. Tentando recuperar automaticamente.
                 </p>
-
-                {/* Indicador de Tentativa Automática (se em andamento) */}
-                {autoRetryCount > 0 && autoRetryCount <= 3 && (
-                  <div className="flex items-center gap-2 mb-4 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs font-semibold">
-                    <div className="w-3.5 h-3.5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-                    <span>Tentando reconectar automaticamente ({autoRetryCount}/3)...</span>
-                  </div>
-                )}
-
-                {/* Botão 'Tentar Novamente' em DESTAQUE CENTRALIZADO sobre o vídeo */}
-                <div className="flex flex-col items-center gap-3 w-full max-w-md mt-1">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    id="btn-retry-unstable"
                     onClick={handleForceReload}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold text-sm shadow-2xl shadow-amber-500/40 transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer active:scale-95"
                   >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Tentar Novamente</span>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Tentar Agora</span>
                   </button>
-
-                  {/* Ações Secundárias */}
-                  <div className="flex items-center justify-center gap-2 flex-wrap mt-1">
-                    {sources.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={tryNextSource}
-                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 border border-indigo-500/40 text-xs font-semibold transition-all cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Alternar Servidor ({currentSourceIndex + 1}/{sources.length})</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => { setForceProxy(!usingProxy); setReloadCounter(c => c + 1); }}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 text-xs font-semibold transition-all cursor-pointer"
-                    >
-                      <span>{usingProxy ? 'Conexão Direta' : 'Ativar Proxy'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleReportOffline}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer"
-                    >
-                      <WifiOff className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Reportar Offline</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsConnectionUnstable(false)}
-                      className="px-3 py-2 text-slate-400 hover:text-slate-200 text-xs transition-colors cursor-pointer"
-                    >
-                      Aguardar Sinal
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsConnectionUnstable(false)}
+                    className="px-3.5 py-2 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                  >
+                    Aguardar
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Friendly Stream Health / Warning Banner */}
+            {/* Aviso Sutil de Conexão (Sem Poluição) */}
             {streamWarning && !isConnectionUnstable && !hasError && (
-              <div className="absolute top-16 sm:top-20 left-4 right-4 z-35 max-w-xl mx-auto bg-amber-500/15 border border-amber-500/40 backdrop-blur-md rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 shadow-xl animate-fadeIn">
-                <div className="flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
-                  <div className="text-xs">
-                    <span className="font-semibold text-amber-300 block sm:inline mr-1">
-                      Aviso de Conexão:
-                    </span>
-                    <span>{streamWarning}</span>
-                  </div>
+              <div className="absolute top-16 sm:top-20 left-4 right-4 z-35 max-w-md mx-auto bg-slate-900/90 border border-amber-500/40 backdrop-blur-md rounded-xl p-3 flex items-center justify-between gap-3 text-amber-200 shadow-xl animate-fadeIn">
+                <div className="flex items-center gap-2 text-xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="line-clamp-1">{streamWarning}</span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-end">
-                  <button
-                    type="button"
-                    onClick={runManualHealthCheck}
-                    disabled={isCheckingHealth}
-                    className="text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/20 transition-colors cursor-pointer"
-                  >
-                    {isCheckingHealth ? 'Testando...' : 'Testar Sinal'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={tryNextSource}
-                    className="text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-full shadow-sm transition-colors cursor-pointer"
-                  >
-                    Trocar Servidor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowTroubleshootModal(true)}
-                    className="text-[11px] font-semibold bg-amber-500/30 hover:bg-amber-500/40 text-amber-200 px-2.5 py-1 rounded-full border border-amber-400/30 transition-colors cursor-pointer"
-                  >
-                    Soluções
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStreamWarning(null)}
-                    className="p-1 hover:bg-white/10 rounded-full text-amber-300 transition-colors cursor-pointer"
-                    title="Dispensar aviso"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setStreamWarning(null)}
+                  className="p-1 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                  title="Dispensar"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
 
@@ -2677,181 +2706,53 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </div>
             )}
 
-            {/* Offline / Timeout Error Screen with Visual Blur Transition and Focus on Actions */}
+            {/* Tela de Erro Simplificada e Sem Poluição Visual */}
             {hasError && (
               <div 
                 id="error-modal-overlay"
-                className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl flex flex-col items-center justify-center p-4 sm:p-6 text-center z-25 overflow-y-auto transition-all duration-700 ease-out animate-fadeIn"
+                className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-25 animate-fadeIn select-none"
               >
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mb-3 shadow-2xl shadow-amber-500/20 ring-1 ring-amber-400/20">
-                  {isTimedOut ? (
-                    <Clock className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400 animate-pulse" />
-                  ) : (
-                    <WifiOff className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400" />
-                  )}
+                {/* Ícone Discreto */}
+                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3.5 text-slate-400 shadow-lg">
+                  <WifiOff className="w-7 h-7" />
                 </div>
+
+                {/* Título Limpo */}
                 <h4 className="text-lg sm:text-xl font-bold text-white mb-1.5 tracking-tight">
-                  {isTimedOut ? 'Tempo Limite de 10s Excedido' : 'Não foi possível iniciar a transmissão'}
+                  Sinal Indisponível
                 </h4>
-                <p className="text-xs sm:text-sm text-slate-300 max-w-lg mb-3 font-normal leading-relaxed">
-                  {errorMessage || 'O link do servidor de origem está offline ou demorou mais de 10 segundos para responder. Tente recarregar ou alternar para outro servidor.'}
+
+                {/* Mensagem Curta e Amigável */}
+                <p className="text-xs sm:text-sm text-slate-400 max-w-sm mb-6 leading-relaxed">
+                  Não foi possível carregar este canal no momento.
                 </p>
 
-                {/* Status de Tentativas de Conexão & Backoff Exponencial */}
-                <div className="flex flex-wrap items-center justify-center gap-2 mb-3.5">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700/80 text-[11px] font-semibold text-slate-300">
-                    <Activity className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Tentativas de conexão: <strong className="text-white font-bold">{connectionAttempts}</strong></span>
-                  </div>
-
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-[11px] font-semibold text-purple-300">
-                    <Layers className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Protocolo Atual: <strong className="text-white font-bold">{compatibilityProtocol.toUpperCase()}</strong></span>
-                  </div>
-
-                  {isBackoffActive && backoffSecondsLeft !== null && !isAutoRetryPaused && (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-[11px] font-semibold text-indigo-300 animate-pulse">
-                      <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Próxima reconexão em <strong className="text-white font-bold">{backoffSecondsLeft}s</strong> (Backoff Exponencial)</span>
-                    </div>
-                  )}
-
-                  {isAutoRetryPaused && (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-[11px] font-semibold text-amber-300">
-                      <PauseCircle className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Reconexão automática pausada</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Sugestões de Verificação para problemas locais */}
-                <div className="bg-slate-900/90 border border-slate-800/90 rounded-xl p-3.5 max-w-lg w-full text-left mb-4 shadow-lg">
-                  <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs mb-2.5">
-                    <Info className="w-4 h-4 shrink-0" />
-                    <span>Sugestões de Verificação (resolução de problemas locais):</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
-                      <Wifi className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
-                      <div>
-                        <strong className="text-white block font-medium">Verifique sua conexão Wi-Fi</strong>
-                        <span>Confirme se sua rede está ativa e sem quedas de sinal.</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
-                      <ShieldOff className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-                      <div>
-                        <strong className="text-white block font-medium">Desconecte VPNs</strong>
-                        <span>VPNs ativas ou DNS restritivos podem bloquear transmissões ao vivo.</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" />
-                      <div>
-                        <strong className="text-white block font-medium">Desative bloqueadores (AdBlock)</strong>
-                        <span>Extensões podem bloquear fragmentos .m3u8, .mpd ou .ts.</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 text-[11px] text-slate-300 bg-black/30 p-2 rounded-lg border border-white/5">
-                      <Server className="w-3.5 h-3.5 text-sky-400 mt-0.5 shrink-0" />
-                      <div>
-                        <strong className="text-white block font-medium">Troque de Servidor ou Proxy</strong>
-                        <span>Use os botões abaixo para testar rotas e proxies alternativos.</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-xl">
-                  {/* Botão Tentar Novamente */}
+                {/* Apenas as Ações Essenciais */}
+                <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"
                     onClick={handleForceReload}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 cursor-pointer transition-all active:scale-95"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Tentar Novamente Agora</span>
-                  </button>
-
-                  {/* Botão Alternar Modo de Compatibilidade (HLS vs DASH) */}
-                  <button
-                    type="button"
-                    id="btn-toggle-compatibility"
-                    onClick={handleToggleCompatibilityMode}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-purple-600/40 to-indigo-600/40 hover:from-purple-600/60 hover:to-indigo-600/60 text-purple-200 border border-purple-500/50 text-xs font-bold shadow-lg shadow-purple-900/30 cursor-pointer transition-all active:scale-95"
-                    title="Alternar entre protocolos de transmissão (HLS vs DASH) para recuperação de stream"
-                  >
-                    <Shuffle className="w-4 h-4 text-purple-300" />
-                    <span>Alternar Modo de Compatibilidade ({compatibilityProtocol === 'hls' ? 'DASH' : 'HLS'})</span>
-                  </button>
-
-                  {/* Pausar / Retomar Backoff Exponencial */}
-                  <button
-                    type="button"
-                    onClick={toggleAutoRetryPause}
-                    className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                      isAutoRetryPaused 
-                        ? 'bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border-indigo-500/40' 
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/10'
-                    }`}
-                  >
-                    {isAutoRetryPaused ? (
-                      <>
-                        <PlayCircle className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Retomar Auto-Reconexão</span>
-                      </>
-                    ) : (
-                      <>
-                        <PauseCircle className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Pausar Auto-Reconexão</span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Botão Reportar Erro */}
-                  <button
-                    type="button"
-                    onClick={() => handleReportError()}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-md ${
-                      hasReportedError
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border-rose-500/50'
-                    }`}
-                  >
-                    <AlertTriangle className="w-4 h-4 text-rose-400" />
-                    <span>{hasReportedError ? 'Erro Reportado no Log ✓' : 'Reportar Erro'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={tryNextSource}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 cursor-pointer transition-all"
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 cursor-pointer transition-all active:scale-95"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Trocar de Servidor ({currentSourceIndex + 1}/{sources.length})</span>
+                    <span>Tentar Novamente</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => { setForceProxy(!usingProxy); setHasError(false); setIsLoading(true); }}
-                    className="px-4 py-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
-                  >
-                    {usingProxy ? 'Tentar Conexão Direta' : 'Ativar Proxy Anti-Bloqueio'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowTroubleshootModal(true)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold border border-amber-500/40 cursor-pointer transition-all"
-                  >
-                    <Activity className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Canal com Problema?</span>
-                  </button>
+                  {sources.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={tryNextSource}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 text-xs font-semibold cursor-pointer transition-all active:scale-95"
+                    >
+                      <Server className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Outro Servidor</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="px-4 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
+                    className="px-5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold border border-white/10 cursor-pointer transition-all"
                   >
                     Fechar
                   </button>
@@ -2941,34 +2842,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     ))}
                   </div>
                 )}
-
-                {/* Channel Problem Troubleshooter Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowTroubleshootModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer backdrop-blur-md shadow-sm"
-                  title="Assistente de sinal e diagnóstico para canal com problema"
-                >
-                  <Activity className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Canal com problema?</span>
-                  <span className="sm:hidden">Ajuda</span>
-                </button>
-
-                {/* Botão Reportar Erro (Requisito 2) */}
-                <button
-                  type="button"
-                  onClick={() => handleReportError()}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer backdrop-blur-md shadow-sm ${
-                    hasReportedError
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border-rose-500/30'
-                  }`}
-                  title="Reportar link inativo ou erro no canal para o log administrativo"
-                >
-                  <AlertTriangle className={`w-3.5 h-3.5 ${hasReportedError ? 'text-emerald-400' : 'text-rose-400'}`} />
-                  <span className="hidden sm:inline">{hasReportedError ? 'Erro Reportado ✓' : 'Reportar Erro'}</span>
-                  <span className="sm:hidden">{hasReportedError ? '✓' : 'Reportar'}</span>
-                </button>
 
                 {/* Favorite Toggle Button */}
                 <button
@@ -3149,6 +3022,54 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
+
+                {/* Otimização de Transmissão para Usuários Brasileiros */}
+                <div className="mb-3 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/20">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-emerald-300 mb-1">
+                    <span className="flex items-center gap-1.5">
+                      <span>🇧🇷</span>
+                      <span>Buffer Turbo BR</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
+                      Ativo
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-emerald-200/70 leading-snug">
+                    {activeBufferProfileLabel} com failover automático entre fontes.
+                  </p>
+                </div>
+
+                {/* Seleção e Alternância de Servidores */}
+                {sources.length > 1 && (
+                  <div className="mb-3">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                      Fontes do Canal ({sources.length})
+                    </span>
+                    <div className="max-h-28 overflow-y-auto space-y-1">
+                      {sources.map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCurrentSourceIndex(idx);
+                            setHasError(false);
+                            setIsLoading(true);
+                            setStreamWarning(null);
+                            setReloadCounter(c => c + 1);
+                          }}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
+                            currentSourceIndex === idx
+                              ? 'bg-emerald-600/30 text-emerald-300 font-semibold border border-emerald-500/30'
+                              : 'text-slate-300 hover:bg-white/5'
+                          }`}
+                        >
+                          <span className="truncate pr-1">{s.name}</span>
+                          {currentSourceIndex === idx && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Subtitles shortcut */}
                 <div className="mb-3">
@@ -3751,20 +3672,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     <span className="hidden md:inline">Servidor {currentSourceIndex + 1}/{sources.length}</span>
                   </button>
 
-                  {/* Anti-block Proxy Status Indicator / Switcher */}
-                  <button
-                    type="button"
-                    onClick={() => { setForceProxy(!usingProxy); setHasError(false); setIsLoading(true); }}
-                    className={`hidden lg:flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-                      usingProxy 
-                        ? 'bg-indigo-950/60 border-indigo-500/30 text-indigo-300' 
-                        : 'bg-slate-900/80 border-white/10 text-slate-400'
-                    }`}
-                    title="Alternar modo de proxy interno"
+                  {/* Brazil Acceleration & Anti-Stutter Buffer Badge */}
+                  <div
+                    className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 shadow-sm"
+                    title="Aceleração de rota e buffer anti-travamento ativo para provedores brasileiros"
                   >
-                    <Activity className="w-3 h-3 text-indigo-400" />
-                    <span>{usingProxy ? 'Proxy Ativo' : 'Direto'}</span>
-                  </button>
+                    <span className="text-xs">🇧🇷</span>
+                    <span className="hidden md:inline font-semibold">Turbo BR</span>
+                    <span className="md:hidden">BR</span>
+                  </div>
 
                   {/* Screenshot / Frame Capture */}
                   <button

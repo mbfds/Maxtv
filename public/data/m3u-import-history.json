@@ -1,0 +1,576 @@
+[
+  {
+    "id": "import-1788869852727-jwpuk",
+    "timestamp": "2026-09-08T12:17:32.727Z",
+    "dateFormatted": "08/09/2026, 12:17:32",
+    "sourceName": "Ciclo Automático (24h) - Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026) (988 canais) + Teste Fonte Backup (292953 canais) + 123 (393 canais)",
+    "sourceUrl": "https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8, https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8, https://iptv-org.github.io/iptv/countries/br.m3u",
+    "totalFound": 294334,
+    "duplicatesConsolidated": 41447,
+    "newChannelsAdded": 251514,
+    "totalStreamOptions": 588913,
+    "finalGradeCount": 252104,
+    "status": "success",
+    "durationMs": 60133,
+    "author": "Admin",
+    "details": "Atualização periódica executada com sucesso. 41447 canais consolidados em opções alternativas de sinal e 251514 novos canais inseridos na grade.",
+    "similarityMatches": [
+      {
+        "incomingName": "A&E ²",
+        "matchedChannelName": "A&E",
+        "similarityScore": 100,
+        "assignedOption": "Opção 16 (4K)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "A&E",
+        "matchedChannelName": "A&E",
+        "similarityScore": 100,
+        "assignedOption": "Opção 18 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "A&E",
+        "matchedChannelName": "A&E",
+        "similarityScore": 100,
+        "assignedOption": "Opção 20 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "A&E ²",
+        "matchedChannelName": "A&E",
+        "similarityScore": 100,
+        "assignedOption": "Opção 22 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "A&E",
+        "matchedChannelName": "A&E",
+        "similarityScore": 100,
+        "assignedOption": "Opção 24 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "A&E ²",
+        "matchedChannelName": "A&E",
+        "similarityScore": 100,
+        "assignedOption": "Opção 26 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ADULT SWIN ²",
+        "matchedChannelName": "ADULT SWIN ²",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AGRO+ ²",
+        "matchedChannelName": "AGRO+ ²",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AMC ²",
+        "matchedChannelName": "AMC",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AMC",
+        "matchedChannelName": "AMC",
+        "similarityScore": 100,
+        "assignedOption": "Opção 16 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AMC ²",
+        "matchedChannelName": "AMC",
+        "similarityScore": 100,
+        "assignedOption": "Opção 18 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ANIMAL PLANET",
+        "matchedChannelName": "Animal Planet",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (4K)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ANIMAL PLANET",
+        "matchedChannelName": "Animal Planet",
+        "similarityScore": 100,
+        "assignedOption": "Opção 16 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ANIMAL PLANET",
+        "matchedChannelName": "Animal Planet",
+        "similarityScore": 100,
+        "assignedOption": "Opção 18 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ANIMAL PLANET ²",
+        "matchedChannelName": "Animal Planet",
+        "similarityScore": 100,
+        "assignedOption": "Opção 20 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ANIMAL PLANET",
+        "matchedChannelName": "Animal Planet",
+        "similarityScore": 100,
+        "assignedOption": "Opção 22 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ANIMAL PLANET ²",
+        "matchedChannelName": "Animal Planet",
+        "similarityScore": 100,
+        "assignedOption": "Opção 24 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ARTE 1",
+        "matchedChannelName": "Arte 1",
+        "similarityScore": 100,
+        "assignedOption": "Opção 16 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ARTE 1",
+        "matchedChannelName": "Arte 1",
+        "similarityScore": 100,
+        "assignedOption": "Opção 18 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ARTE 1 ²",
+        "matchedChannelName": "Arte 1",
+        "similarityScore": 100,
+        "assignedOption": "Opção 20 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ARTE 1",
+        "matchedChannelName": "Arte 1",
+        "similarityScore": 100,
+        "assignedOption": "Opção 22 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ARTE 1 ²",
+        "matchedChannelName": "Arte 1",
+        "similarityScore": 100,
+        "assignedOption": "Opção 24 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AXN",
+        "matchedChannelName": "AXN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 16 (4K)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AXN",
+        "matchedChannelName": "AXN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 18 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AXN",
+        "matchedChannelName": "AXN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 20 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AXN",
+        "matchedChannelName": "AXN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 22 (4K)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AXN",
+        "matchedChannelName": "AXN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 24 (SD)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "BAND ²",
+        "matchedChannelName": "Band",
+        "similarityScore": 100,
+        "assignedOption": "Opção 6 (4K)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "BAND",
+        "matchedChannelName": "Band",
+        "similarityScore": 100,
+        "assignedOption": "Opção 8 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "BAND",
+        "matchedChannelName": "Band",
+        "similarityScore": 100,
+        "assignedOption": "Opção 10 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      }
+    ]
+  },
+  {
+    "id": "import-1788868474890-x6zs0",
+    "timestamp": "2026-09-08T11:54:34.890Z",
+    "dateFormatted": "08/09/2026, 11:54:34",
+    "sourceName": "Unificação Geral da Grade (1-Clique)",
+    "totalFound": 689,
+    "duplicatesConsolidated": 0,
+    "newChannelsAdded": 0,
+    "totalStreamOptions": 2967,
+    "finalGradeCount": 586,
+    "status": "success",
+    "durationMs": 43,
+    "author": "Administrador",
+    "details": "Unificação executada com sucesso. 0 duplicatas e similares consolidadas em opções alternativas (Opção 2+) e 0 novos canais cadastrados.",
+    "similarityMatches": []
+  },
+  {
+    "id": "import-1788868440183-g3xkf",
+    "timestamp": "2026-09-08T11:54:00.183Z",
+    "dateFormatted": "08/09/2026, 11:54:00",
+    "sourceName": "M3U8 Personalizado",
+    "totalFound": 0,
+    "duplicatesConsolidated": 0,
+    "newChannelsAdded": 0,
+    "totalStreamOptions": 0,
+    "finalGradeCount": 586,
+    "status": "error",
+    "durationMs": 1,
+    "author": "Administrador",
+    "details": "Falha na importação de arquivo M3U8: Nenhum canal válido foi extraído do conteúdo M3U8 fornecido."
+  },
+  {
+    "id": "import-1788868423365-dwyaa",
+    "timestamp": "2026-09-08T11:53:43.365Z",
+    "dateFormatted": "08/09/2026, 11:53:43",
+    "sourceName": "123",
+    "sourceUrl": "https://iptv-org.github.io/iptv/countries/br.m3u",
+    "totalFound": 393,
+    "duplicatesConsolidated": 73,
+    "newChannelsAdded": 320,
+    "totalStreamOptions": 2967,
+    "finalGradeCount": 586,
+    "status": "success",
+    "durationMs": 1146,
+    "author": "Administrador",
+    "details": "393 canais encontrados no link M3U8. Durante a unificação pré-processada, 73 duplicados/similares foram consolidados em opções de stream alternativas (Opção 2+), mantendo a grade limpa e sem redundância.",
+    "similarityMatches": [
+      {
+        "incomingName": "A&E Latin America Brazil",
+        "matchedChannelName": "A&E",
+        "similarityScore": 95,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Adult Swim Latin America Brazil",
+        "matchedChannelName": "Adult Swim",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "AgroMais",
+        "matchedChannelName": "AgroMais",
+        "similarityScore": 100,
+        "assignedOption": "Opção 12 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Arte 1",
+        "matchedChannelName": "Arte 1",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "AXN",
+        "matchedChannelName": "AXN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Band",
+        "matchedChannelName": "Band",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Band Sports",
+        "matchedChannelName": "BAND SPORTS HD",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Box Kids TV",
+        "matchedChannelName": "Box Kids TV",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Canal do Boi",
+        "matchedChannelName": "Canal do Boi",
+        "similarityScore": 100,
+        "assignedOption": "Opção 10 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Canal Rural",
+        "matchedChannelName": "Canal Rural",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "CazeTV (1080i)",
+        "matchedChannelName": "CazéTV",
+        "similarityScore": 95,
+        "assignedOption": "Opção 5 (1080p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Combate",
+        "matchedChannelName": "Combate",
+        "similarityScore": 100,
+        "assignedOption": "Opção 12 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ESPN",
+        "matchedChannelName": "ESPN",
+        "similarityScore": 100,
+        "assignedOption": "Opção 34 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ESPN 3",
+        "matchedChannelName": "ESPN 3",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "ESPN 4",
+        "matchedChannelName": "ESPN 4",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "FashionTV",
+        "matchedChannelName": "FashionTV",
+        "similarityScore": 100,
+        "assignedOption": "Opção 12 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Fish TV",
+        "matchedChannelName": "Fish TV",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Futura",
+        "matchedChannelName": "Futura",
+        "similarityScore": 100,
+        "assignedOption": "Opção 12 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "GloboNews",
+        "matchedChannelName": "GloboNews",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Globoplay Novelas",
+        "matchedChannelName": "Globoplay Novelas",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Gloobinho",
+        "matchedChannelName": "Gloobinho",
+        "similarityScore": 100,
+        "assignedOption": "Opção 12 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "GNT",
+        "matchedChannelName": "GNT",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "History",
+        "matchedChannelName": "History",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "History 2 Latin America Brazil",
+        "matchedChannelName": "History 2",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Jovem Pan News",
+        "matchedChannelName": "Jovem Pan News",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "MBC Brasil TV",
+        "matchedChannelName": "TV Brasil",
+        "similarityScore": 95,
+        "assignedOption": "Opção 12 (1080p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Megapix",
+        "matchedChannelName": "Megapix",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Music Box Brazil",
+        "matchedChannelName": "Music Box Brazil",
+        "similarityScore": 100,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "N Sports",
+        "matchedChannelName": "N SPORTS",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (1080p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Novo Tempo",
+        "matchedChannelName": "TV Novo Tempo",
+        "similarityScore": 95,
+        "assignedOption": "Opção 12 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Pluto TV Anime Ação",
+        "matchedChannelName": "Pluto TV Anime",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (1080p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Pluto TV Canal UOL",
+        "matchedChannelName": "Canal UOL",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Pluto TV Cine Comédia Romântica",
+        "matchedChannelName": "Pluto TV Cine Comédia",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (1080p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Pluto TV Kids Club",
+        "matchedChannelName": "Pluto TV Kids",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (1080p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Pluto TV MTV Classic",
+        "matchedChannelName": "MTV Pluto TV",
+        "similarityScore": 95,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Pluto TV Record News",
+        "matchedChannelName": "Record News",
+        "similarityScore": 95,
+        "assignedOption": "Opção 14 (720p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Record",
+        "matchedChannelName": "Record",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "Record News",
+        "matchedChannelName": "Record News",
+        "similarityScore": 100,
+        "assignedOption": "Opção 16 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      },
+      {
+        "incomingName": "RecordTV Interior SP",
+        "matchedChannelName": "RecordTV SP",
+        "similarityScore": 95,
+        "assignedOption": "Opção 10 (1080p)",
+        "matchReason": "Todos os termos essenciais coincidem"
+      },
+      {
+        "incomingName": "Rede Globo",
+        "matchedChannelName": "Globo",
+        "similarityScore": 100,
+        "assignedOption": "Opção 4 (720p)",
+        "matchReason": "Correspondência exata de chave canônica"
+      }
+    ]
+  },
+  {
+    "id": "import-1788861122771",
+    "timestamp": "2026-09-08T09:52:02.771Z",
+    "dateFormatted": "08/09/2026, 09:52:02",
+    "sourceName": "Ramys - CanaisBR03.m3u8 (Carga Inicial)",
+    "sourceUrl": "https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8",
+    "totalFound": 287,
+    "duplicatesConsolidated": 0,
+    "newChannelsAdded": 287,
+    "totalStreamOptions": 2182,
+    "finalGradeCount": 287,
+    "status": "success",
+    "durationMs": 1240,
+    "author": "Sistema",
+    "details": "Inicialização da grade com 287 canais principais e 2.182 servidores/opções de transmissão mapeadas.",
+    "similarityMatches": []
+  }
+]

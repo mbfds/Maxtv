@@ -14,6 +14,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'Rio de Janeiro, início dos anos 70. O Brasil enfrenta o aperto da ditadura militar. A família Paiva vive à beira da praia, até que um ato de violência muda suas vidas para sempre.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
     featured: true,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-20',
     isVipOnly: false
   },
   {
@@ -29,6 +31,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'Vinte anos após os eventos do clássico filme, Buscapé continua sua trajetória como fotojornalista retratando os conflitos entre policiais, traficantes e milícias na comunidade.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
     featured: true,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-18',
     isVipOnly: true,
     seasons: [
       {
@@ -75,6 +79,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'Paul Atreides se une a Chani e aos Fremen enquanto busca vingança contra os conspiradores que destruíram sua família, enfrentando uma escolha entre o amor de sua vida e o destino do universo.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
     featured: true,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-15',
     isVipOnly: true
   },
   {
@@ -90,6 +96,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'Vinte anos após sua primeira aventura, Chicó e João Grilo se reencontram na lendária cidade de Taperoá para viver novas trapaças no sertão da Paraíba.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
     featured: false,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-10',
     isVipOnly: false
   },
   {
@@ -105,6 +113,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'Anos após testemunhar a morte de Maximus pelas mãos de seu tio, Lucius é forçado a entrar no Coliseu depois de sua casa ser conquistada por imperadores tirânicos.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     featured: false,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-05',
     isVipOnly: true
   },
   {
@@ -160,6 +170,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'A trajetória de vitórias, superação, decepções e alegrias de Ayrton Senna, desvendando sua personalidade e suas relações pessoais até o trágico acidente em Ímola.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
     featured: false,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-25',
     isVipOnly: false,
     seasons: [
       {
@@ -200,6 +212,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'A autoridade de variação temporal (TVA) convoca Wade Wilson para uma missão que pode salvar o multiverso, obrigando-o a tirar um relutante Wolverine de sua aposentadoria.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
     featured: false,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-08',
     isVipOnly: true
   },
   {
@@ -215,6 +229,8 @@ export const INITIAL_VOD: VodItem[] = [
     synopsis: 'Um documentário imersivo em 4K explorando a rica biodiversidade do Pantanal brasileiro, registrando a vida das onças-pintadas, tuiuiús e a luta pela preservação ambiental.',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
     featured: true,
+    isRecentlyAdded: true,
+    addedAt: '2024-11-22',
     isVipOnly: false
   },
   {

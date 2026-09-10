@@ -188,8 +188,15 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
   // Check single channel (supports Opção 1, Opção 2...)
   const handleTestChannel = async (channel: Channel, sourceIndex = 0) => {
     setTestingChannelIds(prev => new Set(prev).add(channel.id));
+    const targetSource = channel.sources[sourceIndex] || channel.sources[0];
     try {
-      const res = await api.checkChannelHealth(channel.id, sourceIndex);
+      const res = await api.checkChannelHealth(channel.id, sourceIndex, {
+        url: targetSource?.url,
+        referer: targetSource?.referer,
+        channelName: channel.name,
+        category: channel.category,
+        sources: channel.sources
+      });
       if (res.success && res.result) {
         setHealthMap(prev => new Map(prev).set(channel.id, res.result));
         const statusLabel = res.result.status === 'online' ? 'Online' : res.result.status === 'unstable' ? 'Instável' : 'Offline';
@@ -198,7 +205,6 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
       }
     } catch (err: any) {
       // If error, mark offline
-      const targetSource = channel.sources[sourceIndex] || channel.sources[0];
       const fallbackResult: ChannelHealthResult = {
         channelId: channel.id,
         channelName: channel.name,
@@ -250,7 +256,7 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
       const chunkIds = chunk.map(c => c.id);
 
       try {
-        const res = await api.checkBatchChannels({ channelIds: chunkIds });
+        const res = await api.checkBatchChannels({ channelIds: chunkIds, channels: chunk });
         if (res.success && res.results) {
           setHealthMap(prev => {
             const next = new Map(prev);

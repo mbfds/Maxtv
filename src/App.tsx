@@ -10,19 +10,36 @@ import { AdminPanel } from './components/AdminPanel';
 import { AdminAuthGate } from './components/AdminAuthGate';
 import { AuthModal } from './components/AuthModal';
 import { FavoritesView } from './components/FavoritesView';
+import { RecentlyAddedSection } from './components/RecentlyAddedSection';
+import { GlobalSearchResultsView } from './components/GlobalSearchResultsView';
 
 import { Channel, VodItem, Subscriber, SubscriptionPlan, User, NavigationTab, FavoriteItem, WatchProgress } from './types';
 import { INITIAL_CHANNELS } from './data/channelsData';
 import { INITIAL_VOD } from './data/vodData';
 import { SUBSCRIPTION_PLANS } from './data/plansData';
-import { api } from './services/api';
+import { api, clearAdminToken, getAdminToken, getCachedChannels, getCachedVodCatalog } from './services/api';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from './services/favoritesStorage';
 import { watchProgressStorage, PROGRESS_UPDATED_EVENT } from './services/watchProgressStorage';
 import { Tv, Sparkles, Shield, Heart, Radio, ExternalLink, UserCheck, Crown, Lock, LogIn } from 'lucide-react';
 
 export default function App() {
-  const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
-  const [vodItems, setVodItems] = useState<VodItem[]>(INITIAL_VOD);
+  // Instant boot from localStorage cache, falling back to bundled defaults
+  const [channels, setChannels] = useState<Channel[]>(() => {
+    const cached = getCachedChannels();
+    if (cached && cached.length > 0) return cached;
+    return INITIAL_CHANNELS;
+  });
+
+  const [vodItems, setVodItems] = useState<VodItem[]>(() => {
+    const cached = getCachedVodCatalog();
+    if (cached && cached.length > 0) {
+      const existingIds = new Set(cached.map((c: any) => c.id));
+      const defaults = INITIAL_VOD.filter(v => !existingIds.has(v.id));
+      return [...cached, ...defaults];
+    }
+    return INITIAL_VOD;
+  });
+
   const [currentTab, setCurrentTab] = useState<NavigationTab>('live');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -40,6 +57,24 @@ export default function App() {
   const [authToken, setAuthToken] = useState<string>(() => {
     return localStorage.getItem('maxtv_token') || '';
   });
+
+  // Strict Admin Session Verification state with instant secure sessionStorage caching
+  const [isAdminVerified, setIsAdminVerified] = useState<boolean>(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const isVerified = sessionStorage.getItem('maxtv_admin_verified') === 'true';
+        const token = sessionStorage.getItem('maxtv_admin_token') || localStorage.getItem('maxtv_admin_token');
+        const userStr = sessionStorage.getItem('maxtv_admin_user') || localStorage.getItem('maxtv_user');
+        if (isVerified && token && userStr) {
+          const parsed = JSON.parse(userStr);
+          return parsed.role === 'admin';
+        }
+      }
+    } catch {}
+    return false;
+  });
+
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   // Favorites & Watch Progress State
   const [favorites, setFavorites] = useState<FavoriteItem[]>(() => {
@@ -74,6 +109,29 @@ export default function App() {
     }
     return null;
   });
+
+  // TV Box High-Performance Mode (Ultra fast, no blurs, D-Pad focus rings)
+  const [isTvBoxMode, setIsTvBoxMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('maxtv_tv_box_mode');
+      if (saved !== null) return saved === 'true';
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+      return ua.includes('tv') || ua.includes('box') || ua.includes('aftb') || ua.includes('mibox') || ua.includes('smart-tv') || ua.includes('googletv');
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('maxtv_tv_box_mode', isTvBoxMode ? 'true' : 'false');
+      if (isTvBoxMode) {
+        document.documentElement.classList.add('tv-box-mode');
+      } else {
+        document.documentElement.classList.remove('tv-box-mode');
+      }
+    } catch {}
+  }, [isTvBoxMode]);
 
   // Active Player
   const [activeMedia, setActiveMedia] = useState<{
@@ -123,7 +181,58 @@ export default function App() {
     }
   }, [authToken, currentUser?.email]);
 
-  // Fetch live channels and VOD from API on mount
+  // Sync and listen for background cache revalidations (1-hour stale revalidation)
+  useEffect(() => {
+    const onChannelsRevalidated = (e: any) => {
+      if (e.detail?.channels && Array.isArray(e.detail.channels) && e.detail.channels.length > 0) {
+        setChannels(e.detail.channels);
+      }
+    };
+    const onVodRevalidated = (e: any) => {
+      if (e.detail?.items && Array.isArray(e.detail.items) && e.detail.items.length > 0) {
+        setVodItems(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newItems = e.detail.items.filter((item: any) => !existingIds.has(item.id));
+          return [...prev, ...newItems];
+        });
+      }
+    };
+
+    window.addEventListener('maxtv_channels_revalidated', onChannelsRevalidated);
+    window.addEventListener('maxtv_vod_revalidated', onVodRevalidated);
+    return () => {
+      window.removeEventListener('maxtv_channels_revalidated', onChannelsRevalidated);
+      window.removeEventListener('maxtv_vod_revalidated', onVodRevalidated);
+    };
+  }, []);
+
+  // Background check for admin session persistence across reloads
+  useEffect(() => {
+    if (!isAdminVerified) return;
+    const token = getAdminToken();
+    if (!token) {
+      setIsAdminVerified(false);
+      return;
+    }
+    api.verifyAdminSession(token).then(res => {
+      if (!res.valid || res.user?.role !== 'admin') {
+        clearAdminToken();
+        try {
+          sessionStorage.removeItem('maxtv_admin_verified');
+          sessionStorage.removeItem('maxtv_admin_token');
+          sessionStorage.removeItem('maxtv_admin_user');
+        } catch {}
+        setIsAdminVerified(false);
+      } else {
+        try {
+          sessionStorage.setItem('maxtv_admin_verified', 'true');
+          sessionStorage.setItem('maxtv_admin_user', JSON.stringify(res.user));
+        } catch {}
+      }
+    }).catch(() => {});
+  }, [isAdminVerified]);
+
+  // Fetch live channels and VOD from API on mount (using cached instant response + background revalidation)
   useEffect(() => {
     const fetchChannels = async () => {
       try {
@@ -206,13 +315,33 @@ export default function App() {
     try {
       await api.logout();
     } catch (e) {}
+    try {
+      await api.adminLogout();
+    } catch (e) {}
+    clearAdminToken();
+    setIsAdminVerified(false);
     setCurrentUser(null);
     setAuthToken('');
     localStorage.removeItem('maxtv_user');
     localStorage.removeItem('maxtv_token');
     setFavorites(favoritesStorage.getFavorites());
     setWatchProgress(watchProgressStorage.getProgressList());
+    if (currentTab === 'admin') {
+      setCurrentTab('live');
+    }
   };
+
+  // Listen to unauthorized admin API events & reactive synchronization
+  useEffect(() => {
+    const handleAdminUnauthorized = () => {
+      setIsAdminVerified(false);
+    };
+
+    window.addEventListener('maxtv_admin_unauthorized', handleAdminUnauthorized);
+    return () => {
+      window.removeEventListener('maxtv_admin_unauthorized', handleAdminUnauthorized);
+    };
+  }, []);
 
   // Listen to local storage update events (reactive synchronization)
   useEffect(() => {
@@ -324,6 +453,10 @@ export default function App() {
         setCurrentTab={setCurrentTab}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
+        channels={channels}
+        vodItems={vodItems}
+        onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
+        onPlayVod={(vod) => handlePlayVodWithSeek(vod)}
         currentSubscriber={currentSubscriber}
         currentUser={currentUser}
         favoritesCount={favorites.length}
@@ -341,6 +474,8 @@ export default function App() {
         }}
         onLogout={handleLogout}
         totalChannelsCount={channels.length}
+        isTvBoxMode={isTvBoxMode}
+        onToggleTvBoxMode={() => setIsTvBoxMode(prev => !prev)}
       />
 
       {/* Guest Login Hint Bar if not logged in */}
@@ -376,16 +511,34 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentTab === 'admin' ? (
-          currentUser?.role === 'admin' ? (
+          isAdminVerified && currentUser?.role === 'admin' ? (
             <AdminPanel 
               onClose={() => setCurrentTab('live')}
+              onLockAdmin={async () => {
+                try {
+                  await api.adminLogout();
+                } catch {}
+                clearAdminToken();
+                try {
+                  sessionStorage.removeItem('maxtv_admin_verified');
+                  sessionStorage.removeItem('maxtv_admin_token');
+                  sessionStorage.removeItem('maxtv_admin_user');
+                } catch {}
+                setIsAdminVerified(false);
+              }}
               onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
             />
           ) : (
             <AdminAuthGate
-              onAdminSuccess={(adminUser) => {
+              isAuthenticating={isAuthenticating}
+              setIsAuthenticating={setIsAuthenticating}
+              onAdminSuccess={(adminUser, token) => {
                 setCurrentUser(adminUser);
+                setIsAdminVerified(true);
                 try {
+                  sessionStorage.setItem('maxtv_admin_verified', 'true');
+                  if (token) sessionStorage.setItem('maxtv_admin_token', token);
+                  sessionStorage.setItem('maxtv_admin_user', JSON.stringify(adminUser));
                   localStorage.setItem('maxtv_user', JSON.stringify(adminUser));
                 } catch {}
               }}
@@ -394,100 +547,169 @@ export default function App() {
           )
         ) : (
           <>
-            {/* Hero Banner only on Live & Overview */}
-            {currentTab === 'live' && !searchQuery && (
-              <HeroBanner
-                featuredVod={featuredVod}
-                featuredChannel={featuredChannel}
-                featuredVods={vodItems}
-                featuredChannels={channels}
-                isVip={isVip}
-                onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
-                onPlayVod={(vod) => handlePlayMedia(vod, 'vod')}
-                onOpenCheckout={() => {
-                  setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
-                  setIsCheckoutOpen(true);
-                }}
-              />
-            )}
-
-            {/* Tab: Ao Vivo */}
-            {currentTab === 'live' && (
-              <ChannelGrid
-                channels={channels}
+            {/* Global Search Results View across Channels, Movies and Series */}
+            {searchQuery.trim().length > 0 ? (
+              <GlobalSearchResultsView
                 searchQuery={searchQuery}
-                isVip={isVip}
-                onSelectChannel={(ch) => handlePlayMedia(ch, 'channel')}
-                onOpenCheckout={() => {
-                  setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
-                  setIsCheckoutOpen(true);
-                }}
-                favorites={favorites}
-                onToggleFavorite={handleToggleFavoriteChannel}
-                watchProgress={watchProgress}
-                allVodItems={vodItems}
-                onPlayVod={handlePlayVodWithSeek}
-                onRemoveProgress={handleRemoveProgress}
-              />
-            )}
-
-            {/* Tab: Filmes */}
-            {currentTab === 'movies' && (
-              <VodSection
-                items={vodItems}
-                filterType="movie"
-                searchQuery={searchQuery}
-                isVip={isVip}
-                onPlayVod={handlePlayVodWithSeek}
-                onOpenCheckout={() => {
-                  setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
-                  setIsCheckoutOpen(true);
-                }}
-                favorites={favorites}
-                onToggleFavorite={handleToggleFavoriteVod}
-                watchProgress={watchProgress}
-                onRemoveProgress={handleRemoveProgress}
-              />
-            )}
-
-            {/* Tab: Séries */}
-            {currentTab === 'series' && (
-              <VodSection
-                items={vodItems}
-                filterType="series"
-                searchQuery={searchQuery}
-                isVip={isVip}
-                onPlayVod={handlePlayVodWithSeek}
-                onOpenCheckout={() => {
-                  setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
-                  setIsCheckoutOpen(true);
-                }}
-                favorites={favorites}
-                onToggleFavorite={handleToggleFavoriteVod}
-                watchProgress={watchProgress}
-                onRemoveProgress={handleRemoveProgress}
-              />
-            )}
-
-            {/* Tab: Favoritos */}
-            {currentTab === 'favorites' && (
-              <FavoritesView
-                favorites={favorites}
+                onClearSearch={() => setSearchQuery('')}
                 channels={channels}
                 vodItems={vodItems}
+                isVip={isVip}
                 onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
                 onPlayVod={handlePlayVodWithSeek}
-                onRemoveFavorite={handleRemoveFavorite}
-                onExplore={() => setCurrentTab('live')}
+                onOpenCheckout={() => {
+                  setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                  setIsCheckoutOpen(true);
+                }}
+                favorites={favorites}
+                onToggleFavoriteChannel={handleToggleFavoriteChannel}
+                onToggleFavoriteVod={handleToggleFavoriteVod}
               />
-            )}
+            ) : (
+              <>
+                {/* Hero Banner only on Live & Overview */}
+                {currentTab === 'live' && (
+                  <HeroBanner
+                    featuredVod={featuredVod}
+                    featuredChannel={featuredChannel}
+                    featuredVods={vodItems}
+                    featuredChannels={channels}
+                    isVip={isVip}
+                    onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
+                    onPlayVod={(vod) => handlePlayMedia(vod, 'vod')}
+                    onOpenCheckout={() => {
+                      setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                      setIsCheckoutOpen(true);
+                    }}
+                  />
+                )}
 
-            {/* Tab: Planos VIP */}
-            {currentTab === 'plans' && (
-              <PlansView
-                onSelectPlan={handleSelectPlan}
-                isVip={isVip}
-              />
+                {/* Seção Recém Adicionados no Catálogo */}
+                {currentTab === 'live' && (
+                  <RecentlyAddedSection
+                    items={vodItems}
+                    isVip={isVip}
+                    onPlayVod={handlePlayVodWithSeek}
+                    onOpenCheckout={() => {
+                      setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                      setIsCheckoutOpen(true);
+                    }}
+                    favorites={favorites}
+                    onToggleFavorite={handleToggleFavoriteVod}
+                    title="Recém Adicionados no Catálogo"
+                    subtitle="Os mais novos filmes e séries disponíveis com alta qualidade e som imersivo"
+                  />
+                )}
+
+                {/* Tab: Ao Vivo */}
+                {currentTab === 'live' && (
+                  <ChannelGrid
+                    channels={channels}
+                    searchQuery=""
+                    isVip={isVip}
+                    onSelectChannel={(ch) => handlePlayMedia(ch, 'channel')}
+                    onOpenCheckout={() => {
+                      setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                      setIsCheckoutOpen(true);
+                    }}
+                    favorites={favorites}
+                    onToggleFavorite={handleToggleFavoriteChannel}
+                    watchProgress={watchProgress}
+                    allVodItems={vodItems}
+                    onPlayVod={handlePlayVodWithSeek}
+                    onRemoveProgress={handleRemoveProgress}
+                  />
+                )}
+
+                {/* Tab: Filmes */}
+                {currentTab === 'movies' && (
+                  <>
+                    <RecentlyAddedSection
+                      items={vodItems.filter(v => v.type === 'movie')}
+                      isVip={isVip}
+                      onPlayVod={handlePlayVodWithSeek}
+                      onOpenCheckout={() => {
+                        setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                        setIsCheckoutOpen(true);
+                      }}
+                      favorites={favorites}
+                      onToggleFavorite={handleToggleFavoriteVod}
+                      title="Filmes Recém Adicionados"
+                      subtitle="Lançamentos do cinema adicionados recentemente ao acervo MAXTV"
+                    />
+                    <VodSection
+                      items={vodItems}
+                      filterType="movie"
+                      searchQuery=""
+                      isVip={isVip}
+                      onPlayVod={handlePlayVodWithSeek}
+                      onOpenCheckout={() => {
+                        setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                        setIsCheckoutOpen(true);
+                      }}
+                      favorites={favorites}
+                      onToggleFavorite={handleToggleFavoriteVod}
+                      watchProgress={watchProgress}
+                      onRemoveProgress={handleRemoveProgress}
+                    />
+                  </>
+                )}
+
+                {/* Tab: Séries */}
+                {currentTab === 'series' && (
+                  <>
+                    <RecentlyAddedSection
+                      items={vodItems.filter(v => v.type === 'series')}
+                      isVip={isVip}
+                      onPlayVod={handlePlayVodWithSeek}
+                      onOpenCheckout={() => {
+                        setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                        setIsCheckoutOpen(true);
+                      }}
+                      favorites={favorites}
+                      onToggleFavorite={handleToggleFavoriteVod}
+                      title="Séries Recém Adicionadas"
+                      subtitle="Novas séries e temporadas completas adicionadas recentemente"
+                    />
+                    <VodSection
+                      items={vodItems}
+                      filterType="series"
+                      searchQuery=""
+                      isVip={isVip}
+                      onPlayVod={handlePlayVodWithSeek}
+                      onOpenCheckout={() => {
+                        setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                        setIsCheckoutOpen(true);
+                      }}
+                      favorites={favorites}
+                      onToggleFavorite={handleToggleFavoriteVod}
+                      watchProgress={watchProgress}
+                      onRemoveProgress={handleRemoveProgress}
+                    />
+                  </>
+                )}
+
+                {/* Tab: Favoritos */}
+                {currentTab === 'favorites' && (
+                  <FavoritesView
+                    favorites={favorites}
+                    channels={channels}
+                    vodItems={vodItems}
+                    onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
+                    onPlayVod={handlePlayVodWithSeek}
+                    onRemoveFavorite={handleRemoveFavorite}
+                    onExplore={() => setCurrentTab('live')}
+                  />
+                )}
+
+                {/* Tab: Planos VIP */}
+                {currentTab === 'plans' && (
+                  <PlansView
+                    onSelectPlan={handleSelectPlan}
+                    isVip={isVip}
+                  />
+                )}
+              </>
             )}
           </>
         )}

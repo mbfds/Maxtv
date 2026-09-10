@@ -66,6 +66,8 @@ export interface VodItem {
   subtitles?: SubtitleTrack[];
   trailerUrl?: string;
   featured?: boolean;
+  isRecentlyAdded?: boolean;
+  addedAt?: string;
   isVipOnly?: boolean;
   activeSeasonNumber?: number;
   activeEpisodeNumber?: number;
@@ -376,5 +378,35 @@ export interface M3uAutoUpdateConfig {
     finalGradeCount: number;
   };
 }
+
+export interface UrlSaveErrorEntry {
+  id: string;
+  timestamp: string;
+  url: string;
+  sourceName?: string;
+  errorType: 'http_error' | 'timeout' | 'network_error' | 'invalid_m3u_format' | 'empty_content' | 'protocol_error' | 'sqlite_error' | 'validation_error' | string;
+  errorMessage: string;
+  statusCode?: number;
+  details?: {
+    latencyMs?: number;
+    contentType?: string;
+    sampleContent?: string;
+    stack?: string;
+    sample?: string;
+    initiatedBy?: string;
+    [key: string]: any;
+  };
+}
+
+export interface DatabaseStats {
+  dbFile: string;
+  dbSizeBytes: number;
+  dbSizeFormatted: string;
+  walSizeBytes: number;
+  walSizeFormatted: string;
+  counts: Record<string, number>;
+  timestamp: string;
+}
+
 
 

@@ -5,7 +5,8 @@ import {
   Trash2, UserCheck, UserX, Clock, ExternalLink, Zap,
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
-  Activity, Film, WifiOff, FileCode, GitBranch, Layers
+  Activity, Film, WifiOff, FileCode, GitBranch, Layers, Lock,
+  Download, Database, HardDrive
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
@@ -14,15 +15,17 @@ import { ChannelConfigEditor } from './ChannelConfigEditor';
 import { ChannelUpdateHistory } from './ChannelUpdateHistory';
 import { RepoLinksUpdater } from './RepoLinksUpdater';
 import { M3uUnifierManager } from './M3uUnifierManager';
+import { UrlErrorLogsViewer } from './UrlErrorLogsViewer';
 
 interface AdminPanelProps {
   onClose: () => void;
   onPreviewChannel: (channel: Channel) => void;
+  onLockAdmin?: () => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'unify-m3u' | 'channels' | 'channels-config' | 'channels-history' | 'repo-sync' | 'transactions' | 'settings';
+type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'unify-m3u' | 'channels' | 'channels-config' | 'channels-history' | 'repo-sync' | 'transactions' | 'settings' | 'url-errors';
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel, onLockAdmin }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
@@ -36,6 +39,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [actionFeedback, setActionFeedback] = useState<string>('');
+  const [isDownloadingDb, setIsDownloadingDb] = useState<boolean>(false);
+
+  const handleDownloadBackup = async () => {
+    setIsDownloadingDb(true);
+    try {
+      const blob = await api.downloadDatabaseBackup();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const nowTag = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.href = url;
+      a.download = `maxtv-backup-${nowTag}.db`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setActionFeedback('Backup do banco SQLite baixado com sucesso!');
+      setTimeout(() => setActionFeedback(''), 4000);
+    } catch (err: any) {
+      try {
+        const directUrl = api.getDatabaseBackupDownloadUrl();
+        window.open(directUrl, '_blank');
+        setActionFeedback('Iniciando download do backup...');
+        setTimeout(() => setActionFeedback(''), 4000);
+      } catch (e: any) {
+        alert(`Erro ao baixar backup: ${err.message}`);
+      }
+    } finally {
+      setIsDownloadingDb(false);
+    }
+  };
 
   // Modals inside admin
   const [isGrantModalOpen, setIsGrantModalOpen] = useState<boolean>(false);
@@ -424,6 +457,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
           </button>
 
           <button
+            id="btn-header-download-db"
+            type="button"
+            onClick={handleDownloadBackup}
+            disabled={isDownloadingDb}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+            title="Baixar cópia manual do banco de dados SQLite (data/maxtv.db) com flush WAL de segurança"
+          >
+            {isDownloadingDb ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+            <span>Backup SQLite (.db)</span>
+          </button>
+
+          <button
             type="button"
             onClick={loadData}
             disabled={isLoading}
@@ -432,6 +481,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
           </button>
+
+          {onLockAdmin && (
+            <button
+              type="button"
+              onClick={onLockAdmin}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer"
+              title="Bloquear painel e encerrar sessão de administrador"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Bloquear Painel</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -685,6 +746,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             </button>
 
             <button
+              id="sidebar-tab-url-errors"
+              type="button"
+              onClick={() => setActiveTab('url-errors')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'url-errors'
+                  ? 'bg-gradient-to-r from-rose-600 to-indigo-600 text-white shadow-lg shadow-rose-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Database className="w-4 h-4 text-rose-400" />
+                <span>Erros URLs & SQLite</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
+                Diagnóstico
+              </span>
+            </button>
+
+            <button
               type="button"
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -886,6 +966,54 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              {/* CARD DESTAQUE: BACKUP DO BANCO SQLITE & MONITOR DE URLs */}
+              <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 shrink-0">
+                      <Database className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center gap-2">
+                        <span>Banco de Dados SQLite 3 Local</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
+                          data/maxtv.db
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Todos os canais, assinantes, transações PIX e logs são persistidos localmente. Baixe uma cópia para recuperação ou monitore falhas de links M3U.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleDownloadBackup}
+                      disabled={isDownloadingDb}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                      title="Baixar cópia manual de data/maxtv.db"
+                    >
+                      {isDownloadingDb ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      <span>Baixar Backup (.db)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('url-errors')}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Ver Logs de Erros</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2002,6 +2130,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 </form>
               </div>
             </div>
+          )}
+
+          {/* TAB 8: LOGS DE ERROS DE URLs E BANCO SQLITE */}
+          {activeTab === 'url-errors' && (
+            <UrlErrorLogsViewer onGoToUnifier={() => setActiveTab('unify-m3u')} />
           )}
 
         </main>
