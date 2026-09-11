@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   History, 
   CreditCard, 
@@ -13,10 +13,17 @@ import {
   User, 
   DollarSign, 
   Check, 
-  Sparkles,
-  ChevronRight
+  Sparkles, 
+  ChevronRight,
+  X,
+  RefreshCw,
+  SlidersHorizontal,
+  Mail,
+  Cpu
 } from 'lucide-react';
+import { TableVirtuoso } from 'react-virtuoso';
 import { VipGrant, PixTransaction } from '../types';
+import { WorkerUnifiedEntry, WorkerHistoryMetrics, WorkerHistoryOutput } from '../workers/historyWorker';
 
 interface SalesAndGrantsHistoryProps {
   grantsHistory: VipGrant[];
@@ -24,23 +31,6 @@ interface SalesAndGrantsHistoryProps {
   onApproveTransaction: (id: string) => void;
   onOpenGrantModal: () => void;
   onRefreshData?: () => void;
-}
-
-type UnifiedEntryType = 'sale' | 'grant';
-
-interface UnifiedEntry {
-  id: string;
-  type: UnifiedEntryType;
-  timestamp: string;
-  dateObj: Date;
-  subscriberName: string;
-  subscriberEmail: string;
-  title: string;
-  details: string;
-  amountOrPeriod: string;
-  status: 'approved' | 'pending' | 'active';
-  responsibleOrGateway: string;
-  originalData: VipGrant | PixTransaction;
 }
 
 export const SalesAndGrantsHistory: React.FC<SalesAndGrantsHistoryProps> = ({
@@ -52,91 +42,167 @@ export const SalesAndGrantsHistory: React.FC<SalesAndGrantsHistoryProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'all' | 'sales' | 'grants' | 'pending'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | '30days'>('all');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Unificação dos registros em uma linha do tempo única
-  const unifiedEntries = useMemo(() => {
-    const list: UnifiedEntry[] = [];
+  // Worker ref
+  const workerRef = useRef<Worker | null>(null);
 
-    // Mapear Transações PIX
-    transactions.forEach(tx => {
-      const date = new Date(tx.createdAt);
-      list.push({
-        id: tx.id,
-        type: 'sale',
-        timestamp: tx.createdAt,
-        dateObj: date,
-        subscriberName: tx.subscriberName || 'Cliente Anônimo',
-        subscriberEmail: tx.subscriberEmail || '—',
-        title: `Venda PIX: ${tx.planName || 'Plano'}`,
-        details: `Cobrança gerada via Mercado Pago PIX (${tx.id})`,
-        amountOrPeriod: `R$ ${tx.amount.toFixed(2).replace('.', ',')}`,
-        status: tx.status === 'approved' ? 'approved' : 'pending',
-        responsibleOrGateway: 'Mercado Pago PIX',
-        originalData: tx
+  // Estado dos dados calculados via Web Worker
+  const [workerData, setWorkerData] = useState<WorkerHistoryOutput>({
+    unifiedEntries: [],
+    filteredEntries: [],
+    metrics: {
+      totalApprovedSales: 0,
+      totalRevenue: 0,
+      pendingCount: 0,
+      pendingRevenue: 0,
+      totalGrants: 0,
+      totalEntries: 0
+    }
+  });
+
+  // Inicialização do Web Worker
+  useEffect(() => {
+    if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
+      try {
+        const worker = new Worker(new URL('../workers/historyWorker.ts', import.meta.url), { type: 'module' });
+        worker.onmessage = (event: MessageEvent<WorkerHistoryOutput>) => {
+          setWorkerData(event.data);
+          setIsProcessing(false);
+        };
+        workerRef.current = worker;
+
+        return () => {
+          worker.terminate();
+        };
+      } catch (err) {
+        console.warn('Web Worker não pôde ser iniciado diretamente, usando fallback síncrono', err);
+      }
+    }
+  }, []);
+
+  // Sincronização via Worker ou fallback síncrono
+  useEffect(() => {
+    setIsProcessing(true);
+    if (workerRef.current) {
+      workerRef.current.postMessage({
+        transactions,
+        grantsHistory,
+        filterType,
+        searchQuery,
+        selectedDate,
+        datePreset
       });
-    });
-
-    // Mapear Liberações de Acesso
-    grantsHistory.forEach(grant => {
-      const date = new Date(grant.grantedAt);
-      list.push({
-        id: grant.id,
-        type: 'grant',
-        timestamp: grant.grantedAt,
-        dateObj: date,
-        subscriberName: grant.subscriberName || 'Assinante',
-        subscriberEmail: grant.subscriberEmail || '—',
-        title: `Liberação VIP: +${grant.monthsGranted} mês(es)`,
-        details: grant.reason ? `Motivo: ${grant.reason}` : 'Concessão direta do administrador',
-        amountOrPeriod: `+${grant.monthsGranted} Mês (${grant.daysGranted}d)`,
-        status: 'active',
-        responsibleOrGateway: grant.grantedBy || 'Administrador',
-        originalData: grant
+    } else {
+      // Fallback síncrono caso Worker falhe ou esteja desabilitado no ambiente
+      const list: WorkerUnifiedEntry[] = [];
+      (transactions || []).forEach(tx => {
+        const d = new Date(tx.createdAt || Date.now());
+        const timeMs = d.getTime();
+        list.push({
+          id: tx.id || `tx-${timeMs}`,
+          type: 'sale',
+          timestamp: tx.createdAt || d.toISOString(),
+          timestampMs: timeMs,
+          subscriberName: tx.subscriberName || 'Cliente Anônimo',
+          subscriberEmail: tx.subscriberEmail || '—',
+          title: `Venda PIX: ${tx.planName || 'Plano VIP'}`,
+          details: `Cobrança gerada via Mercado Pago PIX (${tx.id || 'N/A'})`,
+          amountOrPeriod: `R$ ${(typeof tx.amount === 'number' ? tx.amount : 0).toFixed(2).replace('.', ',')}`,
+          status: tx.status === 'approved' ? 'approved' : 'pending',
+          responsibleOrGateway: 'Mercado Pago PIX',
+          originalData: tx,
+          dateFormattedPtBr: d.toLocaleDateString('pt-BR'),
+          timeFormattedPtBr: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          dateIsoDateOnly: d.toISOString().slice(0, 10)
+        });
       });
-    });
 
-    // Ordenar cronologicamente: mais recentes primeiro
-    return list.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
-  }, [transactions, grantsHistory]);
+      (grantsHistory || []).forEach(grant => {
+        const d = new Date(grant.grantedAt || Date.now());
+        const timeMs = d.getTime();
+        list.push({
+          id: grant.id || `grant-${timeMs}`,
+          type: 'grant',
+          timestamp: grant.grantedAt || d.toISOString(),
+          timestampMs: timeMs,
+          subscriberName: grant.subscriberName || 'Assinante',
+          subscriberEmail: grant.subscriberEmail || '—',
+          title: `Liberação VIP: +${grant.monthsGranted || 1} mês(es)`,
+          details: grant.reason ? `Motivo: ${grant.reason}` : 'Concessão direta do administrador',
+          amountOrPeriod: `+${grant.monthsGranted || 1} Mês (${grant.daysGranted || 30}d)`,
+          status: 'active',
+          responsibleOrGateway: grant.grantedBy || 'Administrador',
+          originalData: grant,
+          dateFormattedPtBr: d.toLocaleDateString('pt-BR'),
+          timeFormattedPtBr: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          dateIsoDateOnly: d.toISOString().slice(0, 10)
+        });
+      });
 
-  // Cálculos de KPIs comerciais
-  const metrics = useMemo(() => {
-    const approvedSales = transactions.filter(t => t.status === 'approved');
-    const pendingSales = transactions.filter(t => t.status === 'pending');
-    const totalSalesRevenue = approvedSales.reduce((acc, t) => acc + t.amount, 0);
-    const pendingSalesRevenue = pendingSales.reduce((acc, t) => acc + t.amount, 0);
+      list.sort((a, b) => b.timestampMs - a.timestampMs);
 
-    return {
-      totalApprovedSales: approvedSales.length,
-      totalRevenue: totalSalesRevenue,
-      pendingCount: pendingSales.length,
-      pendingRevenue: pendingSalesRevenue,
-      totalGrants: grantsHistory.length,
-      totalEntries: transactions.length + grantsHistory.length
-    };
-  }, [transactions, grantsHistory]);
+      const approvedSales = (transactions || []).filter(t => t.status === 'approved');
+      const pendingSales = (transactions || []).filter(t => t.status === 'pending');
+      const totalSalesRevenue = approvedSales.reduce((acc, t) => acc + (t.amount || 0), 0);
+      const pendingSalesRevenue = pendingSales.reduce((acc, t) => acc + (t.amount || 0), 0);
 
-  // Filtro por texto e tipo
-  const filteredEntries = useMemo(() => {
-    return unifiedEntries.filter(entry => {
-      // Filtro de tipo
-      if (filterType === 'sales' && entry.type !== 'sale') return false;
-      if (filterType === 'grants' && entry.type !== 'grant') return false;
-      if (filterType === 'pending' && entry.status !== 'pending') return false;
+      const metrics: WorkerHistoryMetrics = {
+        totalApprovedSales: approvedSales.length,
+        totalRevenue: totalSalesRevenue,
+        pendingCount: pendingSales.length,
+        pendingRevenue: pendingSalesRevenue,
+        totalGrants: (grantsHistory || []).length,
+        totalEntries: (transactions || []).length + (grantsHistory || []).length
+      };
 
-      // Filtro de busca textual
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        entry.subscriberName.toLowerCase().includes(q) ||
-        entry.subscriberEmail.toLowerCase().includes(q) ||
-        entry.title.toLowerCase().includes(q) ||
-        entry.details.toLowerCase().includes(q) ||
-        entry.id.toLowerCase().includes(q) ||
-        entry.responsibleOrGateway.toLowerCase().includes(q)
-      );
-    });
-  }, [unifiedEntries, filterType, searchQuery]);
+      const now = Date.now();
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+      const q = (searchQuery || '').toLowerCase().trim();
+
+      const filtered = list.filter(entry => {
+        if (filterType === 'sales' && entry.type !== 'sale') return false;
+        if (filterType === 'grants' && entry.type !== 'grant') return false;
+        if (filterType === 'pending' && entry.status !== 'pending') return false;
+        if (selectedDate && entry.dateIsoDateOnly !== selectedDate) return false;
+        if (datePreset === 'today' && entry.dateIsoDateOnly !== todayIso) return false;
+        if (datePreset === '7days' && entry.timestampMs < sevenDaysAgo) return false;
+        if (datePreset === '30days' && entry.timestampMs < thirtyDaysAgo) return false;
+        if (!q) return true;
+        return (
+          entry.subscriberEmail.toLowerCase().includes(q) ||
+          entry.subscriberName.toLowerCase().includes(q) ||
+          entry.dateFormattedPtBr.includes(q) ||
+          entry.timeFormattedPtBr.includes(q) ||
+          entry.id.toLowerCase().includes(q) ||
+          entry.title.toLowerCase().includes(q) ||
+          entry.details.toLowerCase().includes(q)
+        );
+      });
+
+      setWorkerData({
+        unifiedEntries: list,
+        filteredEntries: filtered,
+        metrics
+      });
+      setIsProcessing(false);
+    }
+  }, [transactions, grantsHistory, filterType, searchQuery, selectedDate, datePreset]);
+
+  const { filteredEntries, metrics } = workerData;
+
+  const hasActiveFilters = filterType !== 'all' || searchQuery.trim() !== '' || selectedDate !== '' || datePreset !== 'all';
+
+  const handleResetFilters = () => {
+    setFilterType('all');
+    setSearchQuery('');
+    setSelectedDate('');
+    setDatePreset('all');
+  };
 
   return (
     <div className="space-y-6">
@@ -238,202 +304,338 @@ export const SalesAndGrantsHistory: React.FC<SalesAndGrantsHistoryProps> = ({
         </div>
       </div>
 
-      {/* Barra de Filtros & Busca */}
-      <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Segmented Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-white/5">
-          <button
-            type="button"
-            onClick={() => setFilterType('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              filterType === 'all'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Todos ({metrics.totalEntries})
-          </button>
+      {/* Barra de Filtros & Busca Unificada */}
+      <div className="p-4 rounded-3xl bg-slate-900 border border-white/10 space-y-3.5 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Segmented Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-950 border border-white/5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFilterType('all')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterType === 'all'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Todos ({metrics.totalEntries})
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setFilterType('sales')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              filterType === 'sales'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <CreditCard className="w-3.5 h-3.5" />
-            <span>Vendas PIX ({transactions.length})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('sales')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterType === 'sales'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Vendas PIX ({transactions.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setFilterType('grants')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              filterType === 'grants'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Gift className="w-3.5 h-3.5" />
-            <span>Liberações VIP ({grantsHistory.length})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('grants')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterType === 'grants'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Gift className="w-3.5 h-3.5" />
+              <span>Liberações VIP ({grantsHistory.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setFilterType('pending')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              filterType === 'pending'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Pendentes ({metrics.pendingCount})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('pending')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterType === 'pending'
+                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Pendentes ({metrics.pendingCount})</span>
+            </button>
+          </div>
+
+          {/* Inputs de Busca por Email / Texto e Seletor de Data */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl">
+            {/* Input de Busca Textual (Email, Nome, ID, etc.) */}
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Buscar por e-mail ou data (ex: cebolao1302@gmail.com ou 11/09/2026)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300 p-0.5"
+                  title="Limpar busca"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Filtro por Data Específica (Date Picker) */}
+            <div className="relative shrink-0 flex items-center">
+              <div className="relative">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    if (e.target.value) setDatePreset('all');
+                  }}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  title="Filtrar por data específica"
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate('')}
+                    className="absolute -right-2 -top-2 w-5 h-5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-white/10"
+                    title="Remover filtro de data"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Input de Busca */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-3.5 h-3.5 absolute left-3.5 top-3 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar por cliente, e-mail, plano ou ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          />
+        {/* Linha Secundária: Presets de Data Rápidos & Contador / Reset */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/5 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-500 mr-1 flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-400" />
+              <span>Período:</span>
+            </span>
+
+            <button
+              type="button"
+              onClick={() => { setDatePreset('all'); setSelectedDate(''); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                datePreset === 'all' && !selectedDate
+                  ? 'bg-white/15 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Todas as datas
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setDatePreset('today'); setSelectedDate(''); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                datePreset === 'today'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Hoje
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setDatePreset('7days'); setSelectedDate(''); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                datePreset === '7days'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Últimos 7 dias
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setDatePreset('30days'); setSelectedDate(''); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                datePreset === '30days'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              Últimos 30 dias
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isProcessing && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-teal-400 font-medium animate-pulse">
+                <Cpu className="w-3.5 h-3.5 animate-spin" />
+                <span>Processando Worker...</span>
+              </span>
+            )}
+
+            <span className="text-[11px] text-slate-400 font-medium">
+              Mostrando <strong className="text-white">{filteredEntries.length}</strong> de {metrics.totalEntries} registros
+            </span>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-bold px-2 py-0.5 rounded-md hover:bg-amber-950/30 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                <span>Limpar filtros</span>
+              </button>
+            )}
+
+            {onRefreshData && (
+              <button
+                type="button"
+                onClick={onRefreshData}
+                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                title="Recarregar registros"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Tabela Unificada de Registros */}
-      <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900 shadow-sm">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] font-semibold border-b border-white/10">
-            <tr>
-              <th className="p-4">Tipo & Registro</th>
-              <th className="p-4">Assinante / Cliente</th>
-              <th className="p-4">Detalhes / Plano</th>
-              <th className="p-4">Valor / Período</th>
-              <th className="p-4">Data & Horário</th>
-              <th className="p-4">Status</th>
-              <th className="p-4 text-right">Ação / Responsável</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {filteredEntries.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-12 text-center text-slate-500 space-y-2">
-                  <History className="w-8 h-8 text-slate-600 mx-auto" />
-                  <p className="text-sm font-semibold text-slate-400">Nenhum registro localizado</p>
-                  <p className="text-xs text-slate-500">Tente ajustar seus termos de pesquisa ou filtros selecionados.</p>
-                </td>
+      {/* Tabela Virtualizada de Registros (React Virtuoso com zero lag de DOM) */}
+      <div className="rounded-3xl border border-white/10 bg-slate-900 shadow-sm overflow-hidden">
+        {filteredEntries.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 space-y-2">
+            <History className="w-8 h-8 text-slate-600 mx-auto" />
+            <p className="text-sm font-semibold text-slate-400">Nenhum registro localizado</p>
+            <p className="text-xs text-slate-500">Tente ajustar seus termos de pesquisa ou filtros selecionados.</p>
+          </div>
+        ) : (
+          <TableVirtuoso
+            style={{ height: '620px', width: '100%' }}
+            data={filteredEntries}
+            fixedHeaderContent={() => (
+              <tr className="bg-slate-950 text-slate-400 uppercase text-[10px] font-semibold border-b border-white/10 select-none shadow-md">
+                <th className="p-4 bg-slate-950 w-44">Tipo & Registro</th>
+                <th className="p-4 bg-slate-950">Assinante / Cliente</th>
+                <th className="p-4 bg-slate-950">Detalhes / Plano</th>
+                <th className="p-4 bg-slate-950">Valor / Período</th>
+                <th className="p-4 bg-slate-950">Data & Horário</th>
+                <th className="p-4 bg-slate-950">Status</th>
+                <th className="p-4 bg-slate-950 text-right">Ação / Responsável</th>
               </tr>
-            ) : (
-              filteredEntries.map(entry => {
-                const isSale = entry.type === 'sale';
-                return (
-                  <tr key={`${entry.type}-${entry.id}`} className="hover:bg-white/5 transition-colors">
-                    {/* Tipo & Badge */}
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                          isSale 
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                            : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                        }`}>
-                          {isSale ? <CreditCard className="w-3.5 h-3.5" /> : <Gift className="w-3.5 h-3.5" />}
-                        </span>
-                        <div>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            isSale 
-                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' 
-                              : 'bg-purple-950 text-purple-300 border border-purple-500/30'
-                          }`}>
-                            {isSale ? 'Venda PIX' : 'Liberação VIP'}
-                          </span>
-                          <span className="block text-[10px] font-mono text-slate-500 mt-0.5">
-                            {entry.id.slice(0, 16)}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Assinante */}
-                    <td className="p-4">
-                      <span className="font-semibold text-white block">{entry.subscriberName}</span>
-                      <span className="text-slate-400 text-[11px] font-mono">{entry.subscriberEmail}</span>
-                    </td>
-
-                    {/* Detalhes / Plano */}
-                    <td className="p-4">
-                      <span className="text-slate-200 font-medium block">{entry.title}</span>
-                      <span className="text-slate-400 text-[11px]">{entry.details}</span>
-                    </td>
-
-                    {/* Valor / Período */}
-                    <td className="p-4">
-                      <span className={`text-sm font-bold ${isSale ? 'text-emerald-400' : 'text-purple-400'}`}>
-                        {entry.amountOrPeriod}
-                      </span>
-                    </td>
-
-                    {/* Data & Horário */}
-                    <td className="p-4 text-slate-400 whitespace-nowrap">
-                      <span className="block text-slate-300">
-                        {entry.dateObj.toLocaleDateString('pt-BR')}
-                      </span>
-                      <span className="text-[11px] text-slate-500 font-mono">
-                        {entry.dateObj.toLocaleTimeString('pt-BR')}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="p-4">
-                      {entry.status === 'approved' && (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 w-fit">
-                          <CheckCircle className="w-3 h-3 text-emerald-400" />
-                          <span>Aprovado</span>
-                        </span>
-                      )}
-                      {entry.status === 'pending' && (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-500/30 flex items-center gap-1 w-fit animate-pulse">
-                          <Clock className="w-3 h-3 text-amber-400" />
-                          <span>Pendente</span>
-                        </span>
-                      )}
-                      {entry.status === 'active' && (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-950 text-purple-300 border border-purple-500/30 flex items-center gap-1 w-fit">
-                          <Sparkles className="w-3 h-3 text-purple-400" />
-                          <span>VIP Concedido</span>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Ação ou Responsável */}
-                    <td className="p-4 text-right">
-                      {isSale && entry.status === 'pending' ? (
-                        <button
-                          type="button"
-                          onClick={() => onApproveTransaction(entry.id)}
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition-all inline-flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Aprovar PIX</span>
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-medium px-2 py-1 rounded-lg bg-white/5 border border-white/5">
-                          {entry.responsibleOrGateway}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
             )}
-          </tbody>
-        </table>
+            itemContent={(_index, entry) => {
+              const isSale = entry.type === 'sale';
+              return (
+                <>
+                  {/* Tipo & Badge */}
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                        isSale 
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                          : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                      }`}>
+                        {isSale ? <CreditCard className="w-3.5 h-3.5" /> : <Gift className="w-3.5 h-3.5" />}
+                      </span>
+                      <div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isSale 
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30' 
+                            : 'bg-purple-950 text-purple-300 border border-purple-500/30'
+                        }`}>
+                          {isSale ? 'Venda PIX' : 'Liberação VIP'}
+                        </span>
+                        <span className="block text-[10px] font-mono text-slate-500 mt-0.5">
+                          {entry.id.slice(0, 16)}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Assinante */}
+                  <td className="p-4">
+                    <span className="font-semibold text-white block">{entry.subscriberName}</span>
+                    <span className="text-slate-400 text-[11px] font-mono">{entry.subscriberEmail}</span>
+                  </td>
+
+                  {/* Detalhes / Plano */}
+                  <td className="p-4">
+                    <span className="text-slate-200 font-medium block">{entry.title}</span>
+                    <span className="text-slate-400 text-[11px]">{entry.details}</span>
+                  </td>
+
+                  {/* Valor / Período */}
+                  <td className="p-4">
+                    <span className={`text-sm font-bold ${isSale ? 'text-emerald-400' : 'text-purple-400'}`}>
+                      {entry.amountOrPeriod}
+                    </span>
+                  </td>
+
+                  {/* Data & Horário */}
+                  <td className="p-4 text-slate-400 whitespace-nowrap">
+                    <span className="block text-slate-300">
+                      {entry.dateFormattedPtBr}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {entry.timeFormattedPtBr}
+                    </span>
+                  </td>
+
+                  {/* Status */}
+                  <td className="p-4">
+                    {entry.status === 'approved' && (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 w-fit">
+                        <CheckCircle className="w-3 h-3 text-emerald-400" />
+                        <span>Aprovado</span>
+                      </span>
+                    )}
+                    {entry.status === 'pending' && (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-500/30 flex items-center gap-1 w-fit animate-pulse">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>Pendente</span>
+                      </span>
+                    )}
+                    {entry.status === 'active' && (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-950 text-purple-300 border border-purple-500/30 flex items-center gap-1 w-fit">
+                        <Sparkles className="w-3 h-3 text-purple-400" />
+                        <span>VIP Concedido</span>
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Ação ou Responsável */}
+                  <td className="p-4 text-right">
+                    {isSale && entry.status === 'pending' ? (
+                      <button
+                        type="button"
+                        onClick={() => onApproveTransaction(entry.id)}
+                        className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-sm transition-all inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Aprovar PIX</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 font-medium px-2 py-1 rounded-lg bg-white/5 border border-white/5">
+                        {entry.responsibleOrGateway}
+                      </span>
+                    )}
+                  </td>
+                </>
+              );
+            }}
+            components={{
+              Table: (props) => <table {...props} className="w-full text-left text-xs border-collapse" />,
+              TableRow: (props) => <tr {...props} className="hover:bg-white/5 transition-colors border-b border-white/5" />
+            }}
+          />
+        )}
       </div>
     </div>
   );

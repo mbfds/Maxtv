@@ -21,18 +21,20 @@ import {
   Globe,
   Radio,
   Sliders,
-  Sparkles
+  Sparkles,
+  Edit3,
+  Calendar,
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import { M3uAutoUpdateSource, M3uAutoUpdateConfig } from '../types';
 import { M3uUnifierManager } from './M3uUnifierManager';
-import { RepoLinksUpdater } from './RepoLinksUpdater';
 
 interface UnifiedLinksManagerProps {
   currentUser?: { name?: string; email?: string };
   onRefreshChannels?: () => void;
   onNavigateToHistory?: () => void;
-  defaultSubTab?: 'saved-links' | 'unifier' | 'repo-sync';
+  defaultSubTab?: 'saved-links' | 'unifier';
 }
 
 export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
@@ -41,7 +43,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
   onNavigateToHistory,
   defaultSubTab = 'saved-links'
 }) => {
-  const [subTab, setSubTab] = useState<'saved-links' | 'unifier' | 'repo-sync'>(defaultSubTab);
+  const [subTab, setSubTab] = useState<'saved-links' | 'unifier'>(defaultSubTab);
   const [sources, setSources] = useState<M3uAutoUpdateSource[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -65,6 +67,59 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
   const [testResultsMap, setTestResultsMap] = useState<Record<string, { online: boolean; latencyMs: number; channels?: number }>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Estado para Edição de Link Existente
+  const [editingSource, setEditingSource] = useState<M3uAutoUpdateSource | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [editUrl, setEditUrl] = useState<string>('');
+  const [editType, setEditType] = useState<'channels' | 'vod'>('channels');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  const handleOpenEdit = (src: M3uAutoUpdateSource) => {
+    setEditingSource(src);
+    setEditName(src.name || '');
+    setEditUrl(src.url || '');
+    setEditType(src.type || 'channels');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingSource) return;
+    if (!editName.trim()) {
+      setFeedback({ type: 'error', text: 'Por favor, informe um nome para o link.' });
+      return;
+    }
+    if (!editUrl.trim() || !editUrl.trim().startsWith('http')) {
+      setFeedback({ type: 'error', text: 'Por favor, informe uma URL válida iniciando com http:// ou https://' });
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setFeedback({ type: 'info', text: `Atualizando "${editName.trim()}"...` });
+
+    try {
+      const res = await api.updateM3uSource(editingSource.id, {
+        name: editName.trim(),
+        url: editUrl.trim(),
+        type: editType
+      });
+
+      if (res && res.sources) {
+        setSources(res.sources);
+      } else {
+        await loadSources();
+      }
+
+      setFeedback({
+        type: 'success',
+        text: `Link "${editName.trim()}" atualizado com sucesso com registro de horário de modificação!`
+      });
+      setEditingSource(null);
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err.message || 'Falha ao atualizar link' });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const loadSources = async () => {
     setIsLoading(true);
@@ -598,18 +653,30 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                           </button>
                         </div>
 
-                        {/* REGISTRO DO HORÁRIO QUE O ADMIN COLOCOU */}
-                        <div className="flex items-center gap-4 text-[11px] text-slate-400 pl-8 pt-0.5">
+                        {/* REGISTRO DOS HORÁRIOS: CRIAÇÃO E EDIÇÃO */}
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 pl-8 pt-0.5">
                           <span className="flex items-center gap-1 text-teal-400 font-medium">
-                            <Clock className="w-3 h-3 text-teal-400" />
+                            <Clock className="w-3 h-3 text-teal-400 shrink-0" />
                             <span>
+                              Criado em:{' '}
                               {src.dateFormatted 
-                                ? `Adicionado em: ${src.dateFormatted}` 
+                                ? src.dateFormatted 
                                 : src.createdAt 
-                                ? `Adicionado em: ${new Date(src.createdAt).toLocaleString('pt-BR')}`
+                                ? new Date(src.createdAt).toLocaleString('pt-BR')
                                 : 'Registro de sistema'}
                             </span>
                           </span>
+
+                          {(src.updatedDateFormatted || (src.updatedAt && src.updatedAt !== src.createdAt)) && (
+                            <span className="flex items-center gap-1 text-amber-300 font-medium bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-500/20">
+                              <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span>
+                                Editado em:{' '}
+                                {src.updatedDateFormatted || (src.updatedAt ? new Date(src.updatedAt).toLocaleString('pt-BR') : '')}
+                              </span>
+                            </span>
+                          )}
+
                           {src.author && (
                             <span className="text-slate-500">
                               por <strong className="text-slate-400">{src.author}</strong>
@@ -620,10 +687,21 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
 
                       {/* Botões de Ações do Link */}
                       <div className="flex flex-wrap items-center gap-2 shrink-0 pl-8 lg:pl-0">
+                        {/* Botão de Editar */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(src)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                          title="Editar nome, URL ou tipo do link"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Editar</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleToggleSource(src)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                             src.enabled
                               ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                               : 'bg-emerald-600 text-white hover:bg-emerald-500'
@@ -636,7 +714,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                           type="button"
                           onClick={() => handleTestExistingSource(src)}
                           disabled={testingId === src.id}
-                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
                         >
                           {testingId === src.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5 text-teal-400" />}
                           <span>Testar</span>
@@ -646,7 +724,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                           type="button"
                           onClick={() => handleSyncSourceNow(src)}
                           disabled={activeSyncingId === src.id}
-                          className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                          className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                         >
                           {activeSyncingId === src.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                           <span>Sincronizar</span>
@@ -655,7 +733,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteSource(src.id, src.name)}
-                          className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 transition-colors"
+                          className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
                           title="Remover link"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -667,6 +745,126 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
               </div>
             )}
           </div>
+
+          {/* MODAL DE EDIÇÃO DE LINK */}
+          {editingSource && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+              <div className="w-full max-w-lg bg-slate-900 border border-teal-500/40 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 relative overflow-hidden">
+                <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-teal-500/20 text-teal-400">
+                      <Edit3 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white">Editar Link M3U</h4>
+                      <p className="text-xs text-slate-400">Atualize o nome, URL ou categoria da fonte</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingSource(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Nome do Link */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <span>Nome do Link</span>
+                      <span className="text-rose-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Ex: Minha Grade Premiere 2026..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                    />
+                  </div>
+
+                  {/* URL do Link */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                      <span>URL M3U / M3U8</span>
+                      <span className="text-rose-400 font-bold">*</span>
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={editUrl}
+                      onChange={(e) => setEditUrl(e.target.value)}
+                      placeholder="https://.../lista.m3u8"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
+                    />
+                  </div>
+
+                  {/* Tipo */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300">Tipo de Conteúdo</label>
+                    <select
+                      value={editType}
+                      onChange={(e) => setEditType(e.target.value as 'channels' | 'vod')}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
+                    >
+                      <option value="channels">Canais de TV Ao Vivo</option>
+                      <option value="vod">Filmes / Séries (VOD)</option>
+                    </select>
+                  </div>
+
+                  {/* Histórico do item */}
+                  <div className="p-3 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1.5 text-[11px] text-slate-400">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Criado originalmente:</span>
+                      <span className="font-mono text-slate-300">
+                        {editingSource.dateFormatted || (editingSource.createdAt ? new Date(editingSource.createdAt).toLocaleString('pt-BR') : 'Desconhecido')}
+                      </span>
+                    </div>
+                    {editingSource.updatedDateFormatted && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Última edição:</span>
+                        <span className="font-mono text-amber-300">
+                          {editingSource.updatedDateFormatted}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botões do Modal */}
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSource(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    disabled={isSavingEdit || !editName.trim() || !editUrl.trim()}
+                    className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white text-xs font-bold shadow-lg shadow-teal-600/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {isSavingEdit ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Salvando Edição...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Salvar Alterações</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

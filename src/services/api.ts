@@ -35,7 +35,7 @@ export const getAdminToken = (): string => {
   try {
     return (
       (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('maxtv_admin_token')) ||
-      (typeof localStorage !== 'undefined' && (localStorage.getItem('maxtv_admin_token') || localStorage.getItem('maxtv_token'))) ||
+      (typeof localStorage !== 'undefined' && localStorage.getItem('maxtv_admin_token')) ||
       ''
     );
   } catch {
@@ -63,6 +63,8 @@ export const clearAdminToken = (): void => {
     }
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('maxtv_admin_token');
+      localStorage.removeItem('maxtv_admin_verified');
+      localStorage.removeItem('maxtv_admin_user');
     }
   } catch {}
 };
@@ -732,6 +734,24 @@ export const api = {
       const err = new Error(data.error || 'Falha ao salvar fonte M3U');
       (err as any).data = data;
       throw err;
+    }
+    return data;
+  },
+
+  async updateM3uSource(id: string, payload: { name?: string; url?: string; enabled?: boolean; type?: 'channels' | 'vod' }): Promise<{
+    success: boolean;
+    source: M3uAutoUpdateSource;
+    sources: M3uAutoUpdateSource[];
+    message: string;
+  }> {
+    const res = await adminFetch(`/api/admin/channels/sources/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao atualizar fonte M3U');
     }
     return data;
   },

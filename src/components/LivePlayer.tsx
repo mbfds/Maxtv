@@ -9,7 +9,8 @@ import {
   Server, RefreshCw, Film, PictureInPicture, Camera, 
   Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
   HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
-  Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText, SkipForward, ListOrdered
+  Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText, SkipForward, ListOrdered,
+  ChevronDown
 } from 'lucide-react';
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { api } from '../services/api';
@@ -2281,6 +2282,20 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn">
+      {/* Persistent Global Close Button (Always visible and accessible at all times across all screen sizes and TV) */}
+      <button
+        id="player-global-close-btn"
+        type="button"
+        tabIndex={0}
+        onClick={handleClose}
+        className="fixed top-3 right-3 sm:top-5 sm:right-5 z-[80] min-w-[44px] min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-slate-900/95 hover:bg-red-600 focus:bg-red-600 text-white border border-white/30 hover:border-red-500 shadow-2xl backdrop-blur-xl transition-all hover:scale-105 focus:ring-4 focus:ring-red-500 focus:outline-none focus:scale-110 active:scale-95 cursor-pointer group"
+        title="Fechar Vídeo (ESC)"
+        aria-label="Fechar Vídeo"
+      >
+        <X className="w-4 h-4 text-white group-hover:rotate-90 transition-transform duration-200" />
+        <span className="text-xs font-bold tracking-wide">Fechar</span>
+      </button>
+
       {/* Container */}
       <div 
         id="player-container"
@@ -2292,6 +2307,19 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         onDrop={handleDrop}
         className="relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none"
       >
+        {/* Dedicated Absolute Top-Right Close Button inside Container for small screens & TV navigation */}
+        <button
+          id="player-container-close-btn"
+          type="button"
+          tabIndex={0}
+          onClick={handleClose}
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-[75] min-w-[44px] min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-black/85 hover:bg-red-600 focus:bg-red-600 text-white border border-white/30 hover:border-red-500 shadow-2xl backdrop-blur-xl transition-all focus:ring-4 focus:ring-red-500 focus:outline-none focus:scale-110 active:scale-95 cursor-pointer group"
+          title="Fechar Reprodutor (ESC)"
+          aria-label="Fechar Reprodutor"
+        >
+          <X className="w-5 h-5 text-white group-hover:rotate-90 transition-transform duration-200" />
+          <span className="text-xs font-bold tracking-wide hidden sm:inline">Fechar</span>
+        </button>
         {/* Hidden File Input for Subtitles (.vtt / .srt) */}
         <input
           type="file"
@@ -2762,92 +2790,168 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
             {/* Top Bar (Title info, Quality indicator, Close button) */}
             <div 
-              className={`absolute top-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-b from-black/85 via-black/45 to-transparent flex items-center justify-between z-30 transition-opacity duration-300 ${
+              className={`absolute top-0 left-0 right-0 p-3 sm:p-5 bg-gradient-to-b from-black/90 via-black/50 to-transparent flex items-center justify-between gap-3 z-35 transition-opacity duration-300 ${
                 showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
               }`}
             >
-              <div className="flex items-center gap-3">
+              {/* Media Title and Info - strictly constrained so it won't push the controls */}
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden pr-2">
                 {'logo' in item && item.logo ? (
                   <img 
                     src={item.logo} 
                     alt={item.name} 
-                    className="w-10 h-10 object-contain bg-slate-900/80 p-1 rounded-full border border-white/10 shadow-sm" 
+                    className="w-9 h-9 sm:w-10 sm:h-10 object-contain bg-slate-900/80 p-1 rounded-full border border-white/10 shadow-sm shrink-0" 
                   />
                 ) : 'posterUrl' in item && item.posterUrl ? (
                   <img 
                     src={item.posterUrl} 
                     alt={item.title} 
-                    className="w-8 h-11 object-cover rounded-lg border border-white/10 shadow-sm" 
+                    className="w-7 h-10 sm:w-8 sm:h-11 object-cover rounded-lg border border-white/10 shadow-sm shrink-0" 
                   />
                 ) : null}
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-base sm:text-lg text-white">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="font-bold text-sm sm:text-base md:text-lg text-white truncate drop-shadow-sm">
                       {'name' in item ? item.name : item.title}
                     </span>
                     {type === 'channel' ? (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-[10px] font-bold rounded uppercase tracking-tighter text-white shadow-sm">
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-[10px] font-bold rounded uppercase tracking-tighter text-white shadow-sm shrink-0">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                         AO VIVO
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600/80 text-[10px] font-bold rounded uppercase tracking-tighter text-white border border-indigo-400/30">
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600/80 text-[10px] font-bold rounded uppercase tracking-tighter text-white border border-indigo-400/30 shrink-0">
                         <Film className="w-3 h-3" />
                         {(item as VodItem).type === 'series' ? 'Série' : 'Filme 1080p'}
                       </span>
                     )}
                   </div>
                   {'epgNow' in item && item.epgNow ? (
-                    <p className="text-xs text-slate-300">No Ar: {item.epgNow}</p>
+                    <p className="text-xs text-slate-300 truncate">No Ar: {item.epgNow}</p>
                   ) : isSeries && currentEpisode ? (
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className="text-xs text-indigo-300 font-medium truncate max-w-[200px] sm:max-w-xs">
+                    <div className="flex items-center gap-2 mt-0.5 truncate">
+                      <p className="text-xs text-indigo-300 font-medium truncate max-w-[180px] sm:max-w-xs">
                         T{currentEpisode.seasonNumber}:E{currentEpisode.episodeNumber} • {currentEpisode.title}
                       </p>
                       {isAutopilotEnabled && (
-                        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-semibold border border-indigo-400/30">
+                        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-semibold border border-indigo-400/30 shrink-0">
                           <Sparkles className="w-2.5 h-2.5 text-amber-300" />
                           Piloto Automático
                         </span>
                       )}
                     </div>
                   ) : 'duration' in item && item.duration ? (
-                    <p className="text-xs text-slate-400">Duração: {item.duration} • {item.rating || 'Livre'}</p>
+                    <p className="text-xs text-slate-400 truncate">Duração: {item.duration} • {item.rating || 'Livre'}</p>
                   ) : null}
                 </div>
               </div>
 
               {/* Top Right Controls (Sources, Help, Close) */}
-              <div className="flex items-center gap-2">
+              <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 ml-auto z-40">
+                {/* Dynamic Server Selection: Compact Dropdown for >3 servers, sleek pills for <=3 */}
                 {sources.length > 1 && (
-                  <div className="hidden sm:flex items-center gap-1 bg-slate-900/80 border border-white/10 rounded-full p-1 text-xs backdrop-blur-md">
-                    {sources.map((s, idx) => (
+                  sources.length <= 3 ? (
+                    <div className="hidden sm:flex items-center gap-1 bg-slate-900/90 border border-white/10 rounded-full p-1 text-xs backdrop-blur-md shrink-0">
+                      {sources.map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCurrentSourceIndex(idx);
+                            setHasError(false);
+                            setIsLoading(true);
+                            setStreamWarning(null);
+                            setReloadCounter(c => c + 1);
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                            currentSourceIndex === idx 
+                              ? 'bg-indigo-600 text-white shadow-sm' 
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Servidor {idx + 1}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Dropdown for when there are multiple/many servers */
+                    <div className="relative shrink-0">
                       <button
-                        key={idx}
                         type="button"
-                        onClick={() => {
-                          setCurrentSourceIndex(idx);
-                          setHasError(false);
-                          setIsLoading(true);
-                          setStreamWarning(null);
-                        }}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
-                          currentSourceIndex === idx 
-                            ? 'bg-indigo-600 text-white shadow-sm' 
-                            : 'text-slate-400 hover:text-white'
+                        onClick={() => setActiveMenu(activeMenu === 'sources' ? null : 'sources')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm ${
+                          activeMenu === 'sources'
+                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-600/30'
+                            : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-white/10 hover:border-indigo-400/40'
                         }`}
+                        title="Alternar Servidor de Transmissão"
                       >
-                        Servidor {idx + 1}
+                        <Server className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                        <span className="hidden md:inline truncate max-w-[100px]">
+                          Servidor {currentSourceIndex + 1}
+                        </span>
+                        <span className="text-[10px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                          {currentSourceIndex + 1}/{sources.length}
+                        </span>
+                        <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activeMenu === 'sources' ? 'rotate-180' : ''}`} />
                       </button>
-                    ))}
-                  </div>
+
+                      {/* Dropdown Menu for Many Servers */}
+                      {activeMenu === 'sources' && (
+                        <div className="absolute top-10 right-0 z-50 w-72 sm:w-80 bg-slate-900/95 border border-indigo-500/30 rounded-2xl p-3 shadow-2xl backdrop-blur-xl animate-fadeIn">
+                          <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <Server className="w-3.5 h-3.5 text-indigo-400" />
+                              Servidores Disponíveis ({sources.length})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setActiveMenu(null)}
+                              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                            {sources.map((s, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setCurrentSourceIndex(idx);
+                                  setHasError(false);
+                                  setIsLoading(true);
+                                  setStreamWarning(null);
+                                  setReloadCounter(c => c + 1);
+                                  setActiveMenu(null);
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
+                                  currentSourceIndex === idx
+                                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30 border border-indigo-400/40'
+                                    : 'text-slate-300 hover:bg-white/10 hover:text-white border border-transparent'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${currentSourceIndex === idx ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                                  <span className="truncate">{s.name || `Servidor ${idx + 1}`}</span>
+                                </div>
+                                {currentSourceIndex === idx && (
+                                  <Check className="w-4 h-4 text-emerald-300 shrink-0 ml-2" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
                 )}
 
                 {/* Favorite Toggle Button */}
                 <button
                   type="button"
                   onClick={toggleFavorite}
-                  className={`p-2.5 rounded-full border transition-all cursor-pointer backdrop-blur-md ${
+                  className={`p-2 sm:p-2.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shrink-0 ${
                     isFav 
                       ? 'bg-red-600/30 text-red-400 border-red-500/50 hover:bg-red-600/40' 
                       : 'bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border-white/10'
@@ -2861,19 +2965,22 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}
-                  className="p-2.5 rounded-full bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer backdrop-blur-md"
+                  className="p-2 sm:p-2.5 rounded-full bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer backdrop-blur-md shrink-0"
                   title="Atalhos do Teclado"
                 >
                   <HelpCircle className="w-4 h-4" />
                 </button>
 
+                {/* Close Button - ALWAYS VISIBLE, PRIORITIZED, SHRINK-0 WITH HIGH CONTRAST */}
                 <button
+                  id="player-top-close-btn"
                   type="button"
                   onClick={handleClose}
-                  className="p-2.5 rounded-full bg-slate-900/80 hover:bg-white/15 text-white border border-white/10 transition-all cursor-pointer backdrop-blur-md"
-                  title="Fechar Player"
+                  className="p-2 sm:p-2.5 rounded-full bg-slate-900/90 hover:bg-red-600 text-white border border-white/20 hover:border-red-500 shadow-xl transition-all cursor-pointer backdrop-blur-md shrink-0 flex items-center justify-center hover:scale-105 active:scale-95"
+                  title="Fechar Vídeo (ESC)"
+                  aria-label="Fechar Vídeo"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>

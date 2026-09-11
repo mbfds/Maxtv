@@ -51,12 +51,12 @@ export async function checkStreamAvailability(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Tentativa primária usando método 'HEAD'
+    // Tentativa usando método 'GET' (servidores IPTV bloqueiam HEAD com 405 ou 403)
     const response = await fetch(testUrl, {
-      method: 'HEAD',
+      method: 'GET',
       signal: controller.signal,
       headers: {
-        'Accept': '*/*'
+        'Accept': 'application/json, application/x-mpegURL, application/vnd.apple.mpegurl, */*'
       }
     });
     

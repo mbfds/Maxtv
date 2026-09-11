@@ -1,46 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Lock, KeyRound, AlertCircle, ArrowLeft, CheckCircle2, UserCheck, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { User } from '../types';
-import { api, getAdminToken, clearAdminToken } from '../services/api';
+import { api } from '../services/api';
+import { adminAuthManager } from '../services/adminAuthManager';
 
 interface AdminAuthGateProps {
   onAdminSuccess: (user: User, token?: string) => void;
   onCancel: () => void;
-  isAuthenticating?: boolean;
-  setIsAuthenticating?: (val: boolean) => void;
 }
 
 export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
   onAdminSuccess,
-  onCancel,
-  isAuthenticating: externalIsAuthenticating,
-  setIsAuthenticating: externalSetIsAuthenticating
+  onCancel
 }) => {
-  const [internalIsAuthenticating, setInternalIsAuthenticating] = useState<boolean>(() => {
-    // Check if sessionStorage already has verified admin or a token exists
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        const isVerified = sessionStorage.getItem('maxtv_admin_verified') === 'true';
-        const token = sessionStorage.getItem('maxtv_admin_token') || getAdminToken();
-        const userStr = sessionStorage.getItem('maxtv_admin_user');
-        if (isVerified && token && userStr) {
-          const user = JSON.parse(userStr);
-          if (user.role === 'admin') return false; // Handled synchronously on mount
-        }
-      }
-    } catch {}
-    const existingToken = getAdminToken();
-    return Boolean(existingToken);
+  // Check instant synchronous cache - if already verified or no token exists, don't show loading spinner
+  const [isVerifyingSession, setIsVerifyingSession] = useState<boolean>(() => {
+    const instant = adminAuthManager.getInstantSession();
+    if (instant?.isAuthenticated) return false;
+    // Only verify if we actually have a stored admin token to test
+    const token = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('maxtv_admin_token') : null;
+    return Boolean(token);
   });
 
-  const isAuthenticating = externalIsAuthenticating !== undefined ? externalIsAuthenticating : internalIsAuthenticating;
-  const setIsAuthenticating = (val: boolean) => {
-    setInternalIsAuthenticating(val);
-    if (externalSetIsAuthenticating) {
-      externalSetIsAuthenticating(val);
-    }
-  };
-
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'pin' | 'credentials'>('pin');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState('cebolao1302@gmail.com');
@@ -48,150 +30,106 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
-  // Automated Token / Session Verification on Mount with sessionStorage cache
+  const onAdminSuccessRef = useRef(onAdminSuccess);
   useEffect(() => {
+    onAdminSuccessRef.current = onAdminSuccess;
+  });
+
+  const hasExecutedRef = useRef(false);
+
+  // Single-promise asynchronous session verification on mount
+  useEffect(() => {
+    if (hasExecutedRef.current) return;
+    hasExecutedRef.current = true;
+
+    // 1. Instant check
+    const instant = adminAuthManager.getInstantSession();
+    if (instant?.isAuthenticated && instant.user) {
+      setIsVerifyingSession(false);
+      onAdminSuccessRef.current(instant.user, instant.token);
+      return;
+    }
+
+    // 2. Asynchronous verification through single promise
     let isMounted = true;
-
-    // 1. Instant check from secure sessionStorage
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        const isVerified = sessionStorage.getItem('maxtv_admin_verified') === 'true';
-        const cachedToken = sessionStorage.getItem('maxtv_admin_token') || getAdminToken();
-        const cachedUserStr = sessionStorage.getItem('maxtv_admin_user');
-        if (isVerified && cachedToken && cachedUserStr) {
-          const cachedUser = JSON.parse(cachedUserStr);
-          if (cachedUser.role === 'admin') {
-            setIsAuthenticating(false);
-            onAdminSuccess(cachedUser, cachedToken);
-            return;
-          }
-        }
-      }
-    } catch {}
-
-    // 2. If token exists, verify with server
-    const checkCurrentSession = async () => {
-      const token = getAdminToken();
-      if (!token) {
-        if (isMounted) setIsAuthenticating(false);
-        return;
-      }
-
-      setIsAuthenticating(true);
-      try {
-        const res = await api.verifyAdminSession(token);
+    adminAuthManager.verifySession()
+      .then((res) => {
         if (!isMounted) return;
+        setIsVerifyingSession(false);
 
-        if (res.valid && res.user && res.user.role === 'admin') {
-          // Cache verified status securely in sessionStorage
-          try {
-            sessionStorage.setItem('maxtv_admin_verified', 'true');
-            sessionStorage.setItem('maxtv_admin_token', token);
-            sessionStorage.setItem('maxtv_admin_user', JSON.stringify(res.user));
-          } catch {}
-
-          setIsAuthenticating(false);
-          onAdminSuccess(res.user, token);
-          return;
+        if (res.isAuthenticated && res.user) {
+          onAdminSuccessRef.current(res.user, res.token);
+        } else if (res.isExpired) {
+          setSessionNotice(res.error || 'Sessão administrativa anterior expirada. Insira o PIN Master.');
         }
-
-        // Token was invalid or user is not an admin
-        clearAdminToken();
-        try {
-          sessionStorage.removeItem('maxtv_admin_verified');
-          sessionStorage.removeItem('maxtv_admin_token');
-          sessionStorage.removeItem('maxtv_admin_user');
-        } catch {}
-        setSessionNotice('Sessão administrativa expirada ou não autorizada. Digite o PIN Master para revalidar seu acesso.');
-      } catch (err: any) {
+      })
+      .catch(() => {
         if (!isMounted) return;
-        clearAdminToken();
-        try {
-          sessionStorage.removeItem('maxtv_admin_verified');
-          sessionStorage.removeItem('maxtv_admin_token');
-          sessionStorage.removeItem('maxtv_admin_user');
-        } catch {}
-        setSessionNotice('Não foi possível validar sua sessão anterior. Por favor, autentique-se novamente.');
-      } finally {
-        if (isMounted) {
-          setIsAuthenticating(false);
-        }
-      }
-    };
-
-    checkCurrentSession();
+        setIsVerifyingSession(false);
+        setSessionNotice('Insira o PIN Master para acessar a área administrativa.');
+      });
 
     return () => {
       isMounted = false;
     };
-  }, [onAdminSuccess]);
+  }, []);
 
   const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pin.trim()) return;
+    if (!pin.trim() || isSubmitting) return;
 
-    setIsAuthenticating(true);
+    setIsSubmitting(true);
     setErrorMsg('');
     setSessionNotice(null);
     try {
       const res = await api.adminVerify({ pin: pin.trim() });
       if (res.success && res.user) {
         if (res.user.role !== 'admin') {
-          throw new Error('Acesso negado: Usuário autenticado não possui o papel (role) de administrador.');
+          throw new Error('Acesso negado: Usuário autenticado não possui privilégios de administrador.');
         }
-        // Save to secure sessionStorage and API token
-        try {
-          sessionStorage.setItem('maxtv_admin_verified', 'true');
-          sessionStorage.setItem('maxtv_admin_token', res.token || '');
-          sessionStorage.setItem('maxtv_admin_user', JSON.stringify(res.user));
-        } catch {}
 
-        setIsAuthenticating(false);
-        onAdminSuccess(res.user, res.token);
+        adminAuthManager.setSessionSuccess(res.user, res.token);
+        setIsSubmitting(false);
+        onAdminSuccessRef.current(res.user, res.token);
       } else {
         setErrorMsg(res.message || 'PIN de administrador inválido.');
-        setIsAuthenticating(false);
+        setIsSubmitting(false);
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'PIN incorreto. Tente novamente.');
-      setIsAuthenticating(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) return;
+    if (!email.trim() || !password.trim() || isSubmitting) return;
 
-    setIsAuthenticating(true);
+    setIsSubmitting(true);
     setErrorMsg('');
     setSessionNotice(null);
     try {
       const res = await api.adminVerify({ email: email.trim(), password: password.trim() });
       if (res.success && res.user) {
         if (res.user.role !== 'admin') {
-          throw new Error('Acesso negado: Credenciais válidas, mas o usuário não possui a role de administrador.');
+          throw new Error('Acesso negado: Credenciais válidas, mas o usuário não possui privilégios de administrador.');
         }
-        // Save to secure sessionStorage and API token
-        try {
-          sessionStorage.setItem('maxtv_admin_verified', 'true');
-          sessionStorage.setItem('maxtv_admin_token', res.token || '');
-          sessionStorage.setItem('maxtv_admin_user', JSON.stringify(res.user));
-        } catch {}
 
-        setIsAuthenticating(false);
-        onAdminSuccess(res.user, res.token);
+        adminAuthManager.setSessionSuccess(res.user, res.token);
+        setIsSubmitting(false);
+        onAdminSuccessRef.current(res.user, res.token);
       } else {
         setErrorMsg(res.message || 'Credenciais de administrador inválidas.');
-        setIsAuthenticating(false);
+        setIsSubmitting(false);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'E-mail ou senha de administrador incorretos.');
-      setIsAuthenticating(false);
+      setErrorMsg(err.message || 'Falha ao autenticar administrador.');
+      setIsSubmitting(false);
     }
   };
 
-  // State: Authenticating / checking existing session
-  if (isAuthenticating) {
+  // State: One-time verifying existing session on initial load
+  if (isVerifyingSession) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center py-10 px-4">
         <div className="w-full max-w-md bg-slate-900 border border-indigo-500/30 rounded-3xl p-8 shadow-2xl shadow-indigo-950/50 text-center space-y-5 relative overflow-hidden">
@@ -209,7 +147,7 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
               Verificando Sessão Administrativa
             </h2>
             <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Validando integridade criptográfica do token e permissões de acesso (RBAC) com o servidor...
+              Validando integridade do token de administrador com o servidor...
             </p>
           </div>
 
@@ -238,11 +176,11 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
             Área Administrativa Protegida
           </h2>
           <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-            O Painel de Controle e Gestão é restrito exclusivamente a contas com o papel (<span className="text-indigo-300 font-mono font-semibold">role: 'admin'</span>).
+            O Painel de Controle e Gestão é restrito exclusivamente a contas com privilégios de administrador (<span className="text-indigo-300 font-mono font-semibold">role: 'admin'</span>).
           </p>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-950/60 border border-indigo-500/30 text-[10px] text-indigo-300 font-medium">
             <Shield className="w-3 h-3 text-indigo-400" />
-            <span>Validação Criptográfica Ativa</span>
+            <span>Validação de Segurança Ativa</span>
           </div>
         </div>
 
@@ -259,7 +197,7 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
           <button
             type="button"
             onClick={() => { setAuthMode('pin'); setErrorMsg(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               authMode === 'pin'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -271,7 +209,7 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
           <button
             type="button"
             onClick={() => { setAuthMode('credentials'); setErrorMsg(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               authMode === 'credentials'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -284,7 +222,7 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3 mb-4 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+          <div className="p-3 mb-4 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2 animate-fadeIn">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{errorMsg}</span>
           </div>
@@ -295,31 +233,47 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
           <form onSubmit={handlePinSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Digite o PIN Master ou Senha de Administrador
+                Digite o PIN Master de Administrador
               </label>
               <div className="relative">
                 <input
                   type="password"
                   required
                   autoFocus
-                  placeholder="Ex: 1302 ou admin123"
+                  placeholder="Ex: 1302 ou 2026"
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg tracking-widest text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
               </div>
-              <p className="text-[11px] text-slate-500 mt-1.5 text-center">
-                PINs autorizados: <code className="text-indigo-300 font-mono">1302</code> ou <code className="text-indigo-300 font-mono">admin123</code>
-              </p>
+
+              {/* Quick-fill PIN Chips for Convenience */}
+              <div className="flex items-center justify-center gap-2 pt-2.5">
+                <span className="text-[11px] text-slate-400 font-medium">PINs rápidos:</span>
+                {['1302', '2026', 'admin123'].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => { setPin(preset); setErrorMsg(''); }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      pin === preset
+                        ? 'bg-indigo-600 text-white border border-indigo-400 shadow-sm'
+                        : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-white/5'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={isAuthenticating || !pin.trim()}
+              disabled={isSubmitting || !pin.trim()}
               className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
-              {isAuthenticating ? (
+              {isSubmitting ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Autenticando Acesso...</span>
@@ -346,14 +300,14 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@maxtv.vip"
+                placeholder="cebolao1302@gmail.com"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Senha de Administrador
+                Senha ou PIN do Administrador
               </label>
               <input
                 type="password"
@@ -363,14 +317,27 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
                 placeholder="••••••••"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
+              <div className="flex items-center gap-2 pt-1.5">
+                <span className="text-[10px] text-slate-400">Preenchimento rápido:</span>
+                {['1302', 'admin123'].map((passPreset) => (
+                  <button
+                    key={passPreset}
+                    type="button"
+                    onClick={() => { setPassword(passPreset); setErrorMsg(''); }}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[10px] font-mono cursor-pointer"
+                  >
+                    {passPreset}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={isAuthenticating || !password.trim()}
+              disabled={isSubmitting || !password.trim()}
               className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-2"
             >
-              {isAuthenticating ? (
+              {isSubmitting ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Verificando Administrador...</span>

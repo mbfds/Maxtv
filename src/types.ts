@@ -362,10 +362,14 @@ export interface M3uAutoUpdateSource {
   enabled: boolean;
   priority: number;
   createdAt?: string;
+  updatedAt?: string;
   dateFormatted?: string;
+  updatedDateFormatted?: string;
   type?: 'channels' | 'vod';
   author?: string;
   channelsCount?: number;
+  lastTestedAt?: string;
+  lastLatencyMs?: number;
 }
 
 export interface M3uAutoUpdateConfig {

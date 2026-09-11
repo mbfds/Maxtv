@@ -28,7 +28,9 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3"
+    "react-virtuoso": "^4.18.13",
+    "vite": "^6.2.3",
+    "web-vitals": "^6.2.1"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

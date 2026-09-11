@@ -454,7 +454,9 @@ interface ServerM3uAutoUpdateSource {
   enabled: boolean;
   priority: number;
   createdAt?: string;
+  updatedAt?: string;
   dateFormatted?: string;
+  updatedDateFormatted?: string;
   type?: 'channels' | 'vod';
   author?: string;
   channelsCount?: number;
@@ -484,10 +486,57 @@ let m3uAutoUpdateConfig: ServerM3uAutoUpdateConfig = {
   sources: [
     {
       id: 'src-ramys-br03',
-      name: 'Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026)',
+      name: 'Ramys - CanaisBR03.m3u8 (IPTV Brasil 2026 ~988 canais)',
       url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
+      type: 'channels',
       enabled: true,
-      priority: 1
+      priority: 1,
+      createdAt: '2026-03-01T00:00:00.000Z'
+    },
+    {
+      id: 'src-ramys-br01',
+      name: 'Ramys - CanaisBR01.m3u8 (Backup 1)',
+      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8',
+      type: 'channels',
+      enabled: true,
+      priority: 2,
+      createdAt: '2026-03-01T00:00:00.000Z'
+    },
+    {
+      id: 'src-ramys-br02',
+      name: 'Ramys - CanaisBR02.m3u8 (Backup 2)',
+      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR02.m3u8',
+      type: 'channels',
+      enabled: true,
+      priority: 3,
+      createdAt: '2026-03-01T00:00:00.000Z'
+    },
+    {
+      id: 'src-ramys-filmes-series',
+      name: 'Ramys - Filmes-Series.m3u8 (Catálogo Filmes e Séries)',
+      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8',
+      type: 'vod',
+      enabled: true,
+      priority: 4,
+      createdAt: '2026-03-01T00:00:00.000Z'
+    },
+    {
+      id: 'src-saimo-filmes',
+      name: 'Gabriel Saimo - Filmes VOD (SaimoPlayer)',
+      url: 'https://raw.githubusercontent.com/GabrielSaimo/SaimoPlayer/main/filmes.m3u',
+      type: 'vod',
+      enabled: true,
+      priority: 5,
+      createdAt: '2026-03-01T00:00:00.000Z'
+    },
+    {
+      id: 'src-saimo-series',
+      name: 'Gabriel Saimo - Séries VOD (SaimoPlayer)',
+      url: 'https://raw.githubusercontent.com/GabrielSaimo/SaimoPlayer/main/series.m3u',
+      type: 'vod',
+      enabled: true,
+      priority: 6,
+      createdAt: '2026-03-01T00:00:00.000Z'
     }
   ],
   lastRunAt: new Date().toISOString(),
@@ -1937,14 +1986,15 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
     const isM3u8OrManifest = decodedUrl.includes('.m3u8') || decodedUrl.includes('.m3u') || decodedUrl.includes('/live/') || decodedUrl.includes(':80/');
     const isTsOrBinary = decodedUrl.includes('.ts') || decodedUrl.includes('.mp4') || decodedUrl.includes('.mkv');
 
+    // Headers de Player IPTV real (evita bloqueios de bots e 403/405)
     const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': isM3u8OrManifest ? 'application/x-mpegURL, application/vnd.apple.mpegurl, */*' : '*/*'
+      'User-Agent': 'IPTVSmarters/2.2.1 (Linux; Android 11; SM-G998B) AppleWebKit/537.36',
+      'Accept': isM3u8OrManifest ? 'application/x-mpegURL, application/vnd.apple.mpegurl, video/mp2t, */*' : '*/*'
     };
 
     // Only send Range bytes for TS/MP4 binary files. M3U8 manifests return 416 (Range Not Satisfiable) if Range is sent!
     if (isTsOrBinary && !isM3u8OrManifest) {
-      headers['Range'] = 'bytes=0-1024';
+      headers['Range'] = 'bytes=0-2048';
     }
 
     if (customReferer) {
@@ -1961,12 +2011,11 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
       headers['Referer'] = 'http://camelo.vip/';
     } else if (decodedUrl.includes('govfederal.org')) {
       headers['Referer'] = 'http://govfederal.org/';
-    } else {
-      headers['Referer'] = decodedUrl;
     }
+    // NOTA: Nunca enviar a URL completa como Referer (servidores CDN tratam como hotlinking indevido e retornam 403)
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     let response = await fetch(decodedUrl, {
       headers,
@@ -1980,14 +2029,37 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
     let isOk = response.ok || response.status === 206 || (response.status >= 300 && response.status < 400);
     let contentType = response.headers.get('content-type') || '';
 
-    // If direct connection received 403 (e.g. strict hotlink protection), test through internal proxy!
-    if (!isOk && (response.status === 403 || response.status === 401) && !decodedUrl.includes('/api/proxy')) {
+    // Se o status for 200/206 com content-type text/html, inspecionar se é M3U8 disfarçado ou página de erro
+    if (isOk && contentType.includes('text/html')) {
+      try {
+        const textPreview = await response.text();
+        if (textPreview.includes('#EXTM3U') || textPreview.includes('#EXTINF') || textPreview.includes('.ts') || textPreview.includes('.m3u8')) {
+          // Servidor IPTV Apache/Nginx serviu M3U8 com mime-type genérico text/html
+          return {
+            online: true,
+            status: latency > 3500 ? 'unstable' : 'online',
+            statusCode: response.status,
+            statusText: 'OK (Stream Validado)',
+            latencyMs: latency,
+            contentType: 'application/vnd.apple.mpegurl'
+          };
+        } else {
+          // Bloqueio ou página de erro HTML
+          isOk = false;
+        }
+      } catch {
+        // Ignorado
+      }
+    }
+
+    // Se a conexão direta recebeu 403, 401, 405 ou 5xx (ex: proteção de IP/CDN), testar pelo proxy do sistema!
+    if (!isOk && !decodedUrl.includes('/api/proxy')) {
       try {
         const proxyCheckUrl = `http://127.0.0.1:3000/api/proxy?url=${encodeURIComponent(decodedUrl)}${customReferer ? `&referer=${encodeURIComponent(customReferer)}` : ''}`;
         const proxyCtrl = new AbortController();
         const proxyTimeout = setTimeout(() => proxyCtrl.abort(), 5000);
         const proxyRes = await fetch(proxyCheckUrl, {
-          headers: { 'User-Agent': 'MAXTV-Checker/2.0' },
+          headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
           signal: proxyCtrl.signal
         });
         clearTimeout(proxyTimeout);
@@ -2017,7 +2089,7 @@ async function checkStreamHealth(url: string, customReferer?: string): Promise<{
     if (isOk) {
       return {
         online: true,
-        status: latency > 3000 ? 'unstable' : 'online',
+        status: latency > 3500 ? 'unstable' : 'online',
         statusCode: response.status,
         statusText: response.statusText || 'OK',
         latencyMs: latency,
@@ -4504,7 +4576,10 @@ app.post('/api/admin/channels/sources', async (req, res) => {
   }
 
   try {
-    const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.url.trim().toLowerCase() === cleanUrl.toLowerCase());
+    const targetId = req.body?.id ? String(req.body.id).trim() : '';
+    const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => 
+      (targetId && s.id === targetId) || s.url.trim().toLowerCase() === cleanUrl.toLowerCase()
+    );
     let sourceItem: ServerM3uAutoUpdateSource;
 
     const nowIso = new Date().toISOString();
@@ -4516,22 +4591,27 @@ app.post('/api/admin/channels/sources', async (req, res) => {
 
     if (existingIndex >= 0) {
       m3uAutoUpdateConfig.sources[existingIndex].name = cleanName;
+      m3uAutoUpdateConfig.sources[existingIndex].url = cleanUrl;
       m3uAutoUpdateConfig.sources[existingIndex].enabled = Boolean(enabled);
       if (!m3uAutoUpdateConfig.sources[existingIndex].createdAt) {
         m3uAutoUpdateConfig.sources[existingIndex].createdAt = nowIso;
         m3uAutoUpdateConfig.sources[existingIndex].dateFormatted = nowFormatted;
       }
+      m3uAutoUpdateConfig.sources[existingIndex].updatedAt = nowIso;
+      m3uAutoUpdateConfig.sources[existingIndex].updatedDateFormatted = nowFormatted;
       (m3uAutoUpdateConfig.sources[existingIndex] as any).type = itemType;
       sourceItem = m3uAutoUpdateConfig.sources[existingIndex];
     } else {
       sourceItem = {
-        id: `src-${Date.now()}`,
+        id: targetId || `src-${Date.now()}`,
         name: cleanName,
         url: cleanUrl,
         enabled: Boolean(enabled),
         priority: m3uAutoUpdateConfig.sources.length + 1,
         createdAt: nowIso,
+        updatedAt: nowIso,
         dateFormatted: nowFormatted,
+        updatedDateFormatted: nowFormatted,
         type: itemType,
         author: req.body?.author || 'Administrador'
       } as any;
@@ -4579,6 +4659,57 @@ app.post('/api/admin/channels/sources', async (req, res) => {
       error: `Erro ao gravar no banco SQLite: ${sqliteErr.message}`,
       log: errLog
     });
+  }
+});
+
+// PUT /api/admin/channels/sources/:id (Editar nome, URL, tipo ou estado da fonte M3U com timestamp de modificação)
+app.put('/api/admin/channels/sources/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, url, enabled, type } = req.body || {};
+
+  const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.id === id);
+  if (existingIndex < 0) {
+    return res.status(404).json({ success: false, error: 'Fonte de link não encontrada para edição.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  const nowFormatted = new Date().toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+
+  const target = m3uAutoUpdateConfig.sources[existingIndex];
+  if (name && typeof name === 'string') target.name = name.trim();
+  if (url && typeof url === 'string') target.url = url.trim();
+  if (enabled !== undefined) target.enabled = Boolean(enabled);
+  if (type === 'vod' || type === 'channels') (target as any).type = type;
+  target.updatedAt = nowIso;
+  target.updatedDateFormatted = nowFormatted;
+
+  try {
+    sqliteSaveM3uSource(target);
+    saveAutoUpdateConfigToDisk();
+
+    try {
+      sqliteRecordAuditLog({
+        actionType: 'LINKS',
+        actionName: 'UPDATE_M3U_SOURCE',
+        description: `Editou a fonte de lista M3U "${target.name}"`,
+        adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+        adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+        targetId: target.id,
+        details: { name: target.name, url: target.url, type: target.type, updatedAt: nowIso }
+      });
+    } catch {}
+
+    res.json({
+      success: true,
+      message: `Fonte "${target.name}" atualizada com sucesso!`,
+      source: target,
+      sources: m3uAutoUpdateConfig.sources
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Falha ao salvar edição no SQLite: ${err.message}` });
   }
 });
 
@@ -5060,6 +5191,127 @@ async function runAutoUpdateCycle(triggerReason: string = 'Agendador Automático
   }
 }
 
+let backgroundHealthCheckIndex = 0;
+let isHealthCheckRunning = false;
+
+function startChannelsSignalHealthCron() {
+  console.log(`[CRON SINAIS] Verificador contínuo de integridade dos canais iniciado (baixo consumo de memória).`);
+  // Roda a cada 20 segundos checando um lote microscópico de 2 canais por vez
+  setInterval(async () => {
+    if (isHealthCheckRunning) return;
+    const activeChannels = customConfigChannels.length > 0 
+      ? customConfigChannels 
+      : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
+
+    if (!activeChannels || activeChannels.length === 0) return;
+
+    isHealthCheckRunning = true;
+    try {
+      if (backgroundHealthCheckIndex >= activeChannels.length) {
+        backgroundHealthCheckIndex = 0;
+      }
+      const batch = activeChannels.slice(backgroundHealthCheckIndex, backgroundHealthCheckIndex + 2);
+      backgroundHealthCheckIndex += 2;
+
+      for (const ch of batch) {
+        if (!ch || !ch.id) continue;
+        const channelSources = ch.sources || [];
+        if (channelSources.length === 0) continue;
+
+        let bestHealth = await checkStreamHealth(channelSources[0].url, channelSources[0].referer);
+        let chosenIdx = 0;
+        let chosenUrl = channelSources[0].url;
+
+        // Se a primeira fonte falhou, tentar fontes alternativas
+        if (!bestHealth.online && channelSources.length > 1) {
+          for (let sIdx = 1; sIdx < channelSources.length; sIdx++) {
+            const alt = channelSources[sIdx];
+            if (alt && alt.url) {
+              const altH = await checkStreamHealth(alt.url, alt.referer);
+              if (altH.online) {
+                bestHealth = altH;
+                chosenIdx = sIdx;
+                chosenUrl = alt.url;
+                break;
+              }
+            }
+          }
+        }
+
+        channelHealthStore.set(ch.id, {
+          channelId: ch.id,
+          channelName: ch.name,
+          category: ch.category || 'Geral',
+          sourceIndex: chosenIdx,
+          url: chosenUrl,
+          status: bestHealth.status,
+          statusCode: bestHealth.statusCode,
+          statusText: bestHealth.statusText,
+          latencyMs: bestHealth.latencyMs,
+          contentType: bestHealth.contentType,
+          lastChecked: new Date().toISOString(),
+          error: bestHealth.error
+        });
+      }
+    } catch {
+      // Ignora para manter processo estável
+    } finally {
+      isHealthCheckRunning = false;
+    }
+  }, 20 * 1000);
+}
+
+let isLinksUpdateRunning = false;
+
+function startLinksUpdateCron() {
+  console.log(`[CRON LINKS] Verificador automático de novos canais e listas agendado (a cada 15 min).`);
+  setInterval(async () => {
+    if (isLinksUpdateRunning) return;
+    isLinksUpdateRunning = true;
+    try {
+      const enabledSources = m3uAutoUpdateConfig.sources.filter(s => s.enabled && s.type !== 'vod');
+      if (enabledSources.length === 0) return;
+
+      for (const src of enabledSources) {
+        try {
+          const res = await fetch(src.url, { 
+            headers: { 'User-Agent': 'IPTVSmarters/2.2.1 (Linux; Android 11)' },
+            signal: AbortSignal.timeout(10000)
+          });
+          if (!res.ok) continue;
+          const text = await res.text();
+          const parsed = parseM3uTextToChannels(text);
+
+          const activeChannels = customConfigChannels.length > 0 
+            ? customConfigChannels 
+            : [...customAdminChannels, ...parsedRamysChannels, ...parsedSaimoChannels];
+
+          const existingNames = new Set(activeChannels.map(c => c.name.toLowerCase().trim()));
+          const newChannels = parsed.filter(p => !existingNames.has(p.name.toLowerCase().trim()));
+
+          if (newChannels.length > 0) {
+            console.log(`[CRON LINKS] ${newChannels.length} novos canais encontrados em "${src.name}". Incorporando na grade automaticamente...`);
+            const unification = unifyChannelCollections(activeChannels, parsed);
+            saveUnifiedGradeToDisk(
+              unification.unified,
+              'Cron Job de Links',
+              `Sincronização Automática: ${src.name}`,
+              `Detectados e incorporados ${newChannels.length} novos canais automaticamente.`
+            );
+            break;
+          }
+        } catch {
+          // Continua para a próxima fonte
+        }
+      }
+    } catch {
+      // Ignora
+    } finally {
+      isLinksUpdateRunning = false;
+    }
+  }, 15 * 60 * 1000);
+}
+
 function startAutoUpdateScheduler() {
   console.log(`[AUTO-UPDATE SCHEDULER] Ativo com intervalo de ${m3uAutoUpdateConfig.intervalHours}h.`);
   // Check every 2 minutes
@@ -5075,6 +5327,10 @@ function startAutoUpdateScheduler() {
       await runAutoUpdateCycle('Agendador Automático');
     }
   }, 2 * 60 * 1000);
+
+  // Iniciar cron jobs em background de baixo consumo
+  startChannelsSignalHealthCron();
+  startLinksUpdateCron();
 }
 
 app.post('/api/admin/repo-links/test-host', async (req, res) => {
@@ -5515,12 +5771,29 @@ app.post('/api/admin/channels/check-channel/:id', async (req, res) => {
     return res.status(404).json({ error: 'Canal não encontrado no servidor ou sem fontes configuradas' });
   }
 
-  const sourceIdx = typeof sourceIndex === 'number' 
+  let sourceIdx = typeof sourceIndex === 'number' 
     ? sourceIndex 
     : (req.query?.sourceIndex ? parseInt(req.query.sourceIndex as string, 10) : 0);
-  const targetSource = channelSources[sourceIdx] || channelSources[0];
+  let targetSource = channelSources[sourceIdx] || channelSources[0];
 
-  const health = await checkStreamHealth(targetSource.url, targetSource.referer || directReferer);
+  let health = await checkStreamHealth(targetSource.url, targetSource.referer || directReferer);
+
+  // Se a fonte testada falhar, mas existirem outras fontes no canal, testar as fontes alternativas!
+  if (!health.online && channelSources.length > 1) {
+    for (let altIdx = 0; altIdx < channelSources.length; altIdx++) {
+      if (altIdx === sourceIdx) continue;
+      const alt = channelSources[altIdx];
+      if (alt && alt.url) {
+        const altHealth = await checkStreamHealth(alt.url, alt.referer);
+        if (altHealth.online) {
+          health = altHealth;
+          sourceIdx = altIdx;
+          targetSource = alt;
+          break;
+        }
+      }
+    }
+  }
 
   const resultEntry: ServerHealthResult = {
     channelId: id,
@@ -5578,7 +5851,8 @@ app.post('/api/admin/channels/check-batch', async (req, res) => {
       const chunk = targetChannels.slice(i, i + chunkSize);
       const chunkResults = await Promise.all(
         chunk.map(async (ch) => {
-          const src = ch.sources && ch.sources.length > 0 ? ch.sources[0] : null;
+          const sources = ch.sources || [];
+          const src = sources.length > 0 ? sources[0] : null;
           if (!src || !src.url) {
             return {
               channelId: ch.id,
@@ -5595,13 +5869,32 @@ app.post('/api/admin/channels/check-batch', async (req, res) => {
             };
           }
 
-          const h = await checkStreamHealth(src.url, src.referer);
+          let h = await checkStreamHealth(src.url, src.referer);
+          let chosenSourceIdx = 0;
+          let chosenUrl = src.url;
+
+          // Se a primeira fonte falhou, testar fontes alternativas do canal
+          if (!h.online && sources.length > 1) {
+            for (let altIdx = 1; altIdx < sources.length; altIdx++) {
+              const altSrc = sources[altIdx];
+              if (altSrc && altSrc.url) {
+                const altH = await checkStreamHealth(altSrc.url, altSrc.referer);
+                if (altH.online) {
+                  h = altH;
+                  chosenSourceIdx = altIdx;
+                  chosenUrl = altSrc.url;
+                  break;
+                }
+              }
+            }
+          }
+
           const entry: ServerHealthResult = {
             channelId: ch.id,
             channelName: ch.name,
             category: ch.category || 'Geral',
-            sourceIndex: 0,
-            url: src.url,
+            sourceIndex: chosenSourceIdx,
+            url: chosenUrl,
             status: h.status,
             statusCode: h.statusCode,
             statusText: h.statusText,

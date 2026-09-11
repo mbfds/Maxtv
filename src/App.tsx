@@ -18,6 +18,7 @@ import { INITIAL_CHANNELS } from './data/channelsData';
 import { INITIAL_VOD } from './data/vodData';
 import { SUBSCRIPTION_PLANS } from './data/plansData';
 import { api, clearAdminToken, getAdminToken, getCachedChannels, getCachedVodCatalog } from './services/api';
+import { adminAuthManager } from './services/adminAuthManager';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from './services/favoritesStorage';
 import { watchProgressStorage, PROGRESS_UPDATED_EVENT } from './services/watchProgressStorage';
 import { Tv, Sparkles, Shield, Heart, Radio, ExternalLink, UserCheck, Crown, Lock, LogIn } from 'lucide-react';
@@ -60,21 +61,9 @@ export default function App() {
 
   // Strict Admin Session Verification state with instant secure sessionStorage caching
   const [isAdminVerified, setIsAdminVerified] = useState<boolean>(() => {
-    try {
-      if (typeof sessionStorage !== 'undefined') {
-        const isVerified = sessionStorage.getItem('maxtv_admin_verified') === 'true';
-        const token = sessionStorage.getItem('maxtv_admin_token') || localStorage.getItem('maxtv_admin_token');
-        const userStr = sessionStorage.getItem('maxtv_admin_user') || localStorage.getItem('maxtv_user');
-        if (isVerified && token && userStr) {
-          const parsed = JSON.parse(userStr);
-          return parsed.role === 'admin';
-        }
-      }
-    } catch {}
-    return false;
+    const instant = adminAuthManager.getInstantSession();
+    return Boolean(instant?.isAuthenticated && instant.user?.role === 'admin');
   });
-
-  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   // Favorites & Watch Progress State
   const [favorites, setFavorites] = useState<FavoriteItem[]>(() => {
@@ -518,29 +507,17 @@ export default function App() {
                 try {
                   await api.adminLogout();
                 } catch {}
-                clearAdminToken();
-                try {
-                  sessionStorage.removeItem('maxtv_admin_verified');
-                  sessionStorage.removeItem('maxtv_admin_token');
-                  sessionStorage.removeItem('maxtv_admin_user');
-                } catch {}
+                adminAuthManager.clearSession();
                 setIsAdminVerified(false);
               }}
               onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
             />
           ) : (
             <AdminAuthGate
-              isAuthenticating={isAuthenticating}
-              setIsAuthenticating={setIsAuthenticating}
               onAdminSuccess={(adminUser, token) => {
                 setCurrentUser(adminUser);
                 setIsAdminVerified(true);
-                try {
-                  sessionStorage.setItem('maxtv_admin_verified', 'true');
-                  if (token) sessionStorage.setItem('maxtv_admin_token', token);
-                  sessionStorage.setItem('maxtv_admin_user', JSON.stringify(adminUser));
-                  localStorage.setItem('maxtv_user', JSON.stringify(adminUser));
-                } catch {}
+                adminAuthManager.setSessionSuccess(adminUser, token);
               }}
               onCancel={() => setCurrentTab('live')}
             />
