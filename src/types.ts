@@ -361,6 +361,11 @@ export interface M3uAutoUpdateSource {
   url: string;
   enabled: boolean;
   priority: number;
+  createdAt?: string;
+  dateFormatted?: string;
+  type?: 'channels' | 'vod';
+  author?: string;
+  channelsCount?: number;
 }
 
 export interface M3uAutoUpdateConfig {
@@ -406,6 +411,88 @@ export interface DatabaseStats {
   walSizeFormatted: string;
   counts: Record<string, number>;
   timestamp: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actionType: 'LINKS' | 'PAYMENTS' | 'USERS' | 'CHANNELS' | 'SETTINGS' | 'SYSTEM';
+  actionName: string;
+  description: string;
+  adminEmail: string;
+  adminName: string;
+  targetId?: string;
+  details?: Record<string, any>;
+  ip?: string;
+}
+
+export interface ActiveUserSession {
+  sessionId: string;
+  ip?: string;
+  userAgent?: string;
+  isVip: boolean;
+  userEmail?: string;
+  mediaId?: string;
+  mediaType?: string;
+  mediaName?: string;
+  totalWatchSeconds: number;
+  lastHeartbeat: string;
+  secondsAgo: number;
+  isBlocked: boolean;
+  adblockDetected: boolean;
+  deviceType: 'TV' | 'Mobile' | 'Desktop' | 'Other';
+}
+
+export interface TopChannelMetric {
+  mediaId: string;
+  name: string;
+  category?: string;
+  activeViewers: number;
+  totalWatchSeconds: number;
+  isVipOnly?: boolean;
+}
+
+export interface ServerPerformanceMetrics {
+  uptimeSeconds: number;
+  uptimeFormatted: string;
+  nodeVersion: string;
+  memory: {
+    rssMb: number;
+    heapUsedMb: number;
+    heapTotalMb: number;
+    externalMb: number;
+    heapPercentage: number;
+  };
+  cpu: {
+    userTimeMs: number;
+    systemTimeMs: number;
+  };
+  sqlite: {
+    connected: boolean;
+    dbSizeFormatted: string;
+    walSizeFormatted: string;
+    totalChannels: number;
+    totalSubscribers: number;
+    totalSessions: number;
+    totalAuditLogs: number;
+  };
+  network: {
+    activeConnections: number;
+    totalRequestsHandled: number;
+  };
+  timestamp: string;
+}
+
+export interface RealtimeDashboardData {
+  performance: ServerPerformanceMetrics;
+  activeUsers: {
+    totalActiveNow: number;
+    vipCount: number;
+    guestCount: number;
+    sessions: ActiveUserSession[];
+  };
+  topChannels: TopChannelMetric[];
+  recentAudits: AuditLogEntry[];
 }
 
 

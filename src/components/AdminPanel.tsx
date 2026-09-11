@@ -16,6 +16,10 @@ import { ChannelUpdateHistory } from './ChannelUpdateHistory';
 import { RepoLinksUpdater } from './RepoLinksUpdater';
 import { M3uUnifierManager } from './M3uUnifierManager';
 import { UrlErrorLogsViewer } from './UrlErrorLogsViewer';
+import { UnifiedLinksManager } from './UnifiedLinksManager';
+import { SalesAndGrantsHistory } from './SalesAndGrantsHistory';
+import { AuditLogsViewer } from './AuditLogsViewer';
+import { RealtimeMetricsDashboard } from './RealtimeMetricsDashboard';
 
 interface AdminPanelProps {
   onClose: () => void;
@@ -23,7 +27,25 @@ interface AdminPanelProps {
   onLockAdmin?: () => void;
 }
 
-type AdminTab = 'overview' | 'grant-vip' | 'subscribers' | 'grants-history' | 'channel-health' | 'channel-reports' | 'unify-m3u' | 'channels' | 'channels-config' | 'channels-history' | 'repo-sync' | 'transactions' | 'settings' | 'url-errors';
+type AdminTab = 
+  | 'overview' 
+  | 'realtime-metrics'
+  | 'audit-logs'
+  | 'grant-vip' 
+  | 'subscribers' 
+  | 'sales-and-grants' 
+  | 'grants-history' 
+  | 'transactions' 
+  | 'channels' 
+  | 'm3u-sources-unifier' 
+  | 'unify-m3u' 
+  | 'repo-sync' 
+  | 'channels-config' 
+  | 'channels-history' 
+  | 'channel-health' 
+  | 'channel-reports' 
+  | 'url-errors' 
+  | 'settings';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChannel, onLockAdmin }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -510,8 +532,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
         {/* DIFFERENT ADMIN SIDEBAR */}
         <aside className="w-full md:w-64 bg-slate-900/90 border-b md:border-b-0 md:border-r border-white/10 p-4 shrink-0 flex flex-col justify-between">
           <div className="space-y-1">
+            {/* GRUPO 1: VISÃO GERAL & MONITORAMENTO */}
             <p className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-              Menu Administrativo
+              Visão Geral & Monitoramento
             </p>
 
             <button
@@ -533,6 +556,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 </span>
               )}
             </button>
+
+            {/* PAINEL EM TEMPO REAL */}
+            <button
+              id="sidebar-tab-realtime-metrics"
+              type="button"
+              onClick={() => setActiveTab('realtime-metrics')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'realtime-metrics'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400/50'
+                  : 'text-emerald-400 bg-emerald-950/20 border border-emerald-500/20 hover:bg-emerald-950/40'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                <span>Métricas em Tempo Real</span>
+              </div>
+              <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 animate-pulse">
+                Ao Vivo
+              </span>
+            </button>
+
+            {/* GRUPO 2: COMERCIAL & ASSINANTES */}
+            <div className="pt-3 pb-1">
+              <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Comercial & Assinantes
+              </p>
+            </div>
 
             {/* DESTAQUE PRINCIPAL: LIBERAÇÃO DE MÊS */}
             <button
@@ -571,87 +621,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               </span>
             </button>
 
+            {/* HISTÓRICO COMPLETO: LIBERAÇÃO E VENDAS PIX */}
             <button
               type="button"
-              onClick={() => setActiveTab('grants-history')}
+              onClick={() => setActiveTab('sales-and-grants')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'grants-history'
+                activeTab === 'sales-and-grants' || activeTab === 'grants-history' || activeTab === 'transactions'
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                   : 'text-slate-400 hover:bg-white/5 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <History className="w-4 h-4" />
-                <span>Histórico de Liberações</span>
+                <History className="w-4 h-4 text-emerald-400" />
+                <span>Histórico Completo</span>
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
-                {grantsHistory.length}
+                {grantsHistory.length + transactions.length}
               </span>
             </button>
 
+            {/* GRUPO 3: CONTEÚDO, GRADE & LINKS */}
             <div className="pt-3 pb-1">
               <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                Transmissão & Sistema
+                Conteúdo, Grade & Links
               </p>
             </div>
 
+            {/* UNIFICAR E ATUALIZAR LINKS (JUNTOS) */}
             <button
               type="button"
-              onClick={() => setActiveTab('channel-health')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'channel-health'
-                  ? 'bg-gradient-to-r from-emerald-600 to-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Activity className="w-4 h-4 text-emerald-400" />
-                <span>Verificador de Sinais</span>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 animate-pulse">
-                Diagnóstico
-              </span>
-            </button>
-
-            {/* RELATÓRIOS DE CANAIS COM PROBLEMA / LINKS INATIVOS */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('channel-reports')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'channel-reports'
-                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <AlertCircle className={`w-4 h-4 ${channelReports.length > 0 ? 'text-rose-400' : 'text-slate-400'}`} />
-                <span>Links Inativos / Erros</span>
-              </div>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                channelReports.length > 0 
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse' 
-                  : 'bg-white/10 text-slate-400'
-              }`}>
-                {channelReports.length}
-              </span>
-            </button>
-
-            {/* UNIFICADOR DE M3U8 MULTI-FONTES */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('unify-m3u')}
+              onClick={() => setActiveTab('m3u-sources-unifier')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'unify-m3u'
+                activeTab === 'm3u-sources-unifier' || activeTab === 'unify-m3u' || activeTab === 'repo-sync'
                   ? 'bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/30 ring-2 ring-emerald-400/50'
                   : 'text-teal-300 bg-teal-950/20 border border-teal-500/20 hover:bg-teal-950/40'
               }`}
             >
               <div className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-teal-400" />
-                <span>Unificar M3U8 (Grade Única)</span>
+                <span>Unificar & Atualizar Links</span>
               </div>
               <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30">
-                Multi-Fontes
+                M3U / Hub
               </span>
             </button>
 
@@ -709,39 +720,70 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('repo-sync')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'repo-sync'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <GitBranch className="w-4 h-4 text-emerald-400" />
-                <span>Atualizar Links (2026)</span>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                GitHub
-              </span>
-            </button>
+            {/* GRUPO 4: AUDITORIA, LOGS & DIAGNÓSTICO */}
+            <div className="pt-3 pb-1">
+              <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Auditoria & Diagnóstico
+              </p>
+            </div>
 
+            {/* LOGS DE AUDITORIA */}
             <button
+              id="sidebar-tab-audit-logs"
               type="button"
-              onClick={() => setActiveTab('transactions')}
+              onClick={() => setActiveTab('audit-logs')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === 'transactions'
+                activeTab === 'audit-logs'
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                   : 'text-slate-400 hover:bg-white/5 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <CreditCard className="w-4 h-4" />
-                <span>Pagamentos PIX</span>
+                <Shield className="w-4 h-4 text-indigo-400" />
+                <span>Logs de Auditoria</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
-                {transactions.filter(t => t.status === 'pending').length} pendentes
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                Ações ADM
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('channel-health')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'channel-health'
+                  ? 'bg-gradient-to-r from-emerald-600 to-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                <span>Verificador de Sinais</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 animate-pulse">
+                Diagnóstico
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('channel-reports')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'channel-reports'
+                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className={`w-4 h-4 ${channelReports.length > 0 ? 'text-rose-400' : 'text-slate-400'}`} />
+                <span>Links Inativos / Erros</span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                channelReports.length > 0 
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse' 
+                  : 'bg-white/10 text-slate-400'
+              }`}>
+                {channelReports.length}
               </span>
             </button>
 
@@ -763,6 +805,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                 Diagnóstico
               </span>
             </button>
+
+            {/* GRUPO 5: SISTEMA & AJUSTES */}
+            <div className="pt-3 pb-1">
+              <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Sistema & Ajustes
+              </p>
+            </div>
 
             <button
               type="button"
@@ -803,6 +852,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
         {/* MAIN PANEL VIEW CONTENT */}
         <main className="flex-1 p-6 overflow-y-auto max-h-[800px]">
           
+          {/* TAB: MONITORAMENTO EM TEMPO REAL */}
+          {activeTab === 'realtime-metrics' && (
+            <RealtimeMetricsDashboard 
+              onNavigateTab={(tab) => setActiveTab(tab as AdminTab)} 
+            />
+          )}
+
+          {/* TAB: LOGS DE AUDITORIA */}
+          {activeTab === 'audit-logs' && (
+            <AuditLogsViewer />
+          )}
+
           {/* TAB 1: VISÃO GERAL & MÉTRICAS */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -902,6 +963,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   <p className="text-[11px] text-amber-400 mt-1 font-medium">
                     Aguardando confirmação
                   </p>
+                </div>
+              </div>
+
+              {/* Proactive Admin Management Banners */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div 
+                  onClick={() => setActiveTab('realtime-metrics')}
+                  className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-teal-950/40 border border-emerald-500/20 hover:border-emerald-500/50 transition-all cursor-pointer group flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <Activity className="w-5 h-5 group-hover:animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-white">Métricas de Uso em Tempo Real</h4>
+                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">Ao Vivo</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Audiência atual, canais mais assistidos e performance do servidor</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-300 group-hover:translate-x-1 transition-all shrink-0" />
+                </div>
+
+                <div 
+                  onClick={() => setActiveTab('audit-logs')}
+                  className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-slate-900 to-purple-950/40 border border-indigo-500/20 hover:border-indigo-500/50 transition-all cursor-pointer group flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                      <Shield className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-white">Logs de Auditoria Administrativa</h4>
+                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">Seguro</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">Rastreamento de mudanças em links, pagamentos e usuários</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-300 group-hover:translate-x-1 transition-all shrink-0" />
                 </div>
               </div>
 
@@ -1383,76 +1485,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             </div>
           )}
 
-          {/* TAB 4: HISTÓRICO DE LIBERAÇÕES VIP */}
-          {activeTab === 'grants-history' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Histórico de Concessões VIP & Meses Liberados</h3>
-                  <p className="text-xs text-slate-400">Auditoria de todas as concessões de acesso realizadas pelo administrador</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleOpenGrantModal()}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all"
-                >
-                  <Gift className="w-4 h-4" />
-                  <span>Liberar Novo Mês</span>
-                </button>
-              </div>
-
-              <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900 shadow-sm">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] font-semibold border-b border-white/10">
-                    <tr>
-                      <th className="p-4">Assinante Beneficiado</th>
-                      <th className="p-4">Tempo Concedido</th>
-                      <th className="p-4">Motivo / Finalidade</th>
-                      <th className="p-4">Data da Concessão</th>
-                      <th className="p-4">Novo Vencimento</th>
-                      <th className="p-4">Responsável</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {grantsHistory.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-500">
-                          Nenhuma concessão registrada até o momento.
-                        </td>
-                      </tr>
-                    ) : (
-                      grantsHistory.map(g => (
-                        <tr key={g.id} className="hover:bg-white/5 transition-colors">
-                          <td className="p-4">
-                            <span className="font-semibold text-white block">{g.subscriberName}</span>
-                            <span className="text-slate-400 text-[11px]">{g.subscriberEmail}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className="px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
-                              +{g.monthsGranted} mês(es) ({g.daysGranted}d)
-                            </span>
-                          </td>
-                          <td className="p-4 text-slate-300 font-medium">
-                            {g.reason}
-                          </td>
-                          <td className="p-4 text-slate-400">
-                            {new Date(g.grantedAt).toLocaleString('pt-BR')}
-                          </td>
-                          <td className="p-4 text-emerald-400 font-semibold">
-                            {new Date(g.newExpiresAt).toLocaleDateString('pt-BR')}
-                          </td>
-                          <td className="p-4 text-slate-400">
-                            <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px]">
-                              {g.grantedBy}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {/* TAB 4: HISTÓRICO COMPLETO (LIBERAÇÕES & VENDAS PIX) */}
+          {(activeTab === 'sales-and-grants' || activeTab === 'grants-history' || activeTab === 'transactions') && (
+            <SalesAndGrantsHistory
+              grantsHistory={grantsHistory}
+              transactions={transactions}
+              onApproveTransaction={handleApproveTransaction}
+              onOpenGrantModal={() => handleOpenGrantModal()}
+              onRefreshData={loadData}
+            />
           )}
 
           {/* TAB 4.5: VERIFICADOR DE SAÚDE DOS CANAIS */}
@@ -1664,9 +1705,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             </div>
           )}
 
-          {/* TAB: UNIFICADOR DE M3U8 MULTI-FONTES */}
-          {activeTab === 'unify-m3u' && (
-            <M3uUnifierManager
+          {/* TAB: UNIFICAR & ATUALIZAR LINKS M3U (HUB UNIFICADO) */}
+          {(activeTab === 'm3u-sources-unifier' || activeTab === 'unify-m3u' || activeTab === 'repo-sync') && (
+            <UnifiedLinksManager
               currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
               onRefreshChannels={async () => {
                 try {
@@ -1681,7 +1722,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   // Handled
                 }
               }}
-              onPreviewChannel={onPreviewChannel}
+              onNavigateToHistory={() => setActiveTab('channels-history')}
+              defaultSubTab={activeTab === 'repo-sync' ? 'repo-sync' : activeTab === 'unify-m3u' ? 'unifier' : 'saved-links'}
             />
           )}
 
@@ -1934,95 +1976,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               onTriggerSync={(source) => source === 'ramys' ? handleSyncRamys() : handleSyncSaimo()}
               refreshTrigger={historyRefreshTrigger}
             />
-          )}
-
-          {/* TAB: ATUALIZADOR DE LINKS (IPTV BRASIL 2026 - RAMYS) */}
-          {activeTab === 'repo-sync' && (
-            <RepoLinksUpdater
-              currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
-              onRefreshChannels={async () => {
-                try {
-                  const [cRes, hRes] = await Promise.all([
-                    api.getChannels(),
-                    api.getChannelUpdateHistory()
-                  ]);
-                  if (cRes.channels) setChannels(cRes.channels);
-                  if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
-                  setHistoryRefreshTrigger(prev => prev + 1);
-                } catch {
-                  // Handled
-                }
-              }}
-              onNavigateToHistory={() => setActiveTab('channels-history')}
-            />
-          )}
-
-          {/* TAB 6: TRANSAÇÕES PIX */}
-          {activeTab === 'transactions' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Transações e Cobranças PIX Mercado Pago</h3>
-                  <p className="text-xs text-slate-400">{transactions.length} registros no sistema</p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900 shadow-sm">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/80 text-slate-400 uppercase text-[10px] font-semibold border-b border-white/10">
-                    <tr>
-                      <th className="p-4">ID Transação</th>
-                      <th className="p-4">Assinante</th>
-                      <th className="p-4">Plano</th>
-                      <th className="p-4">Valor</th>
-                      <th className="p-4">Data</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {transactions.map(tx => (
-                      <tr key={tx.id} className="hover:bg-white/5 transition-colors">
-                        <td className="p-4 font-mono text-slate-400">{tx.id}</td>
-                        <td className="p-4">
-                          <span className="font-semibold text-white block">{tx.subscriberName}</span>
-                          <span className="text-slate-400 text-[11px]">{tx.subscriberEmail}</span>
-                        </td>
-                        <td className="p-4 text-slate-300">{tx.planName}</td>
-                        <td className="p-4 font-bold text-white">
-                          R$ {tx.amount.toFixed(2).replace('.', ',')}
-                        </td>
-                        <td className="p-4 text-slate-400">
-                          {new Date(tx.createdAt).toLocaleString('pt-BR')}
-                        </td>
-                        <td className="p-4">
-                          {tx.status === 'approved' ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-950/60 text-indigo-300 border border-indigo-500/30">
-                              Aprovado
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-300 border border-amber-500/30">
-                              Pendente
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-right">
-                          {tx.status === 'pending' && (
-                            <button
-                              type="button"
-                              onClick={() => handleApproveTransaction(tx.id)}
-                              className="px-3 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] transition-colors"
-                            >
-                              Aprovar Pix
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           )}
 
           {/* TAB 7: CONFIGURAÇÕES & CHAVES */}

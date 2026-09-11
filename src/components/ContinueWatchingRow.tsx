@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, X, Clock, Film, PlayCircle } from 'lucide-react';
 import { WatchProgress, VodItem } from '../types';
+import { CachedImage } from './CachedImage';
 
 interface ContinueWatchingRowProps {
   items: WatchProgress[];
@@ -95,13 +96,15 @@ export const ContinueWatchingRow: React.FC<ContinueWatchingRowProps> = ({
               className="relative aspect-video w-full overflow-hidden bg-slate-950 cursor-pointer"
               onClick={() => handleItemClick(item)}
             >
-              <img
+              <CachedImage
                 src={item.bannerUrl || item.posterUrl}
                 alt={item.title}
+                fallbackType="vod"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
+                decoding="async"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none" />
 
               {/* Badges */}
               <div className="absolute top-2 left-2 flex items-center gap-1">

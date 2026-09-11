@@ -1,4 +1,5 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData } from '../types';
+import { getPrefetchedChannels, getPrefetchedVod } from './prefetchService';
 
 const ONE_HOUR_MS = 60 * 60 * 1000; // 1 hour TTL
 const CHANNELS_CACHE_KEY = 'maxtv_cache_channels';
@@ -144,6 +145,19 @@ export const api = {
     if (isCacheValid && !options.forceRefresh) {
       revalidateInBackground();
       return cachedEntry!.data;
+    }
+
+    // Check if startup eager prefetch is already in-flight/ready
+    if (!options.forceRefresh) {
+      const prefetchPromise = getPrefetchedChannels();
+      if (prefetchPromise) {
+        try {
+          const prefetched = await prefetchPromise;
+          if (prefetched?.channels && Array.isArray(prefetched.channels) && prefetched.channels.length > 0) {
+            return prefetched;
+          }
+        } catch {}
+      }
     }
 
     // No cache or forceRefresh requested: fetch synchronously
@@ -507,6 +521,19 @@ export const api = {
       return cachedEntry!.data;
     }
 
+    // Check if startup eager prefetch is already in-flight/ready
+    if (!options.forceRefresh) {
+      const prefetchPromise = getPrefetchedVod();
+      if (prefetchPromise) {
+        try {
+          const prefetched = await prefetchPromise;
+          if (prefetched?.items && Array.isArray(prefetched.items) && prefetched.items.length > 0) {
+            return prefetched;
+          }
+        } catch {}
+      }
+    }
+
     try {
       const res = await fetch('/api/vod');
       if (!res.ok) throw new Error('Falha ao obter catálogo VOD');
@@ -614,7 +641,7 @@ export const api = {
     return data;
   },
 
-  async syncRepoLinks(payload: { file: string; customUrl?: string; author?: string }): Promise<{
+  async syncRepoLinks(payload: { file: string; customUrl?: string; author?: string; name?: string }): Promise<{
     success: boolean;
     message: string;
     channelsCount?: number;
@@ -685,7 +712,7 @@ export const api = {
     return data;
   },
 
-  async saveM3uSource(payload: { name?: string; url: string; enabled?: boolean; skipValidation?: boolean }): Promise<{
+  async saveM3uSource(payload: { name?: string; url: string; enabled?: boolean; skipValidation?: boolean; type?: 'channels' | 'vod'; author?: string }): Promise<{
     success: boolean;
     source: any;
     sources: any[];
@@ -707,6 +734,20 @@ export const api = {
       throw err;
     }
     return data;
+  },
+
+  async deleteM3uSource(id: string): Promise<{ success: boolean; message: string; sources: M3uAutoUpdateSource[] }> {
+    const res = await adminFetch(`/api/admin/channels/sources/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('Falha ao remover fonte');
+    return await res.json();
+  },
+
+  async getM3uSources(): Promise<{ success: boolean; sources: M3uAutoUpdateSource[]; total: number }> {
+    const res = await adminFetch('/api/admin/channels/sources');
+    if (!res.ok) throw new Error('Falha ao obter lista de fontes M3U');
+    return await res.json();
   },
 
   // SQLite Database Backup & Diagnostics
@@ -1037,5 +1078,45 @@ export const api = {
     } catch {
       return false; // Request was blocked by AdBlocker
     }
+  },
+
+  async getAuditLogs(limit = 100, type?: string, search?: string): Promise<{ success: boolean; count: number; logs: AuditLogEntry[] }> {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    if (type && type !== 'ALL') params.set('type', type);
+    if (search) params.set('search', search);
+    const token = getAdminToken();
+    const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    });
+    if (!res.ok) throw new Error('Falha ao obter logs de auditoria');
+    return await res.json();
+  },
+
+  async clearAuditLogs(adminEmail?: string, adminName?: string): Promise<{ success: boolean; message: string }> {
+    const token = getAdminToken();
+    const res = await fetch('/api/admin/audit-logs', {
+      method: 'DELETE',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(adminEmail ? { 'x-admin-email': adminEmail } : {}),
+        ...(adminName ? { 'x-admin-name': adminName } : {})
+      }
+    });
+    if (!res.ok) throw new Error('Falha ao limpar logs de auditoria');
+    return await res.json();
+  },
+
+  async getRealtimeMetrics(): Promise<{ success: boolean; data: RealtimeDashboardData }> {
+    const token = getAdminToken();
+    const res = await fetch('/api/admin/realtime-metrics', {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    });
+    if (!res.ok) throw new Error('Falha ao obter métricas em tempo real');
+    return await res.json();
   },
 };

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { FavoriteItem, Channel, VodItem, User, WatchProgress } from '../types';
 import { ContinueWatchingRow } from './ContinueWatchingRow';
+import { CachedImage } from './CachedImage';
 
 interface FavoritesViewProps {
   favorites: FavoriteItem[];
@@ -273,29 +274,32 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
                 >
                   {isChannel ? (
                     item.logo ? (
-                      <img
+                      <CachedImage
                         src={item.logo}
                         alt={item.name || item.title}
+                        fallbackType="channel"
+                        fallbackText={item.name || item.title}
                         className="max-h-12 max-w-full object-contain filter drop-shadow group-hover:scale-105 transition-transform"
                         loading="lazy"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
+                        decoding="async"
+                        showSkeleton={false}
                       />
                     ) : (
                       <Tv className="w-10 h-10 text-slate-500" />
                     )
                   ) : (
-                    <img
+                    <CachedImage
                       src={item.posterUrl || item.bannerUrl}
                       alt={item.title || item.name}
+                      fallbackType="vod"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      decoding="async"
                     />
                   )}
 
                   {!isChannel && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80 pointer-events-none" />
                   )}
 
                   {/* Badges */}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Tv, Play, Crown, Radio, Sparkles, Filter, Heart } from 'lucide-react';
 import { Channel, ChannelCategory, FavoriteItem, WatchProgress, VodItem } from '../types';
 import { ContinueWatchingRow } from './ContinueWatchingRow';
+import { CachedImage } from './CachedImage';
 
 interface ChannelGridProps {
   channels: Channel[];
@@ -38,7 +39,7 @@ interface ChannelCardItemProps {
   onToggleFavorite?: (channel: Channel) => void;
 }
 
-const ObserverChannelCard: React.FC<ChannelCardItemProps> = ({
+const ObserverChannelCard: React.FC<ChannelCardItemProps> = React.memo(({
   channel,
   idx,
   isVip,
@@ -150,17 +151,17 @@ const ObserverChannelCard: React.FC<ChannelCardItemProps> = ({
           </div>
 
           {/* Channel Logo & Center circular container */}
-          <div className="relative w-16 h-16 rounded-full bg-slate-800/90 border border-white/5 flex items-center justify-center p-2.5 mx-auto my-3 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all shadow-inner">
+          <div className="relative w-16 h-16 rounded-full bg-slate-800/90 border border-white/5 flex items-center justify-center p-2.5 mx-auto my-3 group-hover:scale-105 group-hover:border-indigo-500/30 transition-all shadow-inner overflow-hidden">
             {channel.logo ? (
-              <img
+              <CachedImage
                 src={channel.logo}
                 alt={channel.name}
+                fallbackType="channel"
+                fallbackText={channel.name}
                 className="max-h-10 max-w-full object-contain filter drop-shadow group-hover:scale-105 transition-transform"
                 loading="lazy"
                 decoding="async"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
+                showSkeleton={false}
               />
             ) : (
               <Tv className="w-7 h-7 text-slate-500 group-hover:text-indigo-400 transition-colors" />
@@ -195,7 +196,7 @@ const ObserverChannelCard: React.FC<ChannelCardItemProps> = ({
       )}
     </div>
   );
-};
+});
 
 export const ChannelGrid: React.FC<ChannelGridProps> = ({
   channels,
@@ -211,16 +212,49 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   onRemoveProgress
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ChannelCategory>('Todos');
+  const [visibleCount, setVisibleCount] = useState<number>(60);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   const isItemFavorite = (id: string) => favorites.some(f => f.id === id);
 
-  // Filter channels
-  const filteredChannels = channels.filter(ch => {
-    if (!ch.isActive) return false;
-    const matchesCategory = selectedCategory === 'Todos' || ch.category === selectedCategory;
-    const matchesSearch = !searchQuery || ch.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Filter channels with useMemo to avoid recomputing on every render
+  const filteredChannels = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return channels.filter(ch => {
+      if (!ch.isActive) return false;
+      const matchesCategory = selectedCategory === 'Todos' || ch.category === selectedCategory;
+      const matchesSearch = !q || ch.name.toLowerCase().includes(q);
+      return matchesCategory && matchesSearch;
+    });
+  }, [channels, selectedCategory, searchQuery]);
+
+  // Reset pagination when category or search changes
+  React.useEffect(() => {
+    setVisibleCount(60);
+  }, [selectedCategory, searchQuery]);
+
+  const visibleChannels = React.useMemo(() => {
+    return filteredChannels.slice(0, visibleCount);
+  }, [filteredChannels, visibleCount]);
+
+  const handleLoadMore = React.useCallback(() => {
+    setVisibleCount(prev => Math.min(prev + 60, filteredChannels.length));
+  }, [filteredChannels.length]);
+
+  // Infinite scroll auto-loader via IntersectionObserver
+  React.useEffect(() => {
+    if (!sentinelRef.current || visibleChannels.length >= filteredChannels.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [visibleChannels.length, filteredChannels.length, handleLoadMore]);
 
   return (
     <div className="w-full">
@@ -286,24 +320,38 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           <p className="text-xs text-slate-500 mt-1">Tente pesquisar com outro termo ou selecionar outra categoria.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {filteredChannels.map((channel, idx) => {
-            const signalWidth = 55 + ((idx * 13 + channel.name.length * 5) % 40);
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {visibleChannels.map((channel, idx) => {
+              const signalWidth = 55 + ((idx * 13 + channel.name.length * 5) % 40);
 
-            return (
-              <ObserverChannelCard
-                key={channel.id}
-                channel={channel}
-                idx={idx}
-                isVip={isVip}
-                isFavorite={isItemFavorite(channel.id)}
-                signalWidth={signalWidth}
-                onSelectChannel={onSelectChannel}
-                onToggleFavorite={onToggleFavorite}
-              />
-            );
-          })}
-        </div>
+              return (
+                <ObserverChannelCard
+                  key={channel.id}
+                  channel={channel}
+                  idx={idx}
+                  isVip={isVip}
+                  isFavorite={isItemFavorite(channel.id)}
+                  signalWidth={signalWidth}
+                  onSelectChannel={onSelectChannel}
+                  onToggleFavorite={onToggleFavorite}
+                />
+              );
+            })}
+          </div>
+
+          {visibleChannels.length < filteredChannels.length && (
+            <div ref={sentinelRef} className="text-center mt-8 pb-4">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="px-6 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all shadow-md active:scale-95"
+              >
+                Carregar mais canais ({visibleChannels.length} de {filteredChannels.length})
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

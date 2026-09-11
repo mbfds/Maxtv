@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { VodItem, FavoriteItem, WatchProgress } from '../types';
 import { ContinueWatchingRow } from './ContinueWatchingRow';
+import { CachedImage } from './CachedImage';
 
 interface VodSectionProps {
   items: VodItem[];
@@ -32,6 +33,230 @@ interface VodSectionProps {
   watchProgress?: WatchProgress[];
   onRemoveProgress?: (id: string) => void;
 }
+
+interface ObserverVodCardProps {
+  item: VodItem;
+  idx: number;
+  isVip: boolean;
+  isFavorite: boolean;
+  progress?: WatchProgress;
+  onPlayVod: (vod: VodItem, initialTime?: number) => void;
+  onOpenModal: (vod: VodItem) => void;
+  onToggleFavorite?: (vod: VodItem) => void;
+}
+
+const ObserverVodCard: React.FC<ObserverVodCardProps> = React.memo(({
+  item,
+  idx,
+  isVip,
+  isFavorite,
+  progress,
+  onPlayVod,
+  onOpenModal,
+  onToggleFavorite
+}) => {
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState<boolean>(() => idx < 15);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      setIsVisible(true);
+      return;
+    }
+    const el = cardRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+          } else {
+            if (entry.boundingClientRect.top > window.innerHeight + 350 || entry.boundingClientRect.bottom < -350) {
+              setIsVisible(false);
+            }
+          }
+        });
+      },
+      { rootMargin: '300px 0px 300px 0px', threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const isLocked = item.isVipOnly && !isVip;
+  const isWatched = Boolean(
+    progress && (
+      progress.percent >= 90 || 
+      (progress.duration > 0 && progress.duration - progress.currentTime < 30)
+    )
+  );
+  const isInProgress = Boolean(
+    progress && progress.percent > 0 && !isWatched
+  );
+
+  return (
+    <div
+      ref={cardRef}
+      id={`vod-card-${item.id}`}
+      onClick={() => {
+        const initialTime = (isInProgress && progress?.currentTime && progress.currentTime > 5) 
+          ? progress.currentTime 
+          : undefined;
+        onPlayVod(item, initialTime);
+      }}
+      className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-white/5 hover:border-indigo-500/50 transition-all cursor-pointer hover:shadow-2xl hover:shadow-indigo-950/20 hover:-translate-y-1.5 min-h-[280px]"
+    >
+      {!isVisible ? (
+        <div className="aspect-[2/3] w-full bg-slate-950 flex flex-col items-center justify-center p-4">
+          <div className="w-12 h-12 rounded-full bg-slate-800 animate-pulse mb-3" />
+          <div className="w-20 h-3 bg-slate-800 rounded animate-pulse" />
+        </div>
+      ) : (
+        <>
+          {/* Poster image */}
+          <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
+            <CachedImage
+              src={item.posterUrl}
+              alt={item.title}
+              fallbackType="vod"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80 pointer-events-none" />
+
+            {/* Top Left Badges (Type, Rating, Watched Checkmark or In-Progress) */}
+            <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
+              {/* Watched Checkmark Badge */}
+              {isWatched && (
+                <div 
+                  id={`vod-watched-badge-${item.id}`}
+                  className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-md shadow-emerald-950/60 backdrop-blur-sm border border-emerald-400/40"
+                  title="Assistido completamente"
+                >
+                  <Check className="w-3 h-3 stroke-[2.5]" />
+                  <span>Assistido</span>
+                </div>
+              )}
+
+              {/* In-Progress Percentage Badge */}
+              {isInProgress && progress && (
+                <div 
+                  id={`vod-progress-badge-${item.id}`}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900/90 text-indigo-300 text-[10px] font-semibold border border-indigo-500/40 backdrop-blur-sm"
+                  title={`${Math.round(progress.percent)}% assistido`}
+                >
+                  <Clock className="w-2.5 h-2.5 text-indigo-400" />
+                  <span>{Math.round(progress.percent)}%</span>
+                </div>
+              )}
+
+              <span className="text-[10px] font-semibold uppercase px-2.5 py-0.5 rounded-full bg-slate-900/90 text-slate-200 border border-white/10 w-fit">
+                {item.type === 'movie' ? 'Filme' : 'Série'}
+              </span>
+              {item.rating && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900/90 text-amber-300 border border-white/10 w-fit">
+                  ★ {item.rating}
+                </span>
+              )}
+            </div>
+
+            {/* Top Right: Info + Favorite Button + VIP badge */}
+            <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
+              {isLocked && (
+                <div className="bg-indigo-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20">
+                  <Crown className="w-3 h-3" />
+                  VIP
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenModal(item);
+                }}
+                className="p-1.5 rounded-full backdrop-blur-md bg-slate-900/80 text-white/70 border border-white/10 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                title="Sinopse e Detalhes"
+              >
+                <Film className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite?.(item);
+                }}
+                className={`p-1.5 rounded-full backdrop-blur-md border transition-all cursor-pointer ${
+                  isFavorite
+                    ? 'bg-red-600/30 text-red-400 border-red-500/50 hover:bg-red-600/40'
+                    : 'bg-slate-900/80 text-white/70 border-white/10 hover:text-white hover:bg-slate-800'
+                }`}
+                title={isFavorite ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
+              >
+                <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+              </button>
+            </div>
+
+            {/* Play icon overlay on hover */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-slate-950/40 backdrop-blur-[2px] transition-all z-10">
+              <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-600/40">
+                <Play className="w-5 h-5 fill-white ml-0.5" />
+              </div>
+            </div>
+
+            {/* Visual Progress Bar at the bottom of the poster */}
+            {isWatched ? (
+              <div 
+                id={`vod-progress-bar-${item.id}`}
+                className="absolute bottom-0 inset-x-0 h-1.5 bg-slate-950/90 z-20"
+                title="Assistido completamente (100%)"
+              >
+                <div className="h-full bg-emerald-500 w-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+              </div>
+            ) : isInProgress && progress ? (
+              <div 
+                id={`vod-progress-bar-${item.id}`}
+                className="absolute bottom-0 inset-x-0 h-1.5 bg-slate-950/90 z-20"
+                title={`${Math.round(progress.percent)}% assistido`}
+              >
+                <div 
+                  className="h-full bg-indigo-500 rounded-r shadow-[0_0_8px_rgba(99,102,241,0.8)] transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.max(5, progress.percent))}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {/* Card Information Footer */}
+          <div className="p-3.5">
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-white group-hover:text-indigo-400 transition-colors truncate flex-1">
+                {item.title}
+              </h3>
+              {isWatched && (
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="Assistido" />
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
+              <span>{item.year}</span>
+              <span>•</span>
+              <span className="truncate">{item.duration || item.genre[0]}</span>
+              {isInProgress && progress && (
+                <>
+                  <span>•</span>
+                  <span className="text-indigo-300 font-mono text-[11px]">
+                    {Math.round(progress.percent)}%
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+});
 
 export const VodSection: React.FC<VodSectionProps> = ({
   items,
@@ -48,6 +273,8 @@ export const VodSection: React.FC<VodSectionProps> = ({
   const [activeType, setActiveType] = useState<'all' | 'movie' | 'series'>(filterType);
   const [selectedSubgenre, setSelectedSubgenre] = useState<string>('Todos');
   const [activeModalItem, setActiveModalItem] = useState<VodItem | null>(null);
+  const [visibleCount, setVisibleCount] = useState<number>(40);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   // Synchronize activeType if parent tab changes
   useEffect(() => {
@@ -117,6 +344,34 @@ export const VodSection: React.FC<VodSectionProps> = ({
       return true;
     });
   }, [items, activeType, selectedSubgenre, searchQuery]);
+
+  // Reset pagination when filter changes
+  useEffect(() => {
+    setVisibleCount(40);
+  }, [activeType, selectedSubgenre, searchQuery]);
+
+  const visibleItems = useMemo(() => {
+    return filteredItems.slice(0, visibleCount);
+  }, [filteredItems, visibleCount]);
+
+  const handleLoadMore = React.useCallback(() => {
+    setVisibleCount(prev => Math.min(prev + 40, filteredItems.length));
+  }, [filteredItems.length]);
+
+  // Infinite scroll auto-loader via IntersectionObserver
+  useEffect(() => {
+    if (!sentinelRef.current || visibleItems.length >= filteredItems.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [visibleItems.length, filteredItems.length, handleLoadMore]);
 
   // Helper for formatting playback time in minutes and seconds
   const formatSeconds = (secs?: number) => {
@@ -286,174 +541,38 @@ export const VodSection: React.FC<VodSectionProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredItems.map(item => {
-            const isLocked = item.isVipOnly && !isVip;
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {visibleItems.map((item, idx) => {
+              const progress = watchProgress.find(p => p.id === item.id);
+              return (
+                <ObserverVodCard
+                  key={item.id}
+                  item={item}
+                  idx={idx}
+                  isVip={isVip}
+                  isFavorite={isItemFavorite(item.id)}
+                  progress={progress}
+                  onPlayVod={onPlayVod}
+                  onOpenModal={setActiveModalItem}
+                  onToggleFavorite={onToggleFavorite}
+                />
+              );
+            })}
+          </div>
 
-            // Check user's watch progress for this VOD
-            const progress = watchProgress.find(p => p.id === item.id);
-            const isWatched = Boolean(
-              progress && (
-                progress.percent >= 90 || 
-                (progress.duration > 0 && progress.duration - progress.currentTime < 30)
-              )
-            );
-            const isInProgress = Boolean(
-              progress && progress.percent > 0 && !isWatched
-            );
-
-            return (
-              <div
-                key={item.id}
-                id={`vod-card-${item.id}`}
-                onClick={() => {
-                  const initialTime = (isInProgress && progress?.currentTime && progress.currentTime > 5) 
-                    ? progress.currentTime 
-                    : undefined;
-                  onPlayVod(item, initialTime);
-                }}
-                className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-white/5 hover:border-indigo-500/50 transition-all cursor-pointer hover:shadow-2xl hover:shadow-indigo-950/20 hover:-translate-y-1.5"
+          {visibleItems.length < filteredItems.length && (
+            <div ref={sentinelRef} className="text-center mt-8 pb-4">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                className="px-6 py-3 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
               >
-                {/* Poster image */}
-                <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
-                  <img
-                    src={item.posterUrl}
-                    alt={item.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
-
-                  {/* Top Left Badges (Type, Rating, Watched Checkmark or In-Progress) */}
-                  <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
-                    {/* Watched Checkmark Badge */}
-                    {isWatched && (
-                      <div 
-                        id={`vod-watched-badge-${item.id}`}
-                        className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shadow-md shadow-emerald-950/60 backdrop-blur-sm border border-emerald-400/40"
-                        title="Assistido completamente"
-                      >
-                        <Check className="w-3 h-3 stroke-[2.5]" />
-                        <span>Assistido</span>
-                      </div>
-                    )}
-
-                    {/* In-Progress Percentage Badge */}
-                    {isInProgress && progress && (
-                      <div 
-                        id={`vod-progress-badge-${item.id}`}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900/90 text-indigo-300 text-[10px] font-semibold border border-indigo-500/40 backdrop-blur-sm"
-                        title={`${Math.round(progress.percent)}% assistido`}
-                      >
-                        <Clock className="w-2.5 h-2.5 text-indigo-400" />
-                        <span>{Math.round(progress.percent)}%</span>
-                      </div>
-                    )}
-
-                    <span className="text-[10px] font-semibold uppercase px-2.5 py-0.5 rounded-full bg-slate-900/90 text-slate-200 border border-white/10 w-fit">
-                      {item.type === 'movie' ? 'Filme' : 'Série'}
-                    </span>
-                    {item.rating && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900/90 text-amber-300 border border-white/10 w-fit">
-                        ★ {item.rating}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Top Right: Info + Favorite Button + VIP badge */}
-                  <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5">
-                    {isLocked && (
-                      <div className="bg-indigo-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/20">
-                        <Crown className="w-3 h-3" />
-                        VIP
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveModalItem(item);
-                      }}
-                      className="p-1.5 rounded-full backdrop-blur-md bg-slate-900/80 text-white/70 border border-white/10 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
-                      title="Sinopse e Detalhes"
-                    >
-                      <Film className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleFavorite?.(item);
-                      }}
-                      className={`p-1.5 rounded-full backdrop-blur-md border transition-all cursor-pointer ${
-                        isItemFavorite(item.id)
-                          ? 'bg-red-600/30 text-red-400 border-red-500/50 hover:bg-red-600/40'
-                          : 'bg-slate-900/80 text-white/70 border-white/10 hover:text-white hover:bg-slate-800'
-                      }`}
-                      title={isItemFavorite(item.id) ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
-                    >
-                      <Heart className={`w-3.5 h-3.5 ${isItemFavorite(item.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                    </button>
-                  </div>
-
-                  {/* Play icon overlay on hover */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-slate-950/40 backdrop-blur-[2px] transition-all z-10">
-                    <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-600/40">
-                      <Play className="w-5 h-5 fill-white ml-0.5" />
-                    </div>
-                  </div>
-
-                  {/* Visual Progress Bar at the bottom of the poster */}
-                  {isWatched ? (
-                    <div 
-                      id={`vod-progress-bar-${item.id}`}
-                      className="absolute bottom-0 inset-x-0 h-1.5 bg-slate-950/90 z-20"
-                      title="Assistido completamente (100%)"
-                    >
-                      <div className="h-full bg-emerald-500 w-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                    </div>
-                  ) : isInProgress && progress ? (
-                    <div 
-                      id={`vod-progress-bar-${item.id}`}
-                      className="absolute bottom-0 inset-x-0 h-1.5 bg-slate-950/90 z-20"
-                      title={`${Math.round(progress.percent)}% assistido`}
-                    >
-                      <div 
-                        className="h-full bg-indigo-500 rounded-r shadow-[0_0_8px_rgba(99,102,241,0.8)] transition-all duration-300"
-                        style={{ width: `${Math.min(100, Math.max(5, progress.percent))}%` }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Card Information Footer */}
-                <div className="p-3.5">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-semibold text-white group-hover:text-indigo-400 transition-colors truncate flex-1">
-                      {item.title}
-                    </h3>
-                    {isWatched && (
-                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="Assistido" />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-                    <span>{item.year}</span>
-                    <span>•</span>
-                    <span className="truncate">{item.duration || item.genre[0]}</span>
-                    {isInProgress && progress && (
-                      <>
-                        <span>•</span>
-                        <span className="text-indigo-300 font-mono text-[11px]">
-                          {Math.round(progress.percent)}%
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                Carregar mais títulos ({visibleItems.length} de {filteredItems.length})
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* VOD Details Modal */}
@@ -462,12 +581,13 @@ export const VodSection: React.FC<VodSectionProps> = ({
           <div className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl animate-fadeIn">
             {/* Modal Header Banner */}
             <div className="relative h-56 w-full overflow-hidden bg-slate-950">
-              <img
-                src={activeModalItem.bannerUrl}
+              <CachedImage
+                src={activeModalItem.bannerUrl || activeModalItem.posterUrl}
                 alt={activeModalItem.title}
+                fallbackType="vod"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent pointer-events-none" />
               <button
                 type="button"
                 onClick={() => setActiveModalItem(null)}

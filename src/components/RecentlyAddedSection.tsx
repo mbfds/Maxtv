@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Sparkles, Film, PlayCircle, Play, Heart, Crown, ChevronLeft, ChevronRight, Clock, Star } from 'lucide-react';
 import { VodItem, FavoriteItem } from '../types';
+import { CachedImage } from './CachedImage';
 
 interface RecentlyAddedSectionProps {
   items: VodItem[];
@@ -159,13 +160,15 @@ export const RecentlyAddedSection: React.FC<RecentlyAddedSectionProps> = ({
                   }
                 }}
               >
-                <img
+                <CachedImage
                   src={item.bannerUrl || item.posterUrl}
                   alt={item.title}
+                  fallbackType="vod"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
+                  decoding="async"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent pointer-events-none" />
 
                 {/* Top Badges */}
                 <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10">

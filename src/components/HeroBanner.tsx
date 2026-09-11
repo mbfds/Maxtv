@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { Channel, VodItem } from '../types';
+import { prefetchImagesBatch } from '../services/imageCache';
 
 interface HeroBannerProps {
   onPlayChannel: (channel: Channel) => void;
@@ -169,6 +170,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const touchStartXRef = useRef<number | null>(null);
+
+  // Eagerly prefetch hero slide background banners into Web Cache API
+  useEffect(() => {
+    const urls = slides.map(s => s.bannerUrl).filter(Boolean);
+    if (urls.length > 0) {
+      prefetchImagesBatch(urls, { maxConcurrency: 3 }).catch(() => {});
+    }
+  }, [slides]);
 
   // Auto-slide effect (changes slide every 6.5s unless paused/hovered)
   useEffect(() => {

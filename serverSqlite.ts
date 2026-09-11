@@ -308,6 +308,25 @@ export function initSqlite(): { success: boolean; dbPath: string; error?: string
       CREATE INDEX IF NOT EXISTS idx_url_err_time ON url_save_errors(timestamp);
     `);
 
+    // 12. Audit Logs Table (Logs de Auditoria de Ações Administrativas)
+    dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        action_name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        admin_email TEXT NOT NULL,
+        admin_name TEXT NOT NULL,
+        target_id TEXT,
+        details_json TEXT,
+        ip TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_logs(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_logs(action_type);
+      CREATE INDEX IF NOT EXISTS idx_audit_admin ON audit_logs(admin_email);
+    `);
+
     console.log('[SQLite] Banco de dados SQLite 3 inicializado com sucesso em:', DB_FILE);
     return { success: true, dbPath: DB_FILE };
   } catch (err: any) {
@@ -1045,6 +1064,8 @@ export function sqliteGetDatabaseStats() {
     'm3u_sources',
     'm3u_logs',
     'url_save_errors',
+    'audit_logs',
+    'device_sessions',
     'users',
     'subscribers',
     'transactions',
@@ -1135,6 +1156,181 @@ export function sqliteClearUrlErrorLogs(): boolean {
   } catch (err) {
     console.error('[SQLite 3] Erro ao limpar logs de erros de URL:', err);
     return false;
+  }
+}
+
+// -------------------------------------------------------------
+// AUDIT LOGS (AÇÕES CRÍTICAS ADMINISTRATIVAS)
+// -------------------------------------------------------------
+export interface SqliteAuditLogDoc {
+  id?: string;
+  timestamp?: string;
+  actionType: 'LINKS' | 'PAYMENTS' | 'USERS' | 'CHANNELS' | 'SETTINGS' | 'SYSTEM' | string;
+  actionName: string;
+  description: string;
+  adminEmail: string;
+  adminName?: string;
+  targetId?: string;
+  details?: Record<string, any>;
+  ip?: string;
+}
+
+export function sqliteRecordAuditLog(entry: SqliteAuditLogDoc): void {
+  const db = getSqliteDb();
+  try {
+    const id = entry.id || `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const timestamp = entry.timestamp || new Date().toISOString();
+    const adminEmail = (entry.adminEmail || 'admin@sistema.local').toLowerCase().trim();
+    const adminName = entry.adminName || (adminEmail.includes('@') ? adminEmail.split('@')[0] : 'Administrador');
+
+    const stmt = db.prepare(`
+      INSERT INTO audit_logs (
+        id, timestamp, action_type, action_name, description, admin_email, admin_name, target_id, details_json, ip
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `);
+
+    stmt.run(
+      id,
+      timestamp,
+      entry.actionType,
+      entry.actionName,
+      entry.description,
+      adminEmail,
+      adminName,
+      entry.targetId || null,
+      entry.details ? JSON.stringify(entry.details) : null,
+      entry.ip || null
+    );
+
+    // Mantém os 500 registros mais recentes para controle e auditoria duradoura
+    db.exec(`
+      DELETE FROM audit_logs WHERE id NOT IN (
+        SELECT id FROM audit_logs ORDER BY timestamp DESC LIMIT 500
+      );
+    `);
+  } catch (err) {
+    console.error('[SQLite 3] Erro ao gravar log de auditoria:', err);
+  }
+}
+
+export function sqliteGetAuditLogs(limit = 100, actionType?: string, search?: string): any[] {
+  const db = getSqliteDb();
+  try {
+    let sql = 'SELECT * FROM audit_logs WHERE 1=1';
+    const params: any[] = [];
+
+    if (actionType && actionType !== 'ALL') {
+      sql += ' AND action_type = ?';
+      params.push(actionType);
+    }
+
+    if (search && search.trim()) {
+      sql += ' AND (description LIKE ? OR admin_email LIKE ? OR admin_name LIKE ? OR action_name LIKE ?)';
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s, s);
+    }
+
+    sql += ' ORDER BY timestamp DESC LIMIT ?';
+    params.push(limit);
+
+    const rows = db.prepare(sql).all(...params) as any[];
+    return rows.map(r => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      actionType: r.action_type,
+      actionName: r.action_name,
+      description: r.description,
+      adminEmail: r.admin_email,
+      adminName: r.admin_name,
+      targetId: r.target_id || undefined,
+      details: r.details_json ? JSON.parse(r.details_json) : undefined,
+      ip: r.ip || undefined
+    }));
+  } catch (err) {
+    console.warn('[SQLite 3] Erro ao buscar logs de auditoria:', err);
+    return [];
+  }
+}
+
+export function sqliteClearAuditLogs(): boolean {
+  const db = getSqliteDb();
+  try {
+    db.exec('DELETE FROM audit_logs;');
+    return true;
+  } catch (err) {
+    console.error('[SQLite 3] Erro ao limpar logs de auditoria:', err);
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
+// SESSÕES ATIVAS E MÉTRICAS EM TEMPO REAL
+// -------------------------------------------------------------
+export function sqliteGetRecentActiveSessions(secondsThreshold = 60): any[] {
+  const db = getSqliteDb();
+  try {
+    // Retorna sessões cujo último heartbeat ocorreu há menos de secondsThreshold segundos
+    const now = Date.now();
+    const rows = db.prepare('SELECT * FROM device_sessions ORDER BY last_heartbeat DESC LIMIT 200').all() as any[];
+    
+    return rows
+      .map(r => {
+        const hbTime = new Date(r.last_heartbeat).getTime();
+        const secondsAgo = Math.max(0, Math.round((now - hbTime) / 1000));
+        
+        let deviceType: 'TV' | 'Mobile' | 'Desktop' | 'Other' = 'Desktop';
+        const ua = (r.user_agent || '').toLowerCase();
+        if (ua.includes('smart-tv') || ua.includes('tizen') || ua.includes('webos') || ua.includes('androidtv') || ua.includes('googletv') || ua.includes('crkey') || ua.includes('apple tv') || ua.includes('rokutv')) {
+          deviceType = 'TV';
+        } else if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+          deviceType = 'Mobile';
+        }
+
+        return {
+          sessionId: r.session_id,
+          ip: r.ip || '127.0.0.1',
+          userAgent: r.user_agent,
+          isVip: Boolean(r.is_vip),
+          userEmail: r.user_email || undefined,
+          mediaId: r.media_id || undefined,
+          mediaType: r.media_type || undefined,
+          totalWatchSeconds: r.total_watch_seconds || 0,
+          lastHeartbeat: r.last_heartbeat,
+          secondsAgo,
+          isBlocked: Boolean(r.is_blocked),
+          adblockDetected: Boolean(r.adblock_detected),
+          deviceType
+        };
+      })
+      .filter(s => s.secondsAgo <= secondsThreshold);
+  } catch (err) {
+    console.warn('[SQLite 3] Erro ao buscar sessões ativas:', err);
+    return [];
+  }
+}
+
+export function sqliteGetTopWatchedChannelsFromSessions(limit = 10): any[] {
+  const db = getSqliteDb();
+  try {
+    const rows = db.prepare(`
+      SELECT 
+        media_id,
+        media_type,
+        COUNT(session_id) as total_viewers,
+        SUM(total_watch_seconds) as total_seconds
+      FROM device_sessions
+      WHERE media_id IS NOT NULL AND media_id != ''
+      GROUP BY media_id, media_type
+      ORDER BY total_viewers DESC, total_seconds DESC
+      LIMIT ?
+    `).all(limit) as any[];
+
+    return rows;
+  } catch (err) {
+    console.warn('[SQLite 3] Erro ao buscar top canais de sessões:', err);
+    return [];
   }
 }
 

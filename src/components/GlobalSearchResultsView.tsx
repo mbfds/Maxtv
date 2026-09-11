@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Tv, Film, PlayCircle, Play, Heart, Crown, X, Sparkles, Filter } from 'lucide-react';
 import { Channel, VodItem, FavoriteItem } from '../types';
+import { CachedImage } from './CachedImage';
 
 interface GlobalSearchResultsViewProps {
   searchQuery: string;
@@ -234,11 +235,15 @@ export const GlobalSearchResultsView: React.FC<GlobalSearchResultsViewProps> = (
                   className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-white/10 hover:border-indigo-500/50 transition-all duration-200 shadow-md hover:shadow-indigo-950/40 hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="relative aspect-video w-full flex items-center justify-center p-4 bg-slate-950">
-                    <img
+                    <CachedImage
                       src={channel.logo}
                       alt={channel.name}
+                      fallbackType="channel"
+                      fallbackText={channel.name}
                       className="max-h-12 max-w-[80%] object-contain filter group-hover:scale-110 transition-transform duration-300"
                       loading="lazy"
+                      decoding="async"
+                      showSkeleton={false}
                     />
 
                     {/* Live Pulse Indicator */}
@@ -346,13 +351,15 @@ export const GlobalSearchResultsView: React.FC<GlobalSearchResultsViewProps> = (
                   className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-white/10 hover:border-indigo-500/50 transition-all duration-200 shadow-md hover:shadow-indigo-950/40 hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
-                    <img
+                    <CachedImage
                       src={movie.posterUrl}
                       alt={movie.title}
+                      fallbackType="vod"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      decoding="async"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none" />
 
                     {/* Top Badges */}
                     <div className="absolute top-2 left-2 flex items-center gap-1 z-10">
@@ -459,13 +466,15 @@ export const GlobalSearchResultsView: React.FC<GlobalSearchResultsViewProps> = (
                   className="group relative flex flex-col rounded-2xl overflow-hidden bg-slate-900 border border-white/10 hover:border-indigo-500/50 transition-all duration-200 shadow-md hover:shadow-indigo-950/40 hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950">
-                    <img
+                    <CachedImage
                       src={series.posterUrl}
                       alt={series.title}
+                      fallbackType="vod"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      decoding="async"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent pointer-events-none" />
 
                     {/* Top Badges */}
                     <div className="absolute top-2 left-2 flex items-center gap-1 z-10">

@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -38,10 +39,18 @@ import {
   sqliteGetDatabaseStats,
   sqliteSaveUrlErrorLog,
   sqliteGetUrlErrorLogs,
-  sqliteClearUrlErrorLogs
+  sqliteClearUrlErrorLogs,
+  sqliteRecordAuditLog,
+  sqliteGetAuditLogs,
+  sqliteClearAuditLogs,
+  sqliteGetRecentActiveSessions,
+  sqliteGetTopWatchedChannelsFromSessions
 } from './serverSqlite';
 
 dotenv.config();
+
+// Contador de requisições HTTP para métricas do servidor
+let totalHttpRequests = 0;
 
 // Inicialização rápida e permanente do banco de dados SQLite 3
 const sqliteInitResult = initSqlite();
@@ -54,14 +63,27 @@ if (sqliteInitResult.success) {
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Compress all HTTP/JSON responses over 1KB for dramatic bandwidth & memory savings
+app.use(compression({
+  threshold: 1024,
+  filter: (req, res) => {
+    // Don't compress video segments or live TS streams
+    if (req.path.includes('/api/proxy') || req.path.includes('.ts') || req.path.includes('.m4s')) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS middleware
 app.use((req, res, next) => {
+  totalHttpRequests++;
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range, Authorization, x-admin-email, x-admin-name');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -431,6 +453,11 @@ interface ServerM3uAutoUpdateSource {
   url: string;
   enabled: boolean;
   priority: number;
+  createdAt?: string;
+  dateFormatted?: string;
+  type?: 'channels' | 'vod';
+  author?: string;
+  channelsCount?: number;
 }
 
 interface ServerM3uAutoUpdateConfig {
@@ -1505,8 +1532,8 @@ interface CachedMediaChunk {
 }
 
 const segmentCache = new Map<string, CachedMediaChunk>();
-const MAX_CACHED_SEGMENTS = 300;
-const SEGMENT_CACHE_TTL_MS = 120_000; // 2 minutos
+const MAX_CACHED_SEGMENTS = 40;
+const SEGMENT_CACHE_TTL_MS = 60_000; // 1 minuto
 
 // Limpeza automática periódica dos chunks de transmissão
 setInterval(() => {
@@ -1517,6 +1544,24 @@ setInterval(() => {
     }
   }
 }, 30_000);
+
+// In-Memory Performance Caching Layer para Canais & VOD
+let cachedChannelsResponse: any = null;
+let cachedChannelsTimestamp = 0;
+const CHANNELS_CACHE_TTL_MS = 25_000; // 25 segundos de cache
+
+export function invalidateChannelsCache() {
+  cachedChannelsResponse = null;
+  cachedChannelsTimestamp = 0;
+}
+
+let cachedVodResponse: any = null;
+let cachedVodFileMtime = 0;
+
+export function invalidateVodCache() {
+  cachedVodResponse = null;
+  cachedVodFileMtime = 0;
+}
 
 // --- API ROUTES ---
 
@@ -2032,8 +2077,13 @@ function getHealthSummary() {
   };
 }
 
-// 2. CHANNELS API (Grade Unificada Oficial)
+// 2. CHANNELS API (Grade Unificada Oficial com Cache de Alta Performance)
 app.get('/api/channels', (req, res) => {
+  const now = Date.now();
+  if (cachedChannelsResponse && (now - cachedChannelsTimestamp < CHANNELS_CACHE_TTL_MS)) {
+    return res.json(cachedChannelsResponse);
+  }
+
   // A grade unificada oficial é a fonte primária para todos os usuários
   let effectiveChannels = customConfigChannels;
 
@@ -2062,7 +2112,7 @@ app.get('/api/channels', (req, res) => {
     if (count > 1) multiSourceCount++;
   });
 
-  res.json({
+  const payload = {
     success: true,
     count: all.length,
     source: 'Grade Unificada Multi-Fontes (IPTV Brasil 2026)',
@@ -2074,7 +2124,12 @@ app.get('/api/channels', (req, res) => {
     configCount: customConfigChannels.length,
     lastUpdated: lastCatalogFetch || lastRamysFetch || Date.now(),
     channels: all
-  });
+  };
+
+  cachedChannelsResponse = payload;
+  cachedChannelsTimestamp = now;
+
+  res.json(payload);
 });
 
 // 2.1 VOD CATALOG API (Filmes e Séries - Arquivos Enriquecidos ou Ramys/Iptv-Brasil-2026)
@@ -2082,15 +2137,20 @@ app.get('/api/vod', (req, res) => {
   try {
     const enrichedPath = path.join(process.cwd(), 'public', 'data', 'enriched', 'vod.json');
     if (fs.existsSync(enrichedPath)) {
-      const rawData = fs.readFileSync(enrichedPath, 'utf-8');
-      const parsed = JSON.parse(rawData);
-      return res.json({
-        success: true,
-        count: parsed.items?.length || parsed.count || 0,
-        source: 'Enriched Local M3U (public/data/enriched/vod.json)',
-        updatedAt: parsed.updatedAt,
-        items: parsed.items || []
-      });
+      const stats = fs.statSync(enrichedPath);
+      if (!cachedVodResponse || cachedVodFileMtime !== stats.mtimeMs) {
+        const rawData = fs.readFileSync(enrichedPath, 'utf-8');
+        const parsed = JSON.parse(rawData);
+        cachedVodResponse = {
+          success: true,
+          count: parsed.items?.length || parsed.count || 0,
+          source: 'Enriched Local M3U (public/data/enriched/vod.json)',
+          updatedAt: parsed.updatedAt,
+          items: parsed.items || []
+        };
+        cachedVodFileMtime = stats.mtimeMs;
+      }
+      return res.json(cachedVodResponse);
     }
   } catch (err) {
     console.warn('[VOD API] Erro ao ler public/data/enriched/vod.json:', err);
@@ -3056,6 +3116,15 @@ app.post('/api/admin/subscribers', (req, res) => {
   subscribers.unshift(newSub);
   try {
     sqliteSaveSubscriber(newSub);
+    sqliteRecordAuditLog({
+      actionType: 'USERS',
+      actionName: 'CREATE_SUBSCRIBER',
+      description: `Cadastrou novo assinante: ${newSub.name} (${newSub.email}) - Plano: ${newSub.planName}`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: newSub.id,
+      details: { name: newSub.name, email: newSub.email, planName: newSub.planName, expiresAt: newSub.expiresAt }
+    });
   } catch (e) {
     console.warn('[SQLite] Erro ao salvar novo assinante:', e);
   }
@@ -3085,6 +3154,15 @@ app.put('/api/admin/subscribers/:id', (req, res) => {
   subscribers[subIndex] = current;
   try {
     sqliteSaveSubscriber(current);
+    sqliteRecordAuditLog({
+      actionType: 'USERS',
+      actionName: 'UPDATE_SUBSCRIBER',
+      description: `Atualizou assinante: ${current.name} (${current.email}) - Status: ${current.status}`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: current.id,
+      details: { status: current.status, planName: current.planName, expiresAt: current.expiresAt }
+    });
   } catch (e) {
     console.warn('[SQLite] Erro ao atualizar assinante:', e);
   }
@@ -3159,6 +3237,15 @@ app.post('/api/admin/subscribers/grant-months', (req, res) => {
   syncUserWithSubscriber(sub);
   try {
     sqliteSaveSubscriber(sub);
+    sqliteRecordAuditLog({
+      actionType: 'USERS',
+      actionName: 'GRANT_VIP_MONTHS',
+      description: `Concedeu +${effectiveMonths} mês(es) (${totalDays} dias) VIP para ${sub.name} (${sub.email}). Motivo: ${reason || 'Liberado manualmente'}`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: sub.id,
+      details: { effectiveMonths, totalDays, previousExpiresAt, newExpiresAt: sub.expiresAt, reason }
+    });
   } catch (e) {
     console.warn('[SQLite] Erro ao salvar assinante com meses liberados:', e);
   }
@@ -3203,6 +3290,15 @@ app.post('/api/admin/subscribers/:id/quick-add-month', (req, res) => {
   syncUserWithSubscriber(sub);
   try {
     sqliteSaveSubscriber(sub);
+    sqliteRecordAuditLog({
+      actionType: 'USERS',
+      actionName: 'QUICK_ADD_MONTH',
+      description: `Adicionou +1 Mês VIP rápido para ${sub.name} (${sub.email}). Novo vencimento: ${new Date(sub.expiresAt).toLocaleDateString('pt-BR')}`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: sub.id,
+      details: { newExpiresAt: sub.expiresAt }
+    });
   } catch (e) {
     console.warn('[SQLite] Erro ao atualizar assinante rápido:', e);
   }
@@ -3227,11 +3323,21 @@ app.get('/api/admin/grants', (req, res) => {
 app.delete('/api/admin/subscribers/:id', (req, res) => {
   const { id } = req.params;
   const idx = subscribers.findIndex(s => s.id === id);
+  let removedSub: ServerSubscriber | undefined;
   if (idx !== -1) {
+    removedSub = subscribers[idx];
     subscribers.splice(idx, 1);
   }
   try {
     sqliteDeleteSubscriber(id);
+    sqliteRecordAuditLog({
+      actionType: 'USERS',
+      actionName: 'DELETE_SUBSCRIBER',
+      description: `Removeu assinante: ${removedSub?.name || id} (${removedSub?.email || ''})`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: id
+    });
   } catch (e) {
     console.warn('[SQLite] Erro ao deletar assinante:', e);
   }
@@ -3250,6 +3356,19 @@ app.post('/api/admin/transactions/:id/approve', (req, res) => {
   tx.status = 'approved';
   tx.approvedAt = new Date().toISOString();
   activateSubscriber(tx);
+
+  try {
+    sqliteRecordAuditLog({
+      actionType: 'PAYMENTS',
+      actionName: 'APPROVE_PIX_PAYMENT',
+      description: `Aprovou manualmente pagamento PIX de R$ ${tx.amount.toFixed(2)} (${tx.planName}) para ${tx.subscriberEmail}`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: tx.id,
+      details: { amount: tx.amount, planName: tx.planName, email: tx.subscriberEmail }
+    });
+  } catch {}
+
   res.json({ success: true, transaction: tx });
 });
 
@@ -3677,6 +3796,17 @@ app.post('/api/admin/repo-links/sync', async (req, res) => {
         `Sincronização & Unificação: ${fileNameDisplay}`,
         `${result.length} canais processados de ${fileNameDisplay}. Resultado unificado: ${unified.length} canais ativos, ${mergedChannelsCount} fontes secundárias integradas (Opção 2+), totalizando ${totalSourcesCount} streams.`
       );
+
+      try {
+        sqliteRecordAuditLog({
+          actionType: 'LINKS',
+          actionName: 'SYNC_REPO_LINKS',
+          description: `Sincronizou grade de canais com repositório (${fileNameDisplay}) - ${unified.length} canais ativos`,
+          adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+          adminName: currentAuthor,
+          details: { file: fileNameDisplay, channelsCount: unified.length, mergedSources: mergedChannelsCount, durationMs: Date.now() - startTime }
+        });
+      } catch {}
 
       return res.json({
         success: true,
@@ -4297,6 +4427,34 @@ app.post('/api/admin/channels/validate-m3u-url', async (req, res) => {
   });
 });
 
+// GET /api/admin/channels/sources (Listar todas as fontes salvas com nomes e horários)
+app.get('/api/admin/channels/sources', (req, res) => {
+  res.json({
+    success: true,
+    sources: m3uAutoUpdateConfig.sources,
+    total: m3uAutoUpdateConfig.sources.length
+  });
+});
+
+// DELETE /api/admin/channels/sources/:id (Remover fonte M3U com sincronização no SQLite)
+app.delete('/api/admin/channels/sources/:id', (req, res) => {
+  const { id } = req.params;
+  const initialLen = m3uAutoUpdateConfig.sources.length;
+  m3uAutoUpdateConfig.sources = m3uAutoUpdateConfig.sources.filter(s => s.id !== id);
+  try {
+    sqliteDeleteM3uSource(id);
+  } catch (err) {
+    console.warn('[SQLite] Alerta ao deletar fonte no SQLite:', err);
+  }
+  saveAutoUpdateConfigToDisk();
+  res.json({
+    success: true,
+    message: 'Fonte M3U removida com sucesso.',
+    sources: m3uAutoUpdateConfig.sources,
+    removed: initialLen !== m3uAutoUpdateConfig.sources.length
+  });
+});
+
 // POST /api/admin/channels/sources (Salvar ou cadastrar URL M3U8 com validação server-side e persistência garantida no SQLite)
 app.post('/api/admin/channels/sources', async (req, res) => {
   const { name, url, enabled = true, skipValidation = false } = req.body || {};
@@ -4349,9 +4507,21 @@ app.post('/api/admin/channels/sources', async (req, res) => {
     const existingIndex = m3uAutoUpdateConfig.sources.findIndex(s => s.url.trim().toLowerCase() === cleanUrl.toLowerCase());
     let sourceItem: ServerM3uAutoUpdateSource;
 
+    const nowIso = new Date().toISOString();
+    const nowFormatted = new Date().toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    const itemType = req.body?.type === 'vod' ? 'vod' : 'channels';
+
     if (existingIndex >= 0) {
       m3uAutoUpdateConfig.sources[existingIndex].name = cleanName;
       m3uAutoUpdateConfig.sources[existingIndex].enabled = Boolean(enabled);
+      if (!m3uAutoUpdateConfig.sources[existingIndex].createdAt) {
+        m3uAutoUpdateConfig.sources[existingIndex].createdAt = nowIso;
+        m3uAutoUpdateConfig.sources[existingIndex].dateFormatted = nowFormatted;
+      }
+      (m3uAutoUpdateConfig.sources[existingIndex] as any).type = itemType;
       sourceItem = m3uAutoUpdateConfig.sources[existingIndex];
     } else {
       sourceItem = {
@@ -4359,14 +4529,30 @@ app.post('/api/admin/channels/sources', async (req, res) => {
         name: cleanName,
         url: cleanUrl,
         enabled: Boolean(enabled),
-        priority: m3uAutoUpdateConfig.sources.length + 1
-      };
+        priority: m3uAutoUpdateConfig.sources.length + 1,
+        createdAt: nowIso,
+        dateFormatted: nowFormatted,
+        type: itemType,
+        author: req.body?.author || 'Administrador'
+      } as any;
       m3uAutoUpdateConfig.sources.push(sourceItem);
     }
 
     // Persistência no SQLite 3
     sqliteSaveM3uSource(sourceItem);
     saveAutoUpdateConfigToDisk();
+
+    try {
+      sqliteRecordAuditLog({
+        actionType: 'LINKS',
+        actionName: existingIndex >= 0 ? 'UPDATE_M3U_SOURCE' : 'CREATE_M3U_SOURCE',
+        description: `${existingIndex >= 0 ? 'Atualizou' : 'Adicionou'} fonte de lista M3U "${cleanName}" (${itemType || 'canais'})`,
+        adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+        adminName: req.body?.author || (req.headers['x-admin-name'] as string) || 'Administrador',
+        targetId: sourceItem.id,
+        details: { name: cleanName, url: cleanUrl, type: itemType, enabled: sourceItem.enabled }
+      });
+    } catch {}
 
     res.json({
       success: true,
@@ -4502,13 +4688,231 @@ app.delete('/api/admin/logs/url-errors', (req, res) => {
   }
 });
 
+// =============================================================
+// LOGS DE AUDITORIA ADMINISTRATIVA (AÇÕES CRÍTICAS)
+// =============================================================
+app.get('/api/admin/audit-logs', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 100;
+    const type = req.query.type as string | undefined;
+    const search = req.query.search as string | undefined;
+    const logs = sqliteGetAuditLogs(limit, type, search);
+    res.json({
+      success: true,
+      count: logs.length,
+      logs
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/audit-logs', (req, res) => {
+  try {
+    const adminEmail = (req.headers['x-admin-email'] as string) || (req.query.adminEmail as string) || 'cebolao1302@gmail.com';
+    const adminName = (req.headers['x-admin-name'] as string) || 'Administrador';
+    
+    sqliteClearAuditLogs();
+    sqliteRecordAuditLog({
+      actionType: 'SYSTEM',
+      actionName: 'CLEAR_AUDIT_LOGS',
+      description: 'Histórico de logs de auditoria foi limpo pelo administrador.',
+      adminEmail,
+      adminName
+    });
+
+    res.json({
+      success: true,
+      message: 'Logs de auditoria limpos com sucesso.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =============================================================
+// PAINEL DE MONITORAMENTO EM TEMPO REAL & PERFORMANCE
+// =============================================================
+app.get('/api/admin/realtime-metrics', (req, res) => {
+  try {
+    const uptimeSec = Math.floor(process.uptime());
+    const days = Math.floor(uptimeSec / 86400);
+    const hours = Math.floor((uptimeSec % 86400) / 3600);
+    const mins = Math.floor((uptimeSec % 3600) / 60);
+    const secs = uptimeSec % 60;
+    const uptimeFormatted = days > 0 
+      ? `${days}d ${hours}h ${mins}m` 
+      : hours > 0 
+        ? `${hours}h ${mins}m ${secs}s` 
+        : `${mins}m ${secs}s`;
+
+    const mem = process.memoryUsage();
+    const rssMb = Number((mem.rss / (1024 * 1024)).toFixed(1));
+    const heapUsedMb = Number((mem.heapUsed / (1024 * 1024)).toFixed(1));
+    const heapTotalMb = Number((mem.heapTotal / (1024 * 1024)).toFixed(1));
+    const externalMb = Number((mem.external / (1024 * 1024)).toFixed(1));
+    const heapPercentage = Math.round((mem.heapUsed / mem.heapTotal) * 100);
+
+    const cpu = process.cpuUsage();
+    const dbStats = sqliteGetDatabaseStats();
+
+    // Sessões ativas nos últimos 60 segundos
+    const rawSessions = sqliteGetRecentActiveSessions(60);
+
+    // Mapeamento de canais para obter título e categoria amigável
+    const availableChannels = customConfigChannels.length > 0 
+      ? customConfigChannels 
+      : (parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels);
+    const allChannelsList = [...customAdminChannels, ...availableChannels];
+
+    const channelMap = new Map<string, { name: string; category: string; isVipOnly: boolean }>();
+    for (const ch of allChannelsList) {
+      channelMap.set(ch.id, { name: ch.name, category: ch.category, isVipOnly: Boolean(ch.isVipOnly) });
+    }
+
+    const activeSessions = rawSessions.map(s => {
+      let mediaName = s.mediaId;
+      if (s.mediaId && channelMap.has(s.mediaId)) {
+        mediaName = channelMap.get(s.mediaId)!.name;
+      }
+      return {
+        ...s,
+        mediaName: mediaName || 'Navegando no Catálogo'
+      };
+    });
+
+    const vipCount = activeSessions.filter(s => s.isVip).length;
+    const guestCount = activeSessions.length - vipCount;
+
+    // Agrega audiência ao vivo dos canais
+    const sessionMediaCounts: Record<string, { activeViewers: number; totalSeconds: number }> = {};
+    for (const s of activeSessions) {
+      if (s.mediaId) {
+        if (!sessionMediaCounts[s.mediaId]) {
+          sessionMediaCounts[s.mediaId] = { activeViewers: 0, totalSeconds: 0 };
+        }
+        sessionMediaCounts[s.mediaId].activeViewers += 1;
+        sessionMediaCounts[s.mediaId].totalSeconds += s.totalWatchSeconds;
+      }
+    }
+
+    // Combina com top histórico de sessões do SQLite
+    const topWatchedDb = sqliteGetTopWatchedChannelsFromSessions(15);
+    const channelAggMap = new Map<string, { mediaId: string; name: string; category: string; activeViewers: number; totalWatchSeconds: number; isVipOnly: boolean }>();
+
+    for (const row of topWatchedDb) {
+      const chInfo = channelMap.get(row.media_id) || { name: row.media_id, category: 'Ao Vivo', isVipOnly: false };
+      channelAggMap.set(row.media_id, {
+        mediaId: row.media_id,
+        name: chInfo.name,
+        category: chInfo.category,
+        activeViewers: sessionMediaCounts[row.media_id]?.activeViewers || 0,
+        totalWatchSeconds: row.total_seconds || 0,
+        isVipOnly: chInfo.isVipOnly
+      });
+    }
+
+    for (const [mId, cur] of Object.entries(sessionMediaCounts)) {
+      if (!channelAggMap.has(mId)) {
+        const chInfo = channelMap.get(mId) || { name: mId, category: 'Ao Vivo', isVipOnly: false };
+        channelAggMap.set(mId, {
+          mediaId: mId,
+          name: chInfo.name,
+          category: chInfo.category,
+          activeViewers: cur.activeViewers,
+          totalWatchSeconds: cur.totalSeconds,
+          isVipOnly: chInfo.isVipOnly
+        });
+      }
+    }
+
+    // Se ainda não houver dados de streaming nas sessões, preenche com canais mais populares como referência
+    if (channelAggMap.size === 0) {
+      const defaultChannels = allChannelsList.slice(0, 8);
+      for (const ch of defaultChannels) {
+        channelAggMap.set(ch.id, {
+          mediaId: ch.id,
+          name: ch.name,
+          category: ch.category,
+          activeViewers: 0,
+          totalWatchSeconds: 0,
+          isVipOnly: Boolean(ch.isVipOnly)
+        });
+      }
+    }
+
+    const topChannels = Array.from(channelAggMap.values())
+      .sort((a, b) => b.activeViewers - a.activeViewers || b.totalWatchSeconds - a.totalWatchSeconds)
+      .slice(0, 10);
+
+    const recentAudits = sqliteGetAuditLogs(6);
+
+    const data = {
+      performance: {
+        uptimeSeconds: uptimeSec,
+        uptimeFormatted,
+        nodeVersion: process.version,
+        memory: {
+          rssMb,
+          heapUsedMb,
+          heapTotalMb,
+          externalMb,
+          heapPercentage
+        },
+        cpu: {
+          userTimeMs: Math.round(cpu.user / 1000),
+          systemTimeMs: Math.round(cpu.system / 1000)
+        },
+        sqlite: {
+          connected: isSqliteConnected(),
+          dbSizeFormatted: dbStats.dbSizeFormatted,
+          walSizeFormatted: dbStats.walSizeFormatted,
+          totalChannels: dbStats.counts['channels'] || allChannelsList.length,
+          totalSubscribers: dbStats.counts['subscribers'] || subscribers.length,
+          totalSessions: dbStats.counts['device_sessions'] || 0,
+          totalAuditLogs: dbStats.counts['audit_logs'] || 0
+        },
+        network: {
+          activeConnections: activeSessions.length,
+          totalRequestsHandled: totalHttpRequests || 1
+        },
+        timestamp: new Date().toISOString()
+      },
+      activeUsers: {
+        totalActiveNow: activeSessions.length,
+        vipCount,
+        guestCount,
+        sessions: activeSessions
+      },
+      topChannels,
+      recentAudits
+    };
+
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // DELETE /api/admin/channels/sources/:id (Remover fonte M3U8)
 app.delete('/api/admin/channels/sources/:id', (req, res) => {
   const { id } = req.params;
   const initialCount = m3uAutoUpdateConfig.sources.length;
+  const targetSource = m3uAutoUpdateConfig.sources.find(s => s.id === id);
   m3uAutoUpdateConfig.sources = m3uAutoUpdateConfig.sources.filter(s => s.id !== id);
 
   saveAutoUpdateConfigToDisk();
+
+  try {
+    sqliteRecordAuditLog({
+      actionType: 'LINKS',
+      actionName: 'DELETE_M3U_SOURCE',
+      description: `Removeu fonte de lista M3U "${targetSource?.name || id}" (${targetSource?.url || ''})`,
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      targetId: id
+    });
+  } catch {}
 
   res.json({
     success: true,
@@ -4964,6 +5368,17 @@ app.post('/api/admin/channels/config', (req, res) => {
 
     customConfigChannels = normalized;
 
+    try {
+      sqliteRecordAuditLog({
+        actionType: 'CHANNELS',
+        actionName: 'SAVE_CHANNELS_CONFIG',
+        description: `Salvou arquivo de configuração JSON (channels-config.json) com ${normalized.length} canais ativos`,
+        adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+        adminName: author || (req.headers['x-admin-name'] as string) || 'Administrador',
+        details: { channelsCount: normalized.length }
+      });
+    } catch {}
+
     const historyEntry = logChannelUpdate({
       type: 'json_edit',
       actionName: 'Edição de Arquivo JSON de Canais',
@@ -5324,6 +5739,17 @@ app.post('/api/admin/settings', (req, res) => {
       saveAutoUpdateConfigToDisk();
     }
   }
+
+  try {
+    sqliteRecordAuditLog({
+      actionType: 'SETTINGS',
+      actionName: 'UPDATE_SYSTEM_SETTINGS',
+      description: 'Atualizou configurações do sistema (pagamentos, chaves ou intervalo)',
+      adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+      adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+      details: { sandboxMode: systemSettings.sandboxMode, autoUpdateIntervalHours: systemSettings.autoUpdateIntervalHours }
+    });
+  } catch {}
 
   res.json({
     success: true,
