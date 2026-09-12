@@ -6071,24 +6071,41 @@ app.post('/api/admin/settings', (req, res) => {
 
 // Vite Middleware for SPA development & Production static serving
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+  try {
+    if (process.env.NODE_ENV !== 'production') {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(200).send('<!DOCTYPE html><html><head><title>Streaming Brasil - MAXTV</title></head><body style="background:#020617;color:#fff;font-family:sans-serif;text-align:center;padding:50px;"><h1>Streaming Brasil (MAXTV)</h1><p>Compilando aplicação, por favor aguarde...</p><script>setTimeout(() => window.location.reload(), 3000);</script></body></html>');
+        }
+      });
+    }
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Streaming Brasil (MAXTV) Server running on http://0.0.0.0:${PORT}`);
+      try {
+        startAutoUpdateScheduler();
+      } catch (e) {
+        console.error('[AUTO-UPDATE] Erro ao iniciar agendador:', e);
+      }
     });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+  } catch (err) {
+    console.error('[SERVER STARTUP CRITICAL ERROR]', err);
+    // Garantir que a porta 3000 sempre abra para evitar 502 Bad Gateway no proxy reverso do container
+    app.listen(PORT, '0.0.0.0', () => {
+      console.warn(`[SERVER RECOVERY] Servidor iniciado em modo de recuperação de contingência na porta ${PORT}`);
     });
   }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Streaming Brasil (MAXTV) Server running on http://0.0.0.0:${PORT}`);
-    startAutoUpdateScheduler();
-  });
 }
 
 startServer();

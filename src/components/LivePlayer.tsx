@@ -10,7 +10,7 @@ import {
   Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
   HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
   Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText, SkipForward, ListOrdered,
-  ChevronDown
+  ChevronDown, ArrowLeft
 } from 'lucide-react';
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { api } from '../services/api';
@@ -84,6 +84,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [compatibilityProtocol, setCompatibilityProtocol] = useState<'hls' | 'dash'>('hls');
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const serverDropdownRef = useRef<HTMLDivElement>(null);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
@@ -2250,7 +2251,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           if (activeMenu) {
             setActiveMenu(null);
           } else {
-            onClose();
+            handleClose();
           }
           break;
       }
@@ -2259,6 +2260,35 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay, toggleMute, toggleFullscreen, togglePiP, captureScreenshot, adjustVolumeBy, skipSeconds, type, activeMenu, resetControlsTimer, isSeries, nextEpisode, playNextEpisode, onClose]);
+
+  // Preserva a posição exata de rolagem da navegação do usuário ao abrir e fechar o player
+  useEffect(() => {
+    const savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const savedScrollX = window.scrollX || window.pageXOffset || document.documentElement.scrollLeft || 0;
+
+    return () => {
+      // Retorna exatamente para onde o usuário estava navegando na página
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: savedScrollY,
+          left: savedScrollX,
+          behavior: 'instant' as ScrollBehavior
+        });
+      });
+    };
+  }, []);
+
+  // Fecha o dropdown de servidores quando clicar fora do menu
+  useEffect(() => {
+    if (activeMenu !== 'sources') return;
+    const handleOutsideMenuClick = (e: MouseEvent) => {
+      if (serverDropdownRef.current && !serverDropdownRef.current.contains(e.target as Node)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideMenuClick);
+    return () => document.removeEventListener('mousedown', handleOutsideMenuClick);
+  }, [activeMenu]);
 
   const formatTime = (secs: number) => {
     if (!secs || isNaN(secs)) return '00:00';
@@ -2281,7 +2311,16 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn">
+    <div 
+      id="player-modal-backdrop"
+      onClick={(e) => {
+        // Clicar fora do reprodutor (no backdrop) fecha o vídeo e retorna para a navegação de onde parou
+        if (e.target === e.currentTarget || (e.target as HTMLElement)?.id === 'player-modal-backdrop') {
+          handleClose();
+        }
+      }}
+      className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn cursor-pointer"
+    >
       {/* Persistent Global Close Button (Always visible and accessible at all times across all screen sizes and TV) */}
       <button
         id="player-global-close-btn"
@@ -2300,12 +2339,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       <div 
         id="player-container"
         ref={containerRef}
+        onClick={(e) => e.stopPropagation()}
         onMouseMove={resetControlsTimer}
         onMouseEnter={resetControlsTimer}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className="relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none"
+        className="relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none cursor-default"
       >
         {/* Dedicated Absolute Top-Right Close Button inside Container for small screens & TV navigation */}
         <button
@@ -2794,13 +2834,26 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
               }`}
             >
-              {/* Media Title and Info - strictly constrained so it won't push the controls */}
-              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden pr-2">
+              {/* Left Side: Dedicated Back Button & Media Title and Info */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden pr-2">
+                {/* Dedicated 'Voltar' Back Button */}
+                <button
+                  id="player-back-nav-btn"
+                  type="button"
+                  onClick={handleClose}
+                  className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/20 hover:border-indigo-400/50 text-xs font-semibold backdrop-blur-md shadow-md transition-all cursor-pointer shrink-0 active:scale-95 group"
+                  title="Voltar para a navegação anterior"
+                  aria-label="Voltar para a tela anterior"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-indigo-400 group-hover:-translate-x-0.5 transition-transform" />
+                  <span className="font-semibold">Voltar</span>
+                </button>
+
                 {'logo' in item && item.logo ? (
                   <img 
                     src={item.logo} 
                     alt={item.name} 
-                    className="w-9 h-9 sm:w-10 sm:h-10 object-contain bg-slate-900/80 p-1 rounded-full border border-white/10 shadow-sm shrink-0" 
+                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain bg-slate-900/80 p-1 rounded-full border border-white/10 shadow-sm shrink-0" 
                   />
                 ) : 'posterUrl' in item && item.posterUrl ? (
                   <img 
@@ -2846,105 +2899,121 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 </div>
               </div>
 
-              {/* Top Right Controls (Sources, Help, Close) */}
+              {/* Top Right Controls (Sources Popover, Help, Close) */}
               <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 ml-auto z-40">
-                {/* Dynamic Server Selection: Compact Dropdown for >3 servers, sleek pills for <=3 */}
-                {sources.length > 1 && (
-                  sources.length <= 3 ? (
-                    <div className="hidden sm:flex items-center gap-1 bg-slate-900/90 border border-white/10 rounded-full p-1 text-xs backdrop-blur-md shrink-0">
-                      {sources.map((s, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setCurrentSourceIndex(idx);
-                            setHasError(false);
-                            setIsLoading(true);
-                            setStreamWarning(null);
-                            setReloadCounter(c => c + 1);
-                          }}
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                            currentSourceIndex === idx 
-                              ? 'bg-indigo-600 text-white shadow-sm' 
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          Servidor {idx + 1}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    /* Dropdown for when there are multiple/many servers */
-                    <div className="relative shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setActiveMenu(activeMenu === 'sources' ? null : 'sources')}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition-all cursor-pointer shadow-sm ${
-                          activeMenu === 'sources'
-                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-600/30'
-                            : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-white/10 hover:border-indigo-400/40'
-                        }`}
-                        title="Alternar Servidor de Transmissão"
-                      >
-                        <Server className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span className="hidden md:inline truncate max-w-[100px]">
-                          Servidor {currentSourceIndex + 1}
-                        </span>
-                        <span className="text-[10px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                {/* 1 Item Único: Botão 'Selecionar Servidor' com Dropdown Popover para Troca Rápida de Stream */}
+                {sources.length > 0 && (
+                  <div className="relative shrink-0" ref={serverDropdownRef}>
+                    <button
+                      id="player-server-selector-btn"
+                      type="button"
+                      onClick={() => sources.length > 1 && setActiveMenu(activeMenu === 'sources' ? null : 'sources')}
+                      className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition-all select-none shadow-md active:scale-95 ${
+                        sources.length > 1 ? 'cursor-pointer' : 'cursor-default'
+                      } ${
+                        activeMenu === 'sources'
+                          ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-600/40 ring-2 ring-indigo-400/30'
+                          : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-white/15 hover:border-indigo-400/50'
+                      }`}
+                      title={sources.length > 1 ? "Clique para abrir menu de seleção rápida de servidor" : "Servidor ativo"}
+                      aria-expanded={activeMenu === 'sources'}
+                    >
+                      <Server className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span className="font-semibold text-white truncate max-w-[120px] sm:max-w-[160px]">
+                        Selecionar Servidor
+                      </span>
+                      {sources.length > 1 && (
+                        <span className="text-[10px] text-indigo-200 bg-indigo-500/25 border border-indigo-400/30 px-1.5 py-0.5 rounded-full font-mono font-bold shrink-0">
                           {currentSourceIndex + 1}/{sources.length}
                         </span>
-                        <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activeMenu === 'sources' ? 'rotate-180' : ''}`} />
-                      </button>
+                      )}
+                      {sources.length > 1 && (
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${activeMenu === 'sources' ? 'rotate-180 text-white' : ''}`} />
+                      )}
+                    </button>
 
-                      {/* Dropdown Menu for Many Servers */}
-                      {activeMenu === 'sources' && (
-                        <div className="absolute top-10 right-0 z-50 w-72 sm:w-80 bg-slate-900/95 border border-indigo-500/30 rounded-2xl p-3 shadow-2xl backdrop-blur-xl animate-fadeIn">
-                          <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2">
-                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <Server className="w-3.5 h-3.5 text-indigo-400" />
-                              Servidores Disponíveis ({sources.length})
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setActiveMenu(null)}
-                              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                    {/* Popover Dropdown Menu para Troca Rápida de Stream */}
+                    {activeMenu === 'sources' && sources.length > 1 && (
+                      <div 
+                        id="player-server-dropdown-menu"
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-full mt-2 right-0 z-50 w-72 sm:w-84 bg-slate-900/98 border border-indigo-500/40 rounded-2xl p-3 shadow-2xl backdrop-blur-2xl animate-fadeIn"
+                      >
+                        <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2.5">
+                          <div className="flex items-center gap-2">
+                            <Server className="w-4 h-4 text-indigo-400" />
+                            <div>
+                              <p className="text-xs font-bold text-white">Selecionar Servidor</p>
+                              <p className="text-[10px] text-slate-400">Troca rápida de stream ({sources.length} disponíveis)</p>
+                            </div>
                           </div>
-                          <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                            {sources.map((s, idx) => (
+                          <button
+                            type="button"
+                            onClick={() => setActiveMenu(null)}
+                            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                            title="Fechar menu"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                          {sources.map((s, idx) => {
+                            const isSelected = currentSourceIndex === idx;
+                            return (
                               <button
                                 key={idx}
                                 type="button"
                                 onClick={() => {
-                                  setCurrentSourceIndex(idx);
-                                  setHasError(false);
-                                  setIsLoading(true);
-                                  setStreamWarning(null);
-                                  setReloadCounter(c => c + 1);
+                                  if (!isSelected) {
+                                    setCurrentSourceIndex(idx);
+                                    setHasError(false);
+                                    setIsLoading(true);
+                                    setStreamWarning(null);
+                                    setReloadCounter(c => c + 1);
+                                    showToast(`Alternado para Servidor ${idx + 1}`);
+                                  }
                                   setActiveMenu(null);
                                 }}
-                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all text-left cursor-pointer ${
-                                  currentSourceIndex === idx
-                                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30 border border-indigo-400/40'
-                                    : 'text-slate-300 hover:bg-white/10 hover:text-white border border-transparent'
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30 border-indigo-400/50'
+                                    : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/5'
                                 }`}
                               >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className={`w-2 h-2 rounded-full shrink-0 ${currentSourceIndex === idx ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                                  <span className="truncate">{s.name || `Servidor ${idx + 1}`}</span>
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-emerald-400 animate-pulse ring-2 ring-emerald-400/40' : 'bg-slate-500'}`} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 truncate">
+                                      <span className="font-semibold truncate">
+                                        Servidor {idx + 1}
+                                      </span>
+                                      {s.isBrazilCdn && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                                          CDN BR
+                                        </span>
+                                      )}
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300 shrink-0 uppercase">
+                                        {s.protocol || 'HLS'}
+                                      </span>
+                                    </div>
+                                    {s.name && s.name !== `Servidor ${idx + 1}` && (
+                                      <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                        {s.name}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                                {currentSourceIndex === idx && (
+                                {isSelected && (
                                   <Check className="w-4 h-4 text-emerald-300 shrink-0 ml-2" />
                                 )}
                               </button>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
-                  )
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Favorite Toggle Button */}

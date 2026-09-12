@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { ChannelGrid } from './components/ChannelGrid';
@@ -45,6 +45,28 @@ export default function App() {
   });
 
   const [currentTab, setCurrentTab] = useState<NavigationTab>('live');
+
+  // Estado de persistência de scroll para cada NavigationTab (live, movies, series, favorites, plans, admin)
+  const [tabScrollPositions, setTabScrollPositions] = useState<Record<NavigationTab, number>>({
+    live: 0,
+    movies: 0,
+    series: 0,
+    favorites: 0,
+    plans: 0,
+    admin: 0
+  });
+  const tabScrollMapRef = useRef<Record<NavigationTab, number>>({
+    live: 0,
+    movies: 0,
+    series: 0,
+    favorites: 0,
+    plans: 0,
+    admin: 0
+  });
+
+  // Rastreamento da aba e da posição exata de rolagem antes da abertura do reprodutor
+  const previousTabBeforeMediaRef = useRef<NavigationTab>('live');
+  const previousScrollBeforeMediaRef = useRef<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Authentication State
@@ -441,15 +463,114 @@ export default function App() {
   // Determine VIP Status
   const isVip = (currentUser?.vipStatus === 'active') || (currentSubscriber?.status === 'active');
 
-  // Trigger media playback with immediate access for free and guest 5-min preview
-  const handlePlayMedia = (item: Channel | VodItem, type: 'channel' | 'vod', initialTime?: number) => {
+  // Trigger media playback with immediate access, capturing current tab and exact scroll position
+  const handlePlayMedia = useCallback((item: Channel | VodItem, type: 'channel' | 'vod', initialTime?: number) => {
+    if (typeof window !== 'undefined') {
+      const currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      tabScrollMapRef.current[currentTab] = currentY;
+      previousScrollBeforeMediaRef.current = currentY;
+      previousTabBeforeMediaRef.current = currentTab;
+      setTabScrollPositions(prev => ({ ...prev, [currentTab]: currentY }));
+    }
+
     // Both channels and movies play immediately; non-VIP users receive 5 minutes free preview before restart
     setActiveMedia({ item, type, initialSeekTime: initialTime });
-  };
+  }, [currentTab]);
 
-  const handlePlayVodWithSeek = (vod: VodItem, initialTime?: number) => {
+  const handlePlayVodWithSeek = useCallback((vod: VodItem, initialTime?: number) => {
     handlePlayMedia(vod, 'vod', initialTime);
-  };
+  }, [handlePlayMedia]);
+
+  // Limpa o estado activeMedia e retorna a interface e o scroll para a posição e aba onde o usuário estava anteriormente
+  const handleClosePlayer = useCallback(() => {
+    const targetTab = previousTabBeforeMediaRef.current || currentTab;
+    const targetScrollY = previousScrollBeforeMediaRef.current ?? tabScrollMapRef.current[targetTab] ?? 0;
+
+    // 1. Limpa o activeMedia
+    setActiveMedia(null);
+
+    // 2. Garante que a aba anterior (Live, Movies, Series, etc.) seja restaurada
+    if (currentTab !== targetTab) {
+      setCurrentTab(targetTab);
+    }
+
+    // 3. Restaura com exatidão milimétrica a posição de rolagem onde o usuário estava
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: targetScrollY,
+          left: 0,
+          behavior: 'instant' as ScrollBehavior
+        });
+        setTimeout(() => {
+          window.scrollTo({
+            top: targetScrollY,
+            left: 0,
+            behavior: 'instant' as ScrollBehavior
+          });
+        }, 50);
+      });
+    }
+  }, [currentTab]);
+
+  // Alternância de abas com restauração de scroll persistente para cada NavigationTab
+  const handleTabChange = useCallback((newTab: NavigationTab) => {
+    if (newTab === currentTab) return;
+
+    // 1. Salva a posição de scroll da aba atual
+    if (typeof window !== 'undefined') {
+      const currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      tabScrollMapRef.current[currentTab] = currentY;
+      setTabScrollPositions(prev => ({ ...prev, [currentTab]: currentY }));
+    }
+
+    // 2. Altera a aba
+    setCurrentTab(newTab);
+
+    // 3. Restaura a posição de scroll da aba de destino
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        const targetY = tabScrollMapRef.current[newTab] || 0;
+        window.scrollTo({
+          top: targetY,
+          left: 0,
+          behavior: 'instant' as ScrollBehavior
+        });
+        setTimeout(() => {
+          window.scrollTo({
+            top: targetY,
+            left: 0,
+            behavior: 'instant' as ScrollBehavior
+          });
+        }, 40);
+      });
+    }
+  }, [currentTab]);
+
+  // Monitora continuamente a rolagem da aba ativa quando o player não está ativo
+  useEffect(() => {
+    let scrollDebounce: NodeJS.Timeout | null = null;
+    const handleWindowScroll = () => {
+      if (!activeMedia) {
+        const currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+        tabScrollMapRef.current[currentTab] = currentY;
+
+        if (scrollDebounce) clearTimeout(scrollDebounce);
+        scrollDebounce = setTimeout(() => {
+          setTabScrollPositions(prev => ({
+            ...prev,
+            [currentTab]: currentY
+          }));
+        }, 120);
+      }
+    };
+
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleWindowScroll);
+      if (scrollDebounce) clearTimeout(scrollDebounce);
+    };
+  }, [currentTab, activeMedia]);
 
   // Featured items for Hero Banner
   const featuredVod = vodItems.find(v => v.id === 'vod-cidade-de-deus') || vodItems[0];
@@ -468,7 +589,7 @@ export default function App() {
       {/* Main Header with Authentication & VIP status */}
       <Header
         currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={handleTabChange}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         channels={channels}
@@ -537,7 +658,7 @@ export default function App() {
           }>
             {isAdminVerified && currentUser?.role === 'admin' ? (
               <AdminPanel 
-                onClose={() => setCurrentTab('live')}
+                onClose={() => handleTabChange('live')}
                 onLockAdmin={async () => {
                   try {
                     await api.adminLogout();
@@ -545,7 +666,7 @@ export default function App() {
                   adminAuthManager.clearSession();
                   setIsAdminVerified(false);
                 }}
-                onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
+                onPreviewChannel={(ch) => handlePlayMedia(ch, 'channel')}
               />
             ) : (
               <AdminAuthGate
@@ -554,7 +675,7 @@ export default function App() {
                   setIsAdminVerified(true);
                   adminAuthManager.setSessionSuccess(adminUser, token);
                 }}
-                onCancel={() => setCurrentTab('live')}
+                onCancel={() => handleTabChange('live')}
               />
             )}
           </Suspense>
@@ -711,7 +832,7 @@ export default function App() {
                     onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
                     onPlayVod={handlePlayVodWithSeek}
                     onRemoveFavorite={handleRemoveFavorite}
-                    onExplore={() => setCurrentTab('live')}
+                    onExplore={() => handleTabChange('live')}
                   />
                 )}
 
@@ -747,7 +868,7 @@ export default function App() {
           <div className="flex flex-wrap items-center gap-3">
             <button 
               type="button"
-              onClick={() => setCurrentTab('plans')}
+              onClick={() => handleTabChange('plans')}
               className="text-xs font-semibold px-4 py-2 border border-white/10 rounded-lg hover:bg-white/5 transition-colors text-slate-300 cursor-pointer"
             >
               Planos & Preços PIX
@@ -755,7 +876,7 @@ export default function App() {
             {currentUser?.role === 'admin' ? (
               <button 
                 type="button"
-                onClick={() => setCurrentTab('admin')}
+                onClick={() => handleTabChange('admin')}
                 className="text-xs font-semibold px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-600/20 text-white transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Shield className="w-3.5 h-3.5" />
@@ -764,7 +885,7 @@ export default function App() {
             ) : (
               <button 
                 type="button"
-                onClick={() => setCurrentTab('admin')}
+                onClick={() => handleTabChange('admin')}
                 className="text-xs font-medium px-3 py-1.5 border border-slate-800 hover:border-slate-700 rounded-lg text-slate-500 hover:text-slate-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                 title="Acesso reservado aos administradores"
               >
@@ -807,9 +928,9 @@ export default function App() {
             isVip={isVip}
             currentUser={currentUser}
             authToken={authToken}
-            onClose={() => setActiveMedia(null)}
+            onClose={handleClosePlayer}
             onOpenCheckout={() => {
-              setActiveMedia(null);
+              handleClosePlayer();
               setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
               setIsCheckoutOpen(true);
             }}
