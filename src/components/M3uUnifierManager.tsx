@@ -97,6 +97,14 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [expandedChannelId, setExpandedChannelId] = useState<string | null>(null);
 
+  // Remover Servidor do Canal State
+  const [removingSourceInfo, setRemovingSourceInfo] = useState<{
+    channel: Channel;
+    sourceIndex: number;
+    source: { name?: string; url: string; quality?: string };
+  } | null>(null);
+  const [isRemovingSource, setIsRemovingSource] = useState<boolean>(false);
+
   // Notification / Result Banner
   const [resultMessage, setResultMessage] = useState<{
     type: 'success' | 'error' | 'info';
@@ -327,29 +335,53 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
     }
   };
 
-  // Quick preset URLs
-  const presetLists = [
-    {
-      name: 'Ramys - CanaisBR03.m3u8 (Oficial ~988 canais)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
-      label: 'Ramys Oficial BR03'
-    },
-    {
-      name: 'Ramys - CanaisBR01.m3u8 (Backup 1)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8',
-      label: 'Ramys Backup BR01'
-    },
-    {
-      name: 'Ramys - CanaisBR02.m3u8 (Backup 2)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR02.m3u8',
-      label: 'Ramys Backup BR02'
-    },
-    {
-      name: 'Ramys - CanaisEuropa.m3u8 (Internacionais)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisEuropa.m3u8',
-      label: 'Ramys Europa / Mundo'
+  // Remover Servidor de um Canal
+  const handleConfirmRemoveServer = async () => {
+    if (!removingSourceInfo) return;
+    setIsRemovingSource(true);
+    try {
+      const { channel, sourceIndex, source } = removingSourceInfo;
+      const res = await api.removeChannelSource({
+        channelId: channel.id,
+        sourceIndex,
+        sourceUrl: source.url,
+        author: currentUser?.name || 'Administrador'
+      });
+
+      // Atualizar lista local de canais imediatamente
+      setChannels(prev => prev.map(c => {
+        if (c.id === channel.id) {
+          return {
+            ...c,
+            ...res.channel,
+            sources: res.channel.sources || []
+          };
+        }
+        return c;
+      }));
+
+      // Atualizar estatísticas e notificar painel pai
+      await loadData();
+      if (onRefreshChannels) {
+        await onRefreshChannels();
+      }
+
+      setResultMessage({
+        type: 'success',
+        title: 'Servidor Removido!',
+        details: res.message || `Servidor removido com sucesso do canal "${channel.name}". A alteração foi persistida e a grade sincronizada.`
+      });
+      setRemovingSourceInfo(null);
+    } catch (err: any) {
+      setResultMessage({
+        type: 'error',
+        title: 'Erro ao Remover Servidor',
+        details: err.message || 'Não foi possível remover o servidor do canal.'
+      });
+    } finally {
+      setIsRemovingSource(false);
     }
-  ];
+  };
 
   // 1-Click Unify All Known Sources Now
   const handleUnifyAllNow = async () => {
@@ -735,10 +767,10 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Link className="w-4 h-4 text-teal-400" />
-                Inserir Link de Lista M3U8 para Unificar
+                Inserir Link de Lista M3U / M3U8 para Unificar
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Cole abaixo a URL pública da lista M3U8 (GitHub raw, Pastebin, CDN ou servidor próprio). O sistema fará o download, analisará todos os canais e unificará com a grade existente adicionando opções de contingência.
+                Cole abaixo a URL direta da sua lista M3U ou M3U8 (.m3u / .m3u8). O sistema processará todos os canais e unificará com a grade existente, mapeando servidores de contingência automaticamente.
               </p>
             </div>
 
@@ -750,7 +782,7 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                 <input
                   type="url"
                   required
-                  placeholder="https://raw.githubusercontent.com/.../lista.m3u8"
+                  placeholder="https://meu-servidor-iptv.com/lista.m3u8 (ou .m3u)"
                   value={m3uUrl}
                   onChange={(e) => setM3uUrl(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
@@ -810,49 +842,43 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
             </div>
           </form>
 
-          {/* Presets List */}
+          {/* M3U / M3U8 Information & Best Practices */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              Listas Oficiais Rápidas (1 Clique para carregar URL)
+            <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-teal-400" />
+              Diretrizes de Fontes: Exclusivo para Listas M3U & M3U8 (.m3u / .m3u8)
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {presetLists.map((preset, idx) => (
-                <div
-                  key={idx}
-                  className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-teal-500/30 transition-all flex flex-col justify-between gap-3"
-                >
-                  <div>
-                    <span className="font-semibold text-xs text-white block">{preset.name}</span>
-                    <span className="font-mono text-[11px] text-slate-400 block truncate mt-1">
-                      {preset.url}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/60">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setM3uUrl(preset.url);
-                        setSourceLabel(preset.label);
-                      }}
-                      className="text-xs text-teal-400 hover:text-teal-300 font-semibold"
-                    >
-                      Usar Esta URL
-                    </button>
-
-                    <a
-                      href={preset.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[11px] text-slate-500 hover:text-slate-300 inline-flex items-center gap-1"
-                    >
-                      Abrir <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs text-slate-300">
+              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+                <div className="flex items-center gap-2 text-teal-300 font-bold">
+                  <Link className="w-4 h-4 text-teal-400" />
+                  <span>1. Listas por URL</span>
                 </div>
-              ))}
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Insira o link HTTP/HTTPS público fornecido pelo seu provedor IPTV (terminado em <span className="font-mono text-teal-300">.m3u</span> ou <span className="font-mono text-teal-300">.m3u8</span>).
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+                <div className="flex items-center gap-2 text-indigo-300 font-bold">
+                  <Upload className="w-4 h-4 text-indigo-400" />
+                  <span>2. Upload de Arquivos</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Utilize a aba <span className="text-indigo-300 font-semibold">Upload de Arquivo</span> para enviar listas salvas no seu computador ou celular sem depender de conexões externas.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-300 font-bold">
+                  <Server className="w-4 h-4 text-emerald-400" />
+                  <span>3. Multi-Servidores & Backup</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Canais duplicados entre listas são unificados automaticamente com servidores de contingência (Opção 1 Principal e Opção 2+ Backup), com opção de remoção individual de qualquer servidor.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1103,15 +1129,30 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 truncate max-w-sm">
-                                <span className="truncate">{src.url}</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-[11px] font-mono text-slate-400 truncate max-w-[140px] sm:max-w-xs">
+                                  <span className="truncate">{src.url}</span>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => navigator.clipboard.writeText(src.url)}
-                                  className="text-slate-500 hover:text-slate-300"
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
                                   title="Copiar link do stream"
                                 >
-                                  <Copy className="w-3 h-3" />
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRemovingSourceInfo({
+                                    channel: ch,
+                                    sourceIndex: sIdx,
+                                    source: src
+                                  })}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-500/40 transition-colors flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer"
+                                  title="Remover este servidor do canal"
+                                >
+                                  <Trash2 className="w-3 h-3 text-rose-400" />
+                                  <span>Remover Servidor</span>
                                 </button>
                               </div>
                             </div>
@@ -1368,7 +1409,7 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                   <div className="sm:col-span-1">
                     <input
                       type="text"
-                      placeholder="Nome amigável (ex: Ramys BR03 Oficial)"
+                      placeholder="Nome da Lista (ex: Minha Lista IPTV M3U/M3U8)"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -1379,7 +1420,7 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                     <input
                       type="url"
                       required
-                      placeholder="https://raw.githubusercontent.com/.../lista.m3u8"
+                      placeholder="https://meu-servidor-iptv.com/lista.m3u8 (ou .m3u)"
                       value={newSourceUrl}
                       onChange={(e) => {
                         setNewSourceUrl(e.target.value);
@@ -1769,6 +1810,87 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                 className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO: REMOVER SERVIDOR DO CANAL */}
+      {removingSourceInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900 border border-rose-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Remover Servidor do Canal</h3>
+                <p className="text-xs text-slate-400">Confirmar exclusão da fonte de transmissão</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Canal:</span>
+                <span className="text-white font-bold">{removingSourceInfo.channel.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-semibold">Tipo de Opção:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  removingSourceInfo.sourceIndex === 0
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}>
+                  {removingSourceInfo.sourceIndex === 0 ? 'Opção 1 (Principal)' : `Opção ${removingSourceInfo.sourceIndex + 1} (Backup / Contingência)`}
+                </span>
+              </div>
+              {removingSourceInfo.source.name && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 font-semibold">Identificação:</span>
+                  <span className="text-slate-300 font-mono">{removingSourceInfo.source.name}</span>
+                </div>
+              )}
+              <div>
+                <span className="text-slate-400 font-semibold block mb-1">URL do Servidor / Stream:</span>
+                <span className="font-mono text-[11px] text-slate-300 break-all bg-slate-900 p-2.5 rounded-lg block border border-slate-800 select-all">
+                  {removingSourceInfo.source.url}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {removingSourceInfo.channel.sources && removingSourceInfo.channel.sources.length > 1
+                ? 'Ao remover este servidor, a lista de servidores deste canal será reorganizada automaticamente e as opções restantes assumirão a transmissão.'
+                : 'Atenção: Este é o único servidor cadastrado para este canal. Ao removê-lo, o canal ficará sem sinal ativo até uma nova lista ser vinculada.'}
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRemovingSourceInfo(null)}
+                disabled={isRemovingSource}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveServer}
+                disabled={isRemovingSource}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-lg shadow-rose-900/30 cursor-pointer"
+              >
+                {isRemovingSource ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Removendo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirmar Remoção</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

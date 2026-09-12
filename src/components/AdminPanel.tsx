@@ -13,7 +13,6 @@ import { api } from '../services/api';
 import { ChannelHealthChecker } from './ChannelHealthChecker';
 import { ChannelConfigEditor } from './ChannelConfigEditor';
 import { ChannelUpdateHistory } from './ChannelUpdateHistory';
-import { RepoLinksUpdater } from './RepoLinksUpdater';
 import { M3uUnifierManager } from './M3uUnifierManager';
 import { UrlErrorLogsViewer } from './UrlErrorLogsViewer';
 import { UnifiedLinksManager } from './UnifiedLinksManager';

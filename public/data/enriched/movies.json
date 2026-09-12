@@ -3287,11 +3287,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1055487.mp4",
           "quality": "1080p"
@@ -4697,11 +4692,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1049913.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -5067,11 +5057,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/161530.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         },
         {
@@ -5453,11 +5438,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1042827.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -5512,16 +5492,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme A 13ª Emenda (2016) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1265874.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1265874.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -5573,16 +5547,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme A 2º Guerra Mundial Vista do Espaço (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/342850.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/342850.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         },
         {
@@ -5626,11 +5594,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1056753.mp4",
           "quality": "1080p"
@@ -5668,11 +5631,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/906596.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         },
         {
@@ -5716,11 +5674,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1062977.mp4",
           "quality": "1080p"
@@ -5748,16 +5701,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme A Abelhinha Maya e O Ovo Dourado (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/134067.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/134067.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         },
         {
@@ -5801,11 +5748,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1063025.mp4",
           "quality": "1080p"
@@ -5846,11 +5788,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1048649.mp4",
           "quality": "1080p"
@@ -5888,11 +5825,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/646742.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -5944,11 +5876,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1054741.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -5988,11 +5915,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1060445.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -6039,11 +5961,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1051265.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -6079,11 +5996,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1257489.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -6118,11 +6030,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1267114.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -6173,16 +6080,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme BDE (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/194190.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/194190.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         },
         {
@@ -6226,11 +6127,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1071935.mp4",
           "quality": "1080p"
@@ -6258,16 +6154,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme BIHTER: A FORBIDDEN PASSION (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/281461.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/281461.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         },
         {
@@ -6308,11 +6198,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/648189.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -6363,16 +6248,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme BLUE LOCK O FILME -EPISÓDIO NAGI (2024) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1270469.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1270469.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -6429,11 +6308,6 @@
           "name": "Servidor 2 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1255524.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -6484,16 +6358,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme CAM (2018) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1268766.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1268766.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -6529,11 +6397,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1267724.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -6584,16 +6447,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme CICADA (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/194176.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/194176.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         },
         {
@@ -6637,11 +6494,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1251079.mp4",
           "quality": "1080p"
@@ -6669,16 +6521,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme COVID-21: Lethal Virus (2021) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1271296.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1271296.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -6730,11 +6576,6 @@
           "name": "Servidor 3 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/647139.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 4 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -6784,16 +6625,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme Cabana da Morte (2017) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1272437.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1272437.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -6835,11 +6670,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1059192.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -6879,11 +6709,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1058307.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -6934,16 +6759,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme D ad (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/373786.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/373786.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         },
         {
@@ -6987,11 +6806,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1056361.mp4",
           "quality": "1080p"
@@ -7032,11 +6846,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1067640.mp4",
           "quality": "1080p"
@@ -7064,16 +6873,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme D.I.S.C.O. (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/382969.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/382969.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         },
         {
@@ -7117,11 +6920,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1259070.mp4",
           "quality": "1080p"
@@ -7149,16 +6947,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme D.P.A. Detetives do Predio Azul - O Filme (2017) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1269335.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1269335.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -7199,11 +6991,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1063632.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -7265,11 +7052,6 @@
           "name": "Servidor 2 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1022363.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -7320,11 +7102,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1057445.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -7365,11 +7142,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1044506.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -7409,11 +7181,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1063530.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -7465,11 +7232,6 @@
           "name": "Servidor 2 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1022640.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -7519,11 +7281,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1037773.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -7592,11 +7349,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 4 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1066751.mp4",
           "quality": "1080p"
@@ -7637,11 +7389,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1249911.mp4",
           "quality": "1080p"
@@ -7679,11 +7426,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/903679.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         },
         {
@@ -7752,11 +7494,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 8 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1265841.mp4",
           "quality": "1080p"
@@ -7800,11 +7537,6 @@
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/649717.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -7845,11 +7577,6 @@
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/650382.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -7889,11 +7616,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1053192.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -7957,11 +7679,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1060664.mp4",
           "quality": "1080p"
@@ -7999,11 +7716,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/645412.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         },
         {
@@ -8047,11 +7759,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1065032.mp4",
           "quality": "1080p"
@@ -8092,11 +7799,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1047337.mp4",
           "quality": "1080p"
@@ -8124,16 +7826,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme S.W.A.T.: Comando Especial (2003) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1268772.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1268772.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -8175,11 +7871,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1051441.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -8220,11 +7911,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1046291.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -8264,11 +7950,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1046261.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -8315,11 +7996,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1060083.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -8360,11 +8036,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1047194.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": true,
@@ -8404,11 +8075,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1251146.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -8455,11 +8121,6 @@
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1265490.mp4",
           "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
         }
       ],
       "featured": false,
@@ -8499,11 +8160,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1251132.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -8554,16 +8210,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme VHS 2 (2013) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1269121.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1269121.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -8614,16 +8264,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme VHS 4 94 (2021) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1269389.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1269389.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -8674,16 +8318,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme VIRUNGA (2014) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1270502.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1270502.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -8734,16 +8372,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme Vagas para Moças de Fino Trato (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/378709.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/378709.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         },
         {
@@ -8784,11 +8416,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/652572.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -8834,11 +8461,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1066352.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -8902,11 +8524,6 @@
           "quality": "1080p"
         },
         {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-          "quality": "1080p"
-        },
-        {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1062213.mp4",
           "quality": "1080p"
@@ -8934,16 +8551,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme TIM Music Rio Bala Desejo (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/196707.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/196707.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -8994,16 +8605,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme TIM Music Rio Matue (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/196322.mp4",
-      "backupStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/196322.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -9054,16 +8659,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme TIM Music Rio Pretinho da Serrinha (2026) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/196310.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (TJTOR)",
           "url": "http://tjtor8411.com:80/movie/Osiel123/Felicidade321/196310.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -9104,11 +8703,6 @@
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1071842.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],
@@ -9159,16 +8753,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme TOC: Transtornada Obsessiva Compulsiva (2017) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1271884.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1271884.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -9219,16 +8807,10 @@
       "posterUrl": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80",
       "synopsis": "Filme TQM (2022) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.",
       "streamUrl": "http://up.kiwi/movie/351921603109/34939156/1270762.mp4",
-      "backupStreamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
       "sources": [
         {
           "name": "Servidor 1 - Saimo CDN (Kiwi)",
           "url": "http://up.kiwi/movie/351921603109/34939156/1270762.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 2 - Backup Global",
-          "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
           "quality": "1080p"
         }
       ],
@@ -9289,11 +8871,6 @@
         {
           "name": "Servidor 2 - Saimo CDN (Hubby)",
           "url": "http://hubby.cx:80/movie/Pdsrv-vods/726216683528qroqv/646598.mp4",
-          "quality": "1080p"
-        },
-        {
-          "name": "Servidor 3 - Backup Global",
-          "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
           "quality": "1080p"
         }
       ],

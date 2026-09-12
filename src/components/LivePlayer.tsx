@@ -427,7 +427,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       rawUrl.includes('tjtor8411') ||
       rawUrl.includes('.ts') ||
       rawUrl.includes('.mpd') ||
-      (rawUrl.includes('.m3u8') && !rawUrl.includes('mux.dev'))
+      rawUrl.includes('.m3u8')
     );
   }, [type, rawUrl]);
 
@@ -599,59 +599,15 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
   }, [sessionId, item.id, type, isVip, isPlaying, isFiveMinLimitReached, isAdblockDetected, currentUser]);
 
-  // Anti-AdBlock Probe
+  // Anti-AdBlock Probe (Desativado/Seguro para evitar falsos positivos de proteção de rastreamento nativa de navegadores móveis e desktop)
   const probeAdblock = useCallback(async () => {
-    let detected = false;
-
-    // 1. Canary DOM check
-    const canary = document.getElementById('maxtv-ad-element');
-    if (canary) {
-      const style = window.getComputedStyle(canary);
-      if (
-        canary.offsetHeight === 0 ||
-        canary.offsetWidth === 0 ||
-        style.display === 'none' ||
-        style.visibility === 'hidden'
-      ) {
-        detected = true;
-      }
-    }
-
-    // 2. Canary Network check (Ad blockers intercept scripts containing /ad- or /ads/)
-    try {
-      const res = await fetch('/api/ads/telemetry?t=' + Date.now(), {
-        method: 'GET',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      });
-      if (!res.ok) detected = true;
-    } catch (e) {
-      detected = true;
-    }
-
-    // 3. Canary JavaScript beacon check
-    try {
-      const isAdShieldHealthy = await api.checkAdShield();
-      if (!isAdShieldHealthy) detected = true;
-    } catch (e) {
-      detected = true;
-    }
-
-    if (detected) {
-      setIsAdblockDetected(true);
-      if (videoRef.current && !videoRef.current.paused) {
-        videoRef.current.pause();
-      }
-      setIsPlaying(false);
-    } else {
-      setIsAdblockDetected(false);
-    }
-    return !detected;
+    // Mantém falso por padrão para garantir reprodução fluida sem bloqueios indevidos
+    setIsAdblockDetected(false);
+    return true;
   }, []);
 
   useEffect(() => {
     probeAdblock();
-    const interval = setInterval(probeAdblock, 20000);
-    return () => clearInterval(interval);
   }, [probeAdblock]);
 
   // Handler for restarting transmission after 5 min limit
@@ -2379,37 +2335,29 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             <p className="text-xs text-indigo-200">Suporta arquivos WebVTT (.vtt) e SubRip (.srt)</p>
           </div>
         )}
-        {/* Anti-Adblock / Anti-Tampering Canary Element */}
-        <div 
-          id="maxtv-ad-element" 
-          className="adsbox ad-banner pub_300x250 pub_728x90 text-ad" 
-          aria-hidden="true" 
-          style={{ position: 'absolute', top: -9999, left: -9999, width: '10px', height: '10px', pointerEvents: 'none' }} 
-        />
-
-        {/* Anti-AdBlock Modal / Overlay */}
+        {/* Anti-AdBlock Modal / Overlay (Caso ativado manualmente, permite dispensar sem travar o usuário) */}
         {isAdblockDetected && (
           <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-50 animate-fadeIn backdrop-blur-md">
             <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10 mb-4 text-amber-400">
               <ShieldAlert className="w-8 h-8 animate-pulse" />
             </div>
             <span className="text-xs uppercase font-bold tracking-wider text-amber-400 mb-1">
-              Bloqueador de Conteúdo Detectado
+              Aviso de Transmissão
             </span>
             <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
-              Desative o AdBlock para Continuar
+              Ajuste de Reprodução
             </h3>
             <p className="text-sm text-slate-300 max-w-md mb-6 leading-relaxed">
-              Detectamos que você está utilizando um bloqueador de anúncios ou extensões de escudo ativas. Para garantir a estabilidade das transmissões e a liberação da degustação gratuita de 5 minutos, desative o bloqueador para o MAXTV.
+              Caso seu navegador utilize filtros automáticos ou proteção contra rastreadores, você pode continuar assistindo normalmente.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
-                onClick={() => probeAdblock()}
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
+                onClick={() => setIsAdblockDetected(false)}
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer"
               >
                 <RefreshCw className="w-4 h-4" />
-                <span>Já desativei, Continuar Transmissão</span>
+                <span>Continuar Transmissão</span>
               </button>
               <button
                 type="button"

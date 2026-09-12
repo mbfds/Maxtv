@@ -96,14 +96,6 @@ export function detectGenre(group: string, title: string): string[] {
   return Array.from(new Set(genres));
 }
 
-// CDNs de alta estabilidade para backup
-const RELIABLE_BACKUPS = [
-  'https://vjs.zencdn.net/v/oceans.mp4',
-  'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-  'https://media.w3.org/2010/05/sintel/trailer.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-];
-
 /**
  * Baixa e analisa lista M3U / M3U8 de forma ultra-rápida via Streaming
  * Não carrega arquivos de 80MB inteiros na memória, evitando estouro de timeout
@@ -267,13 +259,6 @@ export async function fetchSaimoVod(limitPerLetter: number = 25): Promise<Extrac
 
             const { title, year } = cleanTitle(rawTitle);
             const genres = detectGenre('Filmes', title);
-            const fallback = RELIABLE_BACKUPS[letterItems.length % RELIABLE_BACKUPS.length];
-
-            sources.push({
-              name: `Servidor ${sources.length + 1} - Backup Global`,
-              url: fallback,
-              quality: '1080p'
-            });
 
             const poster = `https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80`;
 
@@ -289,7 +274,7 @@ export async function fetchSaimoVod(limitPerLetter: number = 25): Promise<Extrac
               posterUrl: poster,
               synopsis: `Filme ${title} (${year}) disponível na biblioteca TV Saimo. Múltiplos servidores espelho para reprodução contínua e sem pausas.`,
               streamUrl: sources[0].url,
-              backupStreamUrl: sources[1]?.url || fallback,
+              backupStreamUrl: sources[1]?.url || sources[0].url,
               sources,
               featured: letterItems.length < 3,
               isVipOnly: letterItems.length >= 15

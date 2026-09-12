@@ -12,7 +12,7 @@ export const INITIAL_VOD: VodItem[] = [
     bannerUrl: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1920&q=80',
     posterUrl: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=80',
     synopsis: 'Rio de Janeiro, início dos anos 70. O Brasil enfrenta o aperto da ditadura militar. A família Paiva vive à beira da praia, até que um ato de violência muda suas vidas para sempre.',
-    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
     featured: true,
     isRecentlyAdded: true,
     addedAt: '2024-11-20',
@@ -54,7 +54,7 @@ export const INITIAL_VOD: VodItem[] = [
             episodeNumber: 3,
             title: 'Episódio 3: O Cerco Se Fecha',
             duration: '50m',
-            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'
           },
           {
             episodeNumber: 4,
@@ -193,7 +193,7 @@ export const INITIAL_VOD: VodItem[] = [
             episodeNumber: 3,
             title: 'Episódio 3: A Glória em Mônaco',
             duration: '52m',
-            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+            streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4'
           }
         ]
       }
@@ -210,7 +210,7 @@ export const INITIAL_VOD: VodItem[] = [
     bannerUrl: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=1920&q=80',
     posterUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80',
     synopsis: 'A autoridade de variação temporal (TVA) convoca Wade Wilson para uma missão que pode salvar o multiverso, obrigando-o a tirar um relutante Wolverine de sua aposentadoria.',
-    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
     featured: false,
     isRecentlyAdded: true,
     addedAt: '2024-11-08',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shield, Lock, KeyRound, AlertCircle, ArrowLeft, CheckCircle2, UserCheck, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Shield, Lock, Mail, AlertCircle, ArrowLeft, CheckCircle2, RefreshCw, ShieldAlert, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { User } from '../types';
 import { api } from '../services/api';
 import { adminAuthManager } from '../services/adminAuthManager';
@@ -23,10 +23,9 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [authMode, setAuthMode] = useState<'pin' | 'credentials'>('pin');
-  const [pin, setPin] = useState('');
   const [email, setEmail] = useState('cebolao1302@gmail.com');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [sessionNotice, setSessionNotice] = useState<string | null>(null);
 
@@ -60,46 +59,19 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
         if (res.isAuthenticated && res.user) {
           onAdminSuccessRef.current(res.user, res.token);
         } else if (res.isExpired) {
-          setSessionNotice(res.error || 'Sessão administrativa anterior expirada. Insira o PIN Master.');
+          setSessionNotice(res.error || 'Sessão administrativa anterior expirada. Digite seu e-mail e senha para continuar.');
         }
       })
       .catch(() => {
         if (!isMounted) return;
         setIsVerifyingSession(false);
-        setSessionNotice('Insira o PIN Master para acessar a área administrativa.');
+        setSessionNotice('Insira seu e-mail e senha de administrador para acessar o painel.');
       });
 
     return () => {
       isMounted = false;
     };
   }, []);
-
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pin.trim() || isSubmitting) return;
-
-    setIsSubmitting(true);
-    setErrorMsg('');
-    setSessionNotice(null);
-    try {
-      const res = await api.adminVerify({ pin: pin.trim() });
-      if (res.success && res.user) {
-        if (res.user.role !== 'admin') {
-          throw new Error('Acesso negado: Usuário autenticado não possui privilégios de administrador.');
-        }
-
-        adminAuthManager.setSessionSuccess(res.user, res.token);
-        setIsSubmitting(false);
-        onAdminSuccessRef.current(res.user, res.token);
-      } else {
-        setErrorMsg(res.message || 'PIN de administrador inválido.');
-        setIsSubmitting(false);
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'PIN incorreto. Tente novamente.');
-      setIsSubmitting(false);
-    }
-  };
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,14 +84,14 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
       const res = await api.adminVerify({ email: email.trim(), password: password.trim() });
       if (res.success && res.user) {
         if (res.user.role !== 'admin') {
-          throw new Error('Acesso negado: Credenciais válidas, mas o usuário não possui privilégios de administrador.');
+          throw new Error('Acesso negado: Credenciais válidas, porém este usuário não possui privilégios de administrador.');
         }
 
         adminAuthManager.setSessionSuccess(res.user, res.token);
         setIsSubmitting(false);
         onAdminSuccessRef.current(res.user, res.token);
       } else {
-        setErrorMsg(res.message || 'Credenciais de administrador inválidas.');
+        setErrorMsg(res.message || 'E-mail ou senha de administrador incorretos.');
         setIsSubmitting(false);
       }
     } catch (err: any) {
@@ -176,181 +148,93 @@ export const AdminAuthGate: React.FC<AdminAuthGateProps> = ({
             Área Administrativa Protegida
           </h2>
           <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-            O Painel de Controle e Gestão é restrito exclusivamente a contas com privilégios de administrador (<span className="text-indigo-300 font-mono font-semibold">role: 'admin'</span>).
+            Acesso restrito exclusivamente ao administrador do sistema. Entre com suas credenciais de acesso.
           </p>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-950/60 border border-indigo-500/30 text-[10px] text-indigo-300 font-medium">
             <Shield className="w-3 h-3 text-indigo-400" />
-            <span>Validação de Segurança Ativa</span>
+            <span>Autenticação Segura com E-mail & Senha</span>
           </div>
         </div>
 
-        {/* Session Expired / Notice */}
+        {/* Session Notice */}
         {sessionNotice && !errorMsg && (
-          <div className="p-3 mb-4 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-2">
+          <div className="p-3 mb-5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
             <span>{sessionNotice}</span>
           </div>
         )}
 
-        {/* Mode Selector */}
-        <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 mb-5">
-          <button
-            type="button"
-            onClick={() => { setAuthMode('pin'); setErrorMsg(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              authMode === 'pin'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>Acesso Master (PIN)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { setAuthMode('credentials'); setErrorMsg(''); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              authMode === 'credentials'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Login de Admin</span>
-          </button>
-        </div>
-
         {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3 mb-4 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2 animate-fadeIn">
+          <div className="p-3 mb-5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2 animate-fadeIn">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Form: PIN Master */}
-        {authMode === 'pin' && (
-          <form onSubmit={handlePinSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Digite o PIN Master de Administrador
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  required
-                  autoFocus
-                  placeholder="Ex: 1302 ou 2026"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg tracking-widest text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              </div>
-
-              {/* Quick-fill PIN Chips for Convenience */}
-              <div className="flex items-center justify-center gap-2 pt-2.5">
-                <span className="text-[11px] text-slate-400 font-medium">PINs rápidos:</span>
-                {['1302', '2026', 'admin123'].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => { setPin(preset); setErrorMsg(''); }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-                      pin === preset
-                        ? 'bg-indigo-600 text-white border border-indigo-400 shadow-sm'
-                        : 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-white/5'
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting || !pin.trim()}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Autenticando Acesso...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Validar e Entrar no Painel</span>
-                </>
-              )}
-            </button>
-          </form>
-        )}
-
         {/* Form: Email & Password */}
-        {authMode === 'credentials' && (
-          <form onSubmit={handleCredentialsSubmit} className="space-y-3.5">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                E-mail do Administrador
-              </label>
+        <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              E-mail do Administrador
+            </label>
+            <div className="relative">
               <input
                 type="email"
                 required
+                autoFocus
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="cebolao1302@gmail.com"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="seu-email@exemplo.com"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
               />
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Senha ou PIN do Administrador
-              </label>
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Senha de Acesso
+            </label>
+            <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Digite sua senha"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-11 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
               />
-              <div className="flex items-center gap-2 pt-1.5">
-                <span className="text-[10px] text-slate-400">Preenchimento rápido:</span>
-                {['1302', 'admin123'].map((passPreset) => (
-                  <button
-                    key={passPreset}
-                    type="button"
-                    onClick={() => { setPassword(passPreset); setErrorMsg(''); }}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[10px] font-mono cursor-pointer"
-                  >
-                    {passPreset}
-                  </button>
-                ))}
-              </div>
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 transition-colors"
+                title={showPassword ? 'Ocultar senha' : 'Exibir senha'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting || !password.trim()}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Verificando Administrador...</span>
-                </>
-              ) : (
-                <>
-                  <Shield className="w-4 h-4" />
-                  <span>Entrar como Administrador</span>
-                </>
-              )}
-            </button>
-          </form>
-        )}
+          <button
+            type="submit"
+            disabled={isSubmitting || !email.trim() || !password.trim()}
+            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-3"
+          >
+            {isSubmitting ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Autenticando...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Entrar no Painel Administrativo</span>
+              </>
+            )}
+          </button>
+        </form>
 
         {/* Footer cancel button */}
         <div className="pt-5 mt-5 border-t border-slate-800 text-center">

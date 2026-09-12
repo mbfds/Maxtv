@@ -130,7 +130,7 @@ export const adminAuthManager = {
   },
 
   /**
-   * Explicitly sets a valid admin session after successful PIN or credentials entry.
+   * Explicitly sets a valid admin session after successful credentials entry (email & password).
    */
   setSessionSuccess(user: User, token?: string): void {
     const successResult: AdminSessionResult = {

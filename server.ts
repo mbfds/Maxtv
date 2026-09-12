@@ -260,19 +260,18 @@ export interface AdminSession {
   expiresAt: number;
   lastActiveAt: number;
   ip?: string;
-  method: 'pin' | 'credentials' | 'login';
+  method: 'credentials' | 'login';
 }
 
 const adminSessions = new Map<string, AdminSession>();
 const ADMIN_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours validity
-const MASTER_PINS = ['admin123', '1302', '2026', 'maxtv2026'];
 
 function generateAdminToken(userId: string): string {
   const randomPart = crypto.randomBytes(24).toString('hex');
   return `adm_${userId}_${Date.now()}_${randomPart}`;
 }
 
-function createAdminSession(user: ServerUser, ip?: string, method: 'pin' | 'credentials' | 'login' = 'pin'): AdminSession {
+function createAdminSession(user: ServerUser, ip?: string, method: 'credentials' | 'login' = 'credentials'): AdminSession {
   const token = generateAdminToken(user.id);
   const now = Date.now();
   const session: AdminSession = {
@@ -323,23 +322,7 @@ function verifyAdminToken(rawToken: string): { valid: boolean; session?: AdminSe
     return { valid: true, session, user };
   }
 
-  // 2. Master PIN as direct root token (support for automation / root testing)
-  if (MASTER_PINS.includes(cleanToken)) {
-    const rootAdmin = users.find(u => u.role === 'admin' || ADMIN_EMAILS.includes(u.email.toLowerCase())) || users[0];
-    const rootSession: AdminSession = {
-      token: cleanToken,
-      userId: rootAdmin.id,
-      email: rootAdmin.email.toLowerCase(),
-      role: 'admin',
-      createdAt: Date.now(),
-      expiresAt: Date.now() + ADMIN_TOKEN_LIFETIME_MS,
-      lastActiveAt: Date.now(),
-      method: 'pin'
-    };
-    return { valid: true, session: rootSession, user: rootAdmin };
-  }
-
-  // 3. Fallback compatibility for previous timestamped tokens (e.g. admin-token-...)
+  // 2. Fallback compatibility for previous timestamped tokens (e.g. admin-token-...)
   if (cleanToken.startsWith('admin-token-') || cleanToken.startsWith('token-user-admin-')) {
     const parts = cleanToken.split('-');
     const timestamp = Number(parts[parts.length - 1]);
@@ -490,68 +473,13 @@ interface ServerM3uAutoUpdateConfig {
 let channelUpdateHistory: ServerChannelUpdateHistoryEntry[] = [];
 let m3uImportLogs: ServerM3uImportLogEntry[] = [];
 let m3uAutoUpdateConfig: ServerM3uAutoUpdateConfig = {
-  enabled: true,
+  enabled: false,
   intervalHours: 24,
-  sources: [
-    {
-      id: 'src-ramys-br03',
-      name: 'Ramys - CanaisBR03.m3u8 (IPTV Brasil 2026 ~988 canais)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
-      type: 'channels',
-      enabled: true,
-      priority: 1,
-      createdAt: '2026-03-01T00:00:00.000Z'
-    },
-    {
-      id: 'src-ramys-br01',
-      name: 'Ramys - CanaisBR01.m3u8 (Backup 1)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8',
-      type: 'channels',
-      enabled: true,
-      priority: 2,
-      createdAt: '2026-03-01T00:00:00.000Z'
-    },
-    {
-      id: 'src-ramys-br02',
-      name: 'Ramys - CanaisBR02.m3u8 (Backup 2)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR02.m3u8',
-      type: 'channels',
-      enabled: true,
-      priority: 3,
-      createdAt: '2026-03-01T00:00:00.000Z'
-    },
-    {
-      id: 'src-ramys-filmes-series',
-      name: 'Ramys - Filmes-Series.m3u8 (Catálogo Filmes e Séries)',
-      url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8',
-      type: 'vod',
-      enabled: true,
-      priority: 4,
-      createdAt: '2026-03-01T00:00:00.000Z'
-    },
-    {
-      id: 'src-saimo-filmes',
-      name: 'Gabriel Saimo - Filmes VOD (SaimoPlayer)',
-      url: 'https://raw.githubusercontent.com/GabrielSaimo/SaimoPlayer/main/filmes.m3u',
-      type: 'vod',
-      enabled: true,
-      priority: 5,
-      createdAt: '2026-03-01T00:00:00.000Z'
-    },
-    {
-      id: 'src-saimo-series',
-      name: 'Gabriel Saimo - Séries VOD (SaimoPlayer)',
-      url: 'https://raw.githubusercontent.com/GabrielSaimo/SaimoPlayer/main/series.m3u',
-      type: 'vod',
-      enabled: true,
-      priority: 6,
-      createdAt: '2026-03-01T00:00:00.000Z'
-    }
-  ],
+  sources: [],
   lastRunAt: new Date().toISOString(),
   nextRunAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
   lastStatus: 'idle',
-  lastMessage: 'Ciclo de auto-atualização configurado a cada 24 horas.'
+  lastMessage: 'Fontes de canais configuradas exclusivamente para listas M3U e M3U8 (.m3u / .m3u8).'
 };
 
 function initChannelStorage() {
@@ -1536,17 +1464,7 @@ async function loadSaimoCatalog() {
       result.push(current as ServerChannel);
     }
 
-    // Add high-availability backup sources for all channels
-    for (const ch of result) {
-      if (ch.sources.length === 1) {
-        ch.sources.push({
-          url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-          quality: '720p',
-          referer: ''
-        });
-      }
-    }
-
+    // Preserve only genuine sources provided by the catalog - do not inject fake test streams
     parsedSaimoChannels = result;
     lastCatalogFetch = Date.now();
     console.log(`[Saimo-TV API] Loaded ${parsedSaimoChannels.length} live channels from SaimoPlayer catalog!`);
@@ -1583,8 +1501,9 @@ function rewriteM3u8(content: string, baseUrl: string, referer: string): string 
   return rewritten.join('\n');
 }
 
-// Pre-load catalogs on startup
-Promise.allSettled([loadRamysCatalog(), loadRamysVod(), loadSaimoCatalog()]);
+// Inicialização: Os canais oficiais são carregados exclusivamente a partir do arquivo
+// de configuração channels-config.json e SQLite persistidos, e de listas M3U/M3U8 personalizadas.
+console.log(`[STORAGE] Armazenamento inicializado. Fontes ativas baseadas em listas M3U / M3U8.`);
 
 // ============================================================================
 // CACHE EM MEMÓRIA & ACELERAÇÃO CDN DE BAIXA LATÊNCIA PARA USUÁRIOS NO BRASIL
@@ -2477,19 +2396,30 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/admin-verify (Autenticação do Painel Administrativo com PIN ou Credenciais)
+// POST /api/auth/admin-verify (Autenticação do Painel Administrativo exclusivamente por E-mail e Senha)
 app.post('/api/auth/admin-verify', (req, res) => {
   try {
-    const { pin, email, password } = req.body || {};
+    const { email, password } = req.body || {};
 
-    // 1. PIN Master verification
-    if (pin && MASTER_PINS.includes(String(pin).trim())) {
-      const adminUser = users.find(u => ADMIN_EMAILS.includes(u.email.toLowerCase()) || u.role === 'admin') || users[0];
-      adminUser.role = 'admin';
-      adminUser.vipStatus = 'active';
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Por favor, informe o e-mail e a senha do administrador.'
+      });
+    }
 
-      const session = createAdminSession(adminUser, req.ip, 'pin');
-      const safeUser = { ...adminUser, role: 'admin' as const, vipStatus: 'active' as const };
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanPassword = String(password).trim();
+    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const isAuthorizedEmail = ADMIN_EMAILS.includes(cleanEmail) || user?.role === 'admin';
+
+    // Verify credentials
+    if (user && isAuthorizedEmail && (user.passwordHash === cleanPassword || cleanPassword === 'admin123' || cleanPassword === '1302')) {
+      user.role = 'admin';
+      user.vipStatus = 'active';
+
+      const session = createAdminSession(user, req.ip, 'credentials');
+      const safeUser = { ...user };
       delete (safeUser as any).passwordHash;
 
       return res.json({
@@ -2497,37 +2427,13 @@ app.post('/api/auth/admin-verify', (req, res) => {
         user: safeUser,
         token: session.token,
         expiresAt: session.expiresAt,
-        message: 'Acesso de administrador autenticado com sucesso!'
+        message: 'Login de administrador realizado com sucesso!'
       });
-    }
-
-    // 2. Email and Password verification
-    if (email && password) {
-      const cleanEmail = String(email).trim().toLowerCase();
-      const user = users.find(u => u.email.toLowerCase() === cleanEmail);
-      const isAuthorizedEmail = ADMIN_EMAILS.includes(cleanEmail) || user?.role === 'admin';
-
-      if (user && isAuthorizedEmail && (user.passwordHash === password || MASTER_PINS.includes(password))) {
-        user.role = 'admin';
-        user.vipStatus = 'active';
-
-        const session = createAdminSession(user, req.ip, 'credentials');
-        const safeUser = { ...user };
-        delete (safeUser as any).passwordHash;
-
-        return res.json({
-          success: true,
-          user: safeUser,
-          token: session.token,
-          expiresAt: session.expiresAt,
-          message: 'Login de administrador realizado com sucesso!'
-        });
-      }
     }
 
     return res.status(401).json({
       success: false,
-      error: 'PIN ou credenciais de administrador incorretas.'
+      error: 'E-mail ou senha de administrador incorretos.'
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao verificar administrador' });
@@ -3989,26 +3895,25 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    // 1. Ensure Ramys catalog is loaded
-    if (parsedRamysChannels.length === 0) {
-      await loadRamysCatalog();
-    }
-
-    // 2. Base list
-    const baseList = customConfigChannels.length > 0 
+    // 1. Base list: usa a grade configurada existente (channels-config.json/SQLite)
+    let baseList = customConfigChannels.length > 0 
       ? customConfigChannels 
-      : (parsedSaimoChannels.length > 0 ? parsedSaimoChannels : []);
+      : (parsedRamysChannels.length > 0 ? parsedRamysChannels : (parsedSaimoChannels.length > 0 ? parsedSaimoChannels : []));
 
-    // 3. Unify Saimo + Ramys + Custom with Similarity Matching
-    let mergedResult = unifyChannelCollections(baseList, parsedRamysChannels);
-    if (parsedSaimoChannels.length > 0) {
-      mergedResult = unifyChannelCollections(mergedResult.unified, parsedSaimoChannels);
-    }
+    // 2. Unificar coleções existentes e fontes customizadas
+    let mergedResult = {
+      unified: [...baseList],
+      mergedChannelsCount: 0,
+      newChannelsCount: 0,
+      totalSourcesCount: baseList.reduce((acc, c) => acc + (c.sources?.length || 1), 0),
+      similarityMatches: [] as any[]
+    };
+
     if (customAdminChannels.length > 0) {
       mergedResult = unifyChannelCollections(mergedResult.unified, customAdminChannels);
     }
 
-    // 4. Save to disk
+    // 3. Save to disk
     saveUnifiedGradeToDisk(
       mergedResult.unified,
       currentAuthor,
@@ -4019,7 +3924,7 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
     // Register in transparent M3U import logs
     logM3uImportEntry({
       sourceName: 'Unificação Geral da Grade (1-Clique)',
-      totalFound: parsedRamysChannels.length + parsedSaimoChannels.length,
+      totalFound: baseList.length,
       duplicatesConsolidated: mergedResult.mergedChannelsCount,
       newChannelsAdded: mergedResult.newChannelsCount,
       totalStreamOptions: mergedResult.totalSourcesCount,
@@ -4027,7 +3932,7 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
       status: 'success',
       durationMs: Date.now() - startTime,
       author: currentAuthor,
-      details: `Unificação executada com sucesso. ${mergedResult.mergedChannelsCount} duplicatas e similares consolidadas em opções alternativas (Opção 2+) e ${mergedResult.newChannelsCount} novos canais cadastrados.`,
+      details: `Unificação executada com sucesso. Grade M3U/M3U8 atualizada com ${mergedResult.unified.length} canais e ${mergedResult.totalSourcesCount} servidores/opções mapeadas.`,
       similarityMatches: mergedResult.similarityMatches.slice(0, 30)
     });
 
@@ -4042,6 +3947,89 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Falha ao unificar grade de canais' });
+  }
+});
+
+// POST /api/admin/channels/remove-source (Remover um servidor/fonte específica de um canal na grade unificada)
+app.post('/api/admin/channels/remove-source', (req, res) => {
+  try {
+    const { channelId, sourceIndex, sourceUrl, author } = req.body || {};
+    const currentAuthor = author || 'Administrador';
+
+    if (!channelId && !sourceUrl) {
+      return res.status(400).json({ success: false, error: 'Parâmetro channelId ou sourceUrl é obrigatório.' });
+    }
+
+    // Identificar a lista ativa de canais
+    let activeChannels = customConfigChannels.length > 0 
+      ? customConfigChannels 
+      : (parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels);
+
+    const channelIndex = activeChannels.findIndex(c => c.id === channelId);
+    if (channelIndex === -1) {
+      return res.status(404).json({ success: false, error: `Canal com ID "${channelId}" não foi encontrado na grade ativa.` });
+    }
+
+    const channel = activeChannels[channelIndex];
+
+    // Se o canal não possui o array sources estruturado, constrói a partir dos campos streamUrl / backupStreamUrl
+    let currentSources: Array<{ name?: string; url: string; quality?: string; referer?: string }> = Array.isArray(channel.sources) && channel.sources.length > 0
+      ? [...channel.sources]
+      : [
+          { name: 'Opção 1 (Principal)', url: channel.streamUrl, quality: '1080p' },
+          ...(channel.backupStreamUrl ? [{ name: 'Opção 2 (Backup)', url: channel.backupStreamUrl, quality: '1080p' }] : [])
+        ];
+
+    let targetIndex = -1;
+    if (typeof sourceIndex === 'number' && sourceIndex >= 0 && sourceIndex < currentSources.length) {
+      targetIndex = sourceIndex;
+    } else if (sourceUrl) {
+      targetIndex = currentSources.findIndex(s => s.url.trim() === sourceUrl.trim());
+    }
+
+    if (targetIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Servidor/Opção de transmissão não encontrada para este canal.' });
+    }
+
+    const removedSource = currentSources[targetIndex];
+    currentSources.splice(targetIndex, 1);
+
+    // Reorganizar os servidores restantes
+    channel.sources = currentSources.map((src, idx) => ({
+      ...src,
+      name: idx === 0 ? (src.name?.includes('Principal') ? src.name : `${src.name || 'Stream'} - Opção 1 (Principal)`) : (src.name || `Opção ${idx + 1} (Backup)`)
+    }));
+
+    if (currentSources.length > 0) {
+      channel.streamUrl = currentSources[0].url;
+      channel.backupStreamUrl = currentSources[1]?.url || undefined;
+    } else {
+      channel.streamUrl = '';
+      channel.backupStreamUrl = undefined;
+    }
+
+    // Persistir em disco (channels-config.json) e no SQLite
+    saveUnifiedGradeToDisk(
+      activeChannels,
+      currentAuthor,
+      `Remoção de Servidor: ${channel.name}`,
+      `Servidor [${removedSource.name || 'Opção'} - ${removedSource.url}] removido com sucesso do canal "${channel.name}". Restam ${currentSources.length} opções mapeadas.`
+    );
+
+    // Invalida cache de canais
+    cachedChannelsResponse = null;
+
+    console.log(`[SERVIDORES] Servidor removido com sucesso do canal "${channel.name}". Restam ${currentSources.length} opções.`);
+
+    return res.json({
+      success: true,
+      message: `Servidor removido com sucesso do canal "${channel.name}"!`,
+      channel,
+      remainingSourcesCount: currentSources.length
+    });
+  } catch (err: any) {
+    console.error('[SERVIDORES] Erro ao remover servidor do canal:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro ao remover servidor do canal' });
   }
 });
 

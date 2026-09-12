@@ -568,6 +568,29 @@ export const api = {
     return await res.json();
   },
 
+  async removeChannelSource(data: {
+    channelId: string;
+    sourceIndex?: number;
+    sourceUrl?: string;
+    author?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    channel: any;
+    remainingSourcesCount: number;
+  }> {
+    const res = await adminFetch('/api/admin/channels/remove-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      throw new Error(result.error || result.message || 'Falha ao remover servidor do canal');
+    }
+    return result;
+  },
+
   async unifyChannelsNow(author?: string): Promise<{
     success: boolean;
     message: string;
@@ -983,7 +1006,7 @@ export const api = {
     return await res.json();
   },
 
-  async adminVerify(data: { pin?: string; email?: string; password?: string }): Promise<{ success: boolean; user: any; token: string; expiresAt?: number; message?: string }> {
+  async adminVerify(data: { email: string; password: string }): Promise<{ success: boolean; user: any; token: string; expiresAt?: number; message?: string }> {
     const res = await fetch('/api/auth/admin-verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

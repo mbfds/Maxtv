@@ -29,22 +29,21 @@ import {
 import { api } from '../services/api';
 import { M3uAutoUpdateSource, M3uAutoUpdateConfig } from '../types';
 import { M3uUnifierManager } from './M3uUnifierManager';
-import { RepoLinksUpdater } from './RepoLinksUpdater';
 
 interface UnifiedLinksManagerProps {
   currentUser?: { name?: string; email?: string };
   onRefreshChannels?: () => void;
   onNavigateToHistory?: () => void;
-  defaultSubTab?: 'saved-links' | 'unifier';
+  defaultSubTab?: 'unifier' | 'saved-links';
 }
 
 export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
   currentUser,
   onRefreshChannels,
   onNavigateToHistory,
-  defaultSubTab = 'saved-links'
+  defaultSubTab = 'unifier'
 }) => {
-  const [subTab, setSubTab] = useState<'saved-links' | 'unifier'>(defaultSubTab);
+  const [subTab, setSubTab] = useState<'unifier' | 'saved-links'>(defaultSubTab);
   const [sources, setSources] = useState<M3uAutoUpdateSource[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -348,19 +347,6 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-white/10 shrink-0">
           <button
             type="button"
-            onClick={() => setSubTab('saved-links')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-              subTab === 'saved-links'
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <LinkIcon className="w-3.5 h-3.5" />
-            <span>Links Salvos ({sources.length})</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setSubTab('unifier')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               subTab === 'unifier'
@@ -369,20 +355,20 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Unificador M3U8</span>
+            <span>Unificador M3U / M3U8</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setSubTab('repo-sync')}
+            onClick={() => setSubTab('saved-links')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-              subTab === 'repo-sync'
+              subTab === 'saved-links'
                 ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
                 : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
           >
-            <GitBranch className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Repositório GitHub</span>
+            <LinkIcon className="w-3.5 h-3.5" />
+            <span>Listas Salvas ({sources.length})</span>
           </button>
         </div>
       </div>
@@ -869,18 +855,9 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
         </div>
       )}
 
-      {/* CONTEÚDO DA SUB-ABA 2: UNIFICADOR M3U8 */}
+      {/* CONTEÚDO DA SUB-ABA: UNIFICADOR M3U / M3U8 */}
       {subTab === 'unifier' && (
         <M3uUnifierManager
-          currentUser={currentUser}
-          onRefreshChannels={onRefreshChannels}
-          onNavigateToHistory={onNavigateToHistory}
-        />
-      )}
-
-      {/* CONTEÚDO DA SUB-ABA 3: REPOSITÓRIO GITHUB */}
-      {subTab === 'repo-sync' && (
-        <RepoLinksUpdater
           currentUser={currentUser}
           onRefreshChannels={onRefreshChannels}
           onNavigateToHistory={onNavigateToHistory}
