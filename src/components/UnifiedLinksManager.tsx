@@ -29,6 +29,7 @@ import {
 import { api } from '../services/api';
 import { M3uAutoUpdateSource, M3uAutoUpdateConfig } from '../types';
 import { M3uUnifierManager } from './M3uUnifierManager';
+import { RepoLinksUpdater } from './RepoLinksUpdater';
 
 interface UnifiedLinksManagerProps {
   currentUser?: { name?: string; email?: string };

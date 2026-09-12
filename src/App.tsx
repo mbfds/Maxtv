@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { ChannelGrid } from './components/ChannelGrid';
 import { VodSection } from './components/VodSection';
 import { PlansView } from './components/PlansView';
-import { LivePlayer } from './components/LivePlayer';
-import { CheckoutModal } from './components/CheckoutModal';
-import { AdminPanel } from './components/AdminPanel';
-import { AdminAuthGate } from './components/AdminAuthGate';
-import { AuthModal } from './components/AuthModal';
 import { FavoritesView } from './components/FavoritesView';
 import { RecentlyAddedSection } from './components/RecentlyAddedSection';
 import { GlobalSearchResultsView } from './components/GlobalSearchResultsView';
+
+// Heavy secondary components lazy-loaded to reduce initial bundle and improve TTI
+const LivePlayer = lazy(() => import('./components/LivePlayer').then(m => ({ default: m.LivePlayer })));
+const CheckoutModal = lazy(() => import('./components/CheckoutModal').then(m => ({ default: m.CheckoutModal })));
+const AdminPanel = lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const AdminAuthGate = lazy(() => import('./components/AdminAuthGate').then(m => ({ default: m.AdminAuthGate })));
+const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
 
 import { Channel, VodItem, Subscriber, SubscriptionPlan, User, NavigationTab, FavoriteItem, WatchProgress } from './types';
 import { INITIAL_CHANNELS } from './data/channelsData';
@@ -21,6 +23,7 @@ import { api, clearAdminToken, getAdminToken, getCachedChannels, getCachedVodCat
 import { adminAuthManager } from './services/adminAuthManager';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from './services/favoritesStorage';
 import { watchProgressStorage, PROGRESS_UPDATED_EVENT } from './services/watchProgressStorage';
+import { initDeferredTelemetry } from './services/telemetryService';
 import { Tv, Sparkles, Shield, Heart, Radio, ExternalLink, UserCheck, Crown, Lock, LogIn } from 'lucide-react';
 
 export default function App() {
@@ -135,6 +138,32 @@ export default function App() {
 
   // Global Announcement
   const [announcement, setAnnouncement] = useState<string>('');
+
+  // Time-To-Interactive (TTI) Optimization: Main Grid status
+  const [isMainGridMounted, setIsMainGridMounted] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Notify that core UI and initial grid are mounted and interactive
+    setIsMainGridMounted(true);
+  }, []);
+
+  // Postpone heavy analytics, monitoring, and telemetry until after the main grid is interactive
+  useEffect(() => {
+    if (!isMainGridMounted) return;
+
+    if (typeof window !== 'undefined') {
+      const scheduleIdle = window.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1000));
+      const idleHandle = scheduleIdle(() => {
+        initDeferredTelemetry();
+      });
+
+      return () => {
+        if (window.cancelIdleCallback && typeof idleHandle === 'number') {
+          window.cancelIdleCallback(idleHandle);
+        }
+      };
+    }
+  }, [isMainGridMounted]);
 
   // Sync user status on mount if logged in
   const syncSession = useCallback(async () => {
@@ -500,28 +529,35 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentTab === 'admin' ? (
-          isAdminVerified && currentUser?.role === 'admin' ? (
-            <AdminPanel 
-              onClose={() => setCurrentTab('live')}
-              onLockAdmin={async () => {
-                try {
-                  await api.adminLogout();
-                } catch {}
-                adminAuthManager.clearSession();
-                setIsAdminVerified(false);
-              }}
-              onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
-            />
-          ) : (
-            <AdminAuthGate
-              onAdminSuccess={(adminUser, token) => {
-                setCurrentUser(adminUser);
-                setIsAdminVerified(true);
-                adminAuthManager.setSessionSuccess(adminUser, token);
-              }}
-              onCancel={() => setCurrentTab('live')}
-            />
-          )
+          <Suspense fallback={
+            <div className="flex flex-col items-center justify-center py-24 space-y-4 text-slate-400">
+              <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs font-medium">Carregando Módulos do Painel Administrativo...</p>
+            </div>
+          }>
+            {isAdminVerified && currentUser?.role === 'admin' ? (
+              <AdminPanel 
+                onClose={() => setCurrentTab('live')}
+                onLockAdmin={async () => {
+                  try {
+                    await api.adminLogout();
+                  } catch {}
+                  adminAuthManager.clearSession();
+                  setIsAdminVerified(false);
+                }}
+                onPreviewChannel={(ch) => setActiveMedia({ item: ch, type: 'channel' })}
+              />
+            ) : (
+              <AdminAuthGate
+                onAdminSuccess={(adminUser, token) => {
+                  setCurrentUser(adminUser);
+                  setIsAdminVerified(true);
+                  adminAuthManager.setSessionSuccess(adminUser, token);
+                }}
+                onCancel={() => setCurrentTab('live')}
+              />
+            )}
+          </Suspense>
         ) : (
           <>
             {/* Global Search Results View across Channels, Movies and Series */}
@@ -756,50 +792,67 @@ export default function App() {
 
       {/* Floating Video Player Modal */}
       {activeMedia && (
-        <LivePlayer
-          item={activeMedia.item}
-          type={activeMedia.type}
-          initialSeekTime={activeMedia.initialSeekTime}
-          isVip={isVip}
-          currentUser={currentUser}
-          authToken={authToken}
-          onClose={() => setActiveMedia(null)}
-          onOpenCheckout={() => {
-            setActiveMedia(null);
-            setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
-            setIsCheckoutOpen(true);
-          }}
-          onOpenAuth={() => {
-            setAuthModalConfig({
-              title: 'Entrar na sua Conta VIP',
-              subtitle: 'Entre para liberar a transmissão deste conteúdo',
-              mode: 'login'
-            });
-            setIsAuthModalOpen(true);
-          }}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs text-slate-400 font-medium">Carregando Player de Vídeo...</p>
+            </div>
+          </div>
+        }>
+          <LivePlayer
+            item={activeMedia.item}
+            type={activeMedia.type}
+            initialSeekTime={activeMedia.initialSeekTime}
+            isVip={isVip}
+            currentUser={currentUser}
+            authToken={authToken}
+            onClose={() => setActiveMedia(null)}
+            onOpenCheckout={() => {
+              setActiveMedia(null);
+              setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+              setIsCheckoutOpen(true);
+            }}
+            onOpenAuth={() => {
+              setAuthModalConfig({
+                title: 'Entrar na sua Conta VIP',
+                subtitle: 'Entre para liberar a transmissão deste conteúdo',
+                mode: 'login'
+              });
+              setIsAuthModalOpen(true);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Authentication Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => {
-          setIsAuthModalOpen(false);
-          setPendingMediaAfterAuth(null);
-        }}
-        onSuccess={handleLoginSuccess}
-        initialMode={authModalConfig.mode || 'login'}
-        customTitle={authModalConfig.title}
-        customSubtitle={authModalConfig.subtitle}
-      />
+      {isAuthModalOpen && (
+        <Suspense fallback={null}>
+          <AuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => {
+              setIsAuthModalOpen(false);
+              setPendingMediaAfterAuth(null);
+            }}
+            onSuccess={handleLoginSuccess}
+            initialMode={authModalConfig.mode || 'login'}
+            customTitle={authModalConfig.title}
+            customSubtitle={authModalConfig.subtitle}
+          />
+        </Suspense>
+      )}
 
       {/* Mercado Pago Pix Checkout Modal */}
-      <CheckoutModal
-        isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
-        selectedPlanInitial={selectedPlanForCheckout}
-        onSubscriptionSuccess={handleSubscriptionSuccess}
-      />
+      {isCheckoutOpen && (
+        <Suspense fallback={null}>
+          <CheckoutModal
+            isOpen={isCheckoutOpen}
+            onClose={() => setIsCheckoutOpen(false)}
+            selectedPlanInitial={selectedPlanForCheckout}
+            onSubscriptionSuccess={handleSubscriptionSuccess}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

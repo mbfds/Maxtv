@@ -44,10 +44,19 @@ import {
   sqliteGetAuditLogs,
   sqliteClearAuditLogs,
   sqliteGetRecentActiveSessions,
-  sqliteGetTopWatchedChannelsFromSessions
+  sqliteGetTopWatchedChannelsFromSessions,
+  sqliteGetChannelsCount
 } from './serverSqlite';
+import { validateStartupEnv } from './src/utils/envValidator';
 
 dotenv.config();
+
+// Validação de variáveis de ambiente no startup
+try {
+  validateStartupEnv();
+} catch (envErr) {
+  console.error('[STARTUP ENV WARNING]', envErr);
+}
 
 // Contador de requisições HTTP para métricas do servidor
 let totalHttpRequests = 0;
@@ -603,14 +612,24 @@ function initChannelStorage() {
         }
       }
 
-      // Sincronizar canais com SQLite
-      const dbChannels = sqliteGetAllChannels();
-      if (dbChannels.length > 0 && customConfigChannels.length === 0) {
+      // Sincronizar canais com SQLite (não-bloqueante para passar no healthcheck do Cloud Run)
+      const channelCountInDb = sqliteGetChannelsCount();
+      if (channelCountInDb > 0 && customConfigChannels.length === 0) {
+        const dbChannels = sqliteGetAllChannels();
         customConfigChannels = dbChannels;
         console.log(`[SQLite 3] ${dbChannels.length} canais carregados do banco SQLite.`);
-      } else if (customConfigChannels.length > 0) {
-        sqliteSaveAllChannels(customConfigChannels);
-        console.log(`[SQLite 3] ${customConfigChannels.length} canais persistidos no banco SQLite.`);
+      } else if (customConfigChannels.length > 0 && channelCountInDb === 0) {
+        setImmediate(() => {
+          try {
+            console.log(`[SQLite 3] Salvando ${customConfigChannels.length} canais no banco SQLite em background...`);
+            sqliteSaveAllChannels(customConfigChannels);
+            console.log(`[SQLite 3] ${customConfigChannels.length} canais persistidos com sucesso.`);
+          } catch (e) {
+            console.warn('[SQLite 3] Aviso ao salvar canais em background:', e);
+          }
+        });
+      } else {
+        console.log(`[SQLite 3] Tabela de canais já sincronizada (${channelCountInDb} canais no banco).`);
       }
 
       // Sincronizar fontes M3U com SQLite
@@ -5280,7 +5299,7 @@ function startLinksUpdateCron() {
           });
           if (!res.ok) continue;
           const text = await res.text();
-          const parsed = parseM3uTextToChannels(text);
+          const parsed = parseM3UToChannels(text, `cron-${src.id || 'link'}`);
 
           const activeChannels = customConfigChannels.length > 0 
             ? customConfigChannels 

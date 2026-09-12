@@ -2,7 +2,11 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { validateEnv } from './utils/envValidation';
 import { initStartupPrefetch } from './services/prefetchService';
+
+// Validação imediata de variáveis de ambiente no startup da aplicação
+validateEnv();
 
 // Eagerly initiate channels, VOD catalog metadata & image prefetching at script load
 initStartupPrefetch();

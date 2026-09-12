@@ -836,6 +836,16 @@ export function sqliteSaveAllChannels(channels: any[]): void {
   }
 }
 
+export function sqliteGetChannelsCount(): number {
+  try {
+    const db = getSqliteDb();
+    const row = db.prepare('SELECT COUNT(*) as count FROM channels').get() as { count: number };
+    return row ? row.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function sqliteGetAllChannels(): any[] {
   const db = getSqliteDb();
   const rows = db.prepare('SELECT * FROM channels ORDER BY sort_order ASC, name ASC').all() as any[];

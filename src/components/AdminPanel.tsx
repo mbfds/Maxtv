@@ -6,7 +6,7 @@ import {
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
   Activity, Film, WifiOff, FileCode, GitBranch, Layers, Lock,
-  Download, Database, HardDrive
+  Download, Database, HardDrive, Server
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
@@ -20,6 +20,8 @@ import { UnifiedLinksManager } from './UnifiedLinksManager';
 import { SalesAndGrantsHistory } from './SalesAndGrantsHistory';
 import { AuditLogsViewer } from './AuditLogsViewer';
 import { RealtimeMetricsDashboard } from './RealtimeMetricsDashboard';
+import { ServerHealthDashboard } from './ServerHealthDashboard';
+import { AdminMemoryFooter } from './AdminMemoryFooter';
 
 interface AdminPanelProps {
   onClose: () => void;
@@ -30,6 +32,7 @@ interface AdminPanelProps {
 type AdminTab = 
   | 'overview' 
   | 'realtime-metrics'
+  | 'server-health'
   | 'audit-logs'
   | 'grant-vip' 
   | 'subscribers' 
@@ -574,6 +577,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               </div>
               <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 animate-pulse">
                 Ao Vivo
+              </span>
+            </button>
+
+            {/* SAÚDE DO SERVIDOR (RECHARTS, LATÊNCIA & UPTIME) */}
+            <button
+              id="sidebar-tab-server-health"
+              type="button"
+              onClick={() => setActiveTab('server-health')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'server-health'
+                  ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-lg shadow-teal-600/30 ring-2 ring-cyan-400/50'
+                  : 'text-cyan-300 bg-cyan-950/20 border border-cyan-500/20 hover:bg-cyan-950/40'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Server className="w-4 h-4 text-cyan-400" />
+                <span>Saúde do Servidor</span>
+              </div>
+              <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                Ping & Uptime
               </span>
             </button>
 
@@ -1505,6 +1528,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             />
           )}
 
+          {/* TAB: SAÚDE DO SERVIDOR (LATÊNCIA, FALHAS 24H E UPTIME DE FONTES COM RECHARTS) */}
+          {activeTab === 'server-health' && (
+            <ServerHealthDashboard />
+          )}
+
           {/* TAB 4.8: RELATÓRIOS DE CANAIS COM PROBLEMA & LINKS INATIVOS */}
           {activeTab === 'channel-reports' && (
             <div className="space-y-6">
@@ -2089,6 +2117,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
           {activeTab === 'url-errors' && (
             <UrlErrorLogsViewer onGoToUnifier={() => setActiveTab('unify-m3u')} />
           )}
+
+          {/* DIAGNÓSTICO DE MEMÓRIA (PERFORMANCE.MEMORY) E STATUS GERAL */}
+          <AdminMemoryFooter />
 
         </main>
       </div>
