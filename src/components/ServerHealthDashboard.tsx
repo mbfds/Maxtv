@@ -87,15 +87,15 @@ export const ServerHealthDashboard: React.FC = () => {
   // Servidores de listas IPTV e CDNs mapeados
   const [listServers, setListServers] = useState<ListServerUptime[]>([
     {
-      id: 'srv-ramys-br03',
-      name: 'GitHub Raw CDN (Ramys CanaisBR03)',
-      host: 'raw.githubusercontent.com',
-      uptimePercent: 99.8,
-      latencyMs: 74,
+      id: 'srv-m3u-local-db',
+      name: 'Banco Local de Listas M3U (SQLite)',
+      host: 'localhost:3000',
+      uptimePercent: 99.9,
+      latencyMs: 14,
       status: 'online',
-      lastChecked: 'Há 1 min',
-      totalRequests24h: 12450,
-      failedRequests24h: 8
+      lastChecked: 'Em tempo real',
+      totalRequests24h: 21450,
+      failedRequests24h: 0
     },
     {
       id: 'srv-camelo-vip',
@@ -109,9 +109,9 @@ export const ServerHealthDashboard: React.FC = () => {
       failedRequests24h: 52
     },
     {
-      id: 'srv-saimo-tv',
-      name: 'Saimo TV Direct Streaming',
-      host: 'saimo-tv.site',
+      id: 'srv-hls-direct',
+      name: 'HLS Live Streaming Mirror',
+      host: 'stream-mirror.site',
       uptimePercent: 97.9,
       latencyMs: 185,
       status: 'online',

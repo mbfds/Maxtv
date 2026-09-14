@@ -29,12 +29,13 @@ import {
 import { api } from '../services/api';
 import { M3uAutoUpdateSource, M3uAutoUpdateConfig } from '../types';
 import { M3uUnifierManager } from './M3uUnifierManager';
+import { XmltvValidatorManager } from './XmltvValidatorManager';
 
 interface UnifiedLinksManagerProps {
   currentUser?: { name?: string; email?: string };
   onRefreshChannels?: () => void;
   onNavigateToHistory?: () => void;
-  defaultSubTab?: 'unifier' | 'saved-links';
+  defaultSubTab?: 'unifier' | 'saved-links' | 'epg-validator';
 }
 
 export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
@@ -43,7 +44,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
   onNavigateToHistory,
   defaultSubTab = 'unifier'
 }) => {
-  const [subTab, setSubTab] = useState<'unifier' | 'saved-links'>(defaultSubTab);
+  const [subTab, setSubTab] = useState<'unifier' | 'saved-links' | 'epg-validator'>(defaultSubTab);
   const [sources, setSources] = useState<M3uAutoUpdateSource[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -94,9 +95,22 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
     }
 
     setIsSavingEdit(true);
-    setFeedback({ type: 'info', text: `Atualizando "${editName.trim()}"...` });
+    setFeedback({ type: 'info', text: `Validando conectividade e atualizando "${editName.trim()}"...` });
 
     try {
+      // Validar conectividade se a URL foi alterada
+      if (editUrl.trim() !== editingSource.url) {
+        const valRes = await api.validateM3uUrl(editUrl.trim());
+        if (!valRes.valid) {
+          setFeedback({
+            type: 'error',
+            text: `URL inválida para edição: ${valRes.error || 'A URL informada falhou no teste de conectividade ou formato M3U.'}`
+          });
+          setIsSavingEdit(false);
+          return;
+        }
+      }
+
       const res = await api.updateM3uSource(editingSource.id, {
         name: editName.trim(),
         url: editUrl.trim(),
@@ -111,7 +125,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
 
       setFeedback({
         type: 'success',
-        text: `Link "${editName.trim()}" atualizado com sucesso com registro de horário de modificação!`
+        text: `Link "${editName.trim()}" validado e atualizado com sucesso no SQLite!`
       });
       setEditingSource(null);
     } catch (err: any) {
@@ -183,8 +197,17 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
       return;
     }
 
+    // Validação obrigatória estrita antes de permitir o salvamento no banco SQLite
+    if (!testResult || !testResult.valid) {
+      setFeedback({
+        type: 'error',
+        text: 'Validação Obrigatória: O link M3U deve ser testado e aprovado com sucesso (conectividade e estrutura) antes de poder ser salvo no banco de dados local SQLite. Clique em "Testar Conexão / Ping".'
+      });
+      return;
+    }
+
     setIsSaving(true);
-    setFeedback({ type: 'info', text: 'Salvando link no sistema SQLite...' });
+    setFeedback({ type: 'info', text: 'Salvando link no banco local SQLite...' });
 
     try {
       const authorName = currentUser?.name || currentUser?.email || 'Administrador';
@@ -199,7 +222,7 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
 
       setFeedback({
         type: 'success',
-        text: `Link "${newLinkName.trim()}" salvo com sucesso com registro de horário!`
+        text: `Link "${newLinkName.trim()}" validado e salvo com sucesso no SQLite!`
       });
 
       // Limpar formulário
@@ -214,18 +237,17 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
         await loadSources();
       }
 
-      // Se solicitado, já sincronizar a grade com este link
+      // Se solicitado, já sincronizar a grade com as fontes locais do banco
       if (andSync) {
-        setFeedback({ type: 'info', text: `Sincronizando grade com "${newLinkName.trim()}"...` });
-        await api.syncRepoLinks({
-          file: 'custom',
-          customUrl: newLinkUrl.trim(),
-          name: newLinkName.trim(),
-          author: authorName
-        });
+        setFeedback({ type: 'info', text: `Sincronizando grade com fontes locais...` });
+        if (newLinkType === 'vod') {
+          await api.syncVodM3U({ m3uUrl: newLinkUrl.trim() });
+        } else {
+          await api.syncLocalM3uChannels(authorName);
+        }
         setFeedback({
           type: 'success',
-          text: `Link "${newLinkName.trim()}" salvo e grade de canais atualizada com sucesso!`
+          text: `Link "${newLinkName.trim()}" salvo no SQLite e grade atualizada com sucesso!`
         });
         if (onRefreshChannels) onRefreshChannels();
       }
@@ -273,12 +295,11 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
     setFeedback({ type: 'info', text: `Sincronizando grade com "${src.name}"...` });
     try {
       const author = currentUser?.name || currentUser?.email || 'Administrador';
-      await api.syncRepoLinks({
-        file: src.type === 'vod' ? 'Filmes-Series.m3u8' : 'custom',
-        customUrl: src.url,
-        name: src.name,
-        author
-      });
+      if (src.type === 'vod') {
+        await api.syncVodM3U({ m3uUrl: src.url });
+      } else {
+        await api.syncLocalM3uChannels(author);
+      }
       setFeedback({
         type: 'success',
         text: `Grade atualizada com sucesso utilizando o link "${src.name}"!`
@@ -370,6 +391,19 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
             <LinkIcon className="w-3.5 h-3.5" />
             <span>Listas Salvas ({sources.length})</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setSubTab('epg-validator')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              subTab === 'epg-validator'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                : 'text-indigo-400 hover:text-white hover:bg-indigo-950/40'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Validador XMLTV (EPG)</span>
+          </button>
         </div>
       </div>
 
@@ -449,7 +483,10 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                     type="url"
                     placeholder="https://.../lista.m3u8"
                     value={newLinkUrl}
-                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    onChange={(e) => {
+                      setNewLinkUrl(e.target.value);
+                      setTestResult(null);
+                    }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-20 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
                   />
                   <button
@@ -457,7 +494,10 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                     onClick={async () => {
                       try {
                         const text = await navigator.clipboard.readText();
-                        if (text) setNewLinkUrl(text.trim());
+                        if (text) {
+                          setNewLinkUrl(text.trim());
+                          setTestResult(null);
+                        }
                       } catch {}
                     }}
                     className="absolute right-2 top-2 px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-semibold"
@@ -482,6 +522,16 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
               </div>
             </div>
 
+            {/* Aviso de Validação Obrigatória Pendente */}
+            {!testResult && newLinkUrl.trim() && (
+              <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-950/30 text-xs text-amber-300 flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Validação obrigatória:</strong> Para preservar a estabilidade da grade, clique em <strong>"Testar Conexão / Ping"</strong> para validar a conectividade e estrutura da lista antes de salvar no banco local.
+                </span>
+              </div>
+            )}
+
             {/* Test Results Banner */}
             {testResult && (
               <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
@@ -493,8 +543,8 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                   {testResult.valid ? <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
                   <span>
                     {testResult.valid
-                      ? `Link válido e ativo! ${testResult.channelsCount || 0} canais detectados (latência: ${testResult.latencyMs || 0}ms).`
-                      : `Incompatível ou offline: ${testResult.error || 'A URL não respondeu com formato M3U válido.'}`}
+                      ? `Conectividade e estrutura M3U aprovadas! ${testResult.channelsCount || 0} canais detectados (latência: ${testResult.latencyMs || 0}ms). Pronto para salvar no banco local.`
+                      : `Validação falhou: ${testResult.error || 'A URL não respondeu com formato M3U válido.'} Corrija para poder salvar.`}
                   </span>
                 </div>
               </div>
@@ -516,18 +566,20 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => handleSaveNewLink(false)}
-                  disabled={isSaving || !newLinkName.trim() || !newLinkUrl.trim()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-teal-900/60 border border-teal-500/30 text-teal-300 text-xs font-bold transition-all disabled:opacity-40"
+                  disabled={isSaving || isTesting || !newLinkName.trim() || !newLinkUrl.trim() || !testResult?.valid}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-teal-900/60 border border-teal-500/30 text-teal-300 text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={!testResult?.valid ? "Teste e aprove a conectividade do link antes de salvar" : "Salvar link no banco SQLite"}
                 >
                   <Database className="w-4 h-4" />
-                  <span>Salvar Link no Sistema</span>
+                  <span>Salvar Link no SQLite</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSaveNewLink(true)}
-                  disabled={isSaving || !newLinkName.trim() || !newLinkUrl.trim()}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-teal-600/30 transition-all disabled:opacity-40"
+                  disabled={isSaving || isTesting || !newLinkName.trim() || !newLinkUrl.trim() || !testResult?.valid}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-bold shadow-lg shadow-teal-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={!testResult?.valid ? "Teste e aprove a conectividade do link antes de salvar" : "Salvar no SQLite e sincronizar grade"}
                 >
                   {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                   <span>Salvar e Sincronizar Agora</span>
@@ -861,6 +913,14 @@ export const UnifiedLinksManager: React.FC<UnifiedLinksManagerProps> = ({
           currentUser={currentUser}
           onRefreshChannels={onRefreshChannels}
           onNavigateToHistory={onNavigateToHistory}
+        />
+      )}
+
+      {/* CONTEÚDO DA SUB-ABA: VALIDADOR XMLTV (EPG) */}
+      {subTab === 'epg-validator' && (
+        <XmltvValidatorManager
+          currentUser={currentUser}
+          onRefreshChannels={onRefreshChannels}
         />
       )}
     </div>

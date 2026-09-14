@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv generator-info-name="MaxTV XMLTV Generator" source-info-name="MaxTV EPG">
+  <channel id="globo.br">
+    <display-name>Globo HD</display-name>
+    <display-name>TV Globo</display-name>
+    <icon src="https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=100&amp;auto=format&amp;fit=crop&amp;q=60" />
+  </channel>
+  <channel id="sbt.br">
+    <display-name>SBT HD</display-name>
+    <display-name>SBT</display-name>
+  </channel>
+  <channel id="record.br">
+    <display-name>Record TV HD</display-name>
+    <display-name>Record TV</display-name>
+  </channel>
+  <channel id="band.br">
+    <display-name>Band HD</display-name>
+    <display-name>Band</display-name>
+  </channel>
+  <channel id="espn.br">
+    <display-name>ESPN Brasil</display-name>
+  </channel>
+
+  <programme start="20260913000000 +0000" stop="20260914235959 +0000" channel="globo.br">
+    <title lang="pt">Jornal Nacional</title>
+    <desc lang="pt">As principais notícias do Brasil e do mundo com cobertura ao vivo e reportagens exclusivas.</desc>
+    <category lang="pt">Jornalismo</category>
+  </programme>
+  <programme start="20260915000000 +0000" stop="20260915235959 +0000" channel="globo.br">
+    <title lang="pt">Novela das Nove</title>
+    <desc lang="pt">Capítulo imperdível com reviravoltas na trama principal.</desc>
+    <category lang="pt">Novela</category>
+  </programme>
+
+  <programme start="20260913000000 +0000" stop="20260914235959 +0000" channel="sbt.br">
+    <title lang="pt">Programa Silvio Santos</title>
+    <desc lang="pt">Jogos, brincadeiras, câmeras escondidas e muita diversão.</desc>
+    <category lang="pt">Entretenimento</category>
+  </programme>
+
+  <programme start="20260913000000 +0000" stop="20260914235959 +0000" channel="record.br">
+    <title lang="pt">Domingo Espetacular</title>
+    <desc lang="pt">Revista eletrônica com grandes investigações e matérias especiais.</desc>
+    <category lang="pt">Jornalismo</category>
+  </programme>
+</tv>

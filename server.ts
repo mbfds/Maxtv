@@ -45,8 +45,19 @@ import {
   sqliteClearAuditLogs,
   sqliteGetRecentActiveSessions,
   sqliteGetTopWatchedChannelsFromSessions,
-  sqliteGetChannelsCount
+  sqliteGetChannelsCount,
+  sqliteSaveEpgSource,
+  sqliteGetAllEpgSources,
+  sqliteDeleteEpgSource,
+  sqliteUpdateEpgSource,
+  sqliteGetEpgSourceById
 } from './serverSqlite';
+import {
+  validateXmltvUrl,
+  fetchXmltvText,
+  parseXmltvProgrammes,
+  findCurrentAndNextProgram
+} from './serverXmltv';
 import { validateStartupEnv } from './src/utils/envValidator';
 
 dotenv.config();
@@ -413,6 +424,35 @@ const CHANNELS_HISTORY_FILE = path.join(process.cwd(), 'public', 'data', 'channe
 const M3U_IMPORT_HISTORY_FILE = path.join(process.cwd(), 'public', 'data', 'm3u-import-history.json');
 const M3U_AUTO_UPDATE_CONFIG_FILE = path.join(process.cwd(), 'public', 'data', 'm3u-auto-update-config.json');
 
+function isBannedStreamUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return url.includes('test-streams.mux.dev') || url.includes('x36xhzz');
+}
+
+function sanitizeChannelStreams(ch: ServerChannel): ServerChannel {
+  if (!ch) return ch;
+  const rawSources = Array.isArray(ch.sources) ? ch.sources : [];
+  const sources = rawSources.filter(s => s && s.url && !isBannedStreamUrl(s.url));
+  let streamUrl = ch.streamUrl || '';
+  let backupStreamUrl = ch.backupStreamUrl;
+
+  if (isBannedStreamUrl(streamUrl)) {
+    streamUrl = sources.length > 0 ? sources[0].url : '';
+  }
+  if (isBannedStreamUrl(backupStreamUrl)) {
+    backupStreamUrl = sources.length > 1 ? sources[1].url : undefined;
+  }
+  if (!streamUrl && sources.length > 0) {
+    streamUrl = sources[0].url;
+  }
+  return {
+    ...ch,
+    streamUrl,
+    backupStreamUrl: backupStreamUrl || undefined,
+    sources
+  };
+}
+
 interface ServerSimilarityMatchLog {
   incomingName: string;
   matchedChannelName: string;
@@ -494,7 +534,7 @@ function initChannelStorage() {
       const parsed = JSON.parse(raw);
       const list = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.channels) ? parsed.channels : []);
       if (list.length > 0) {
-        customConfigChannels = list;
+        customConfigChannels = list.map(sanitizeChannelStreams);
         console.log(`[CHANNELS CONFIG] ${customConfigChannels.length} canais carregados do arquivo channels-config.json`);
       }
     }
@@ -610,8 +650,8 @@ function initChannelStorage() {
         id: `import-${now - 7200000}`,
         timestamp: new Date(now - 7200000).toISOString(),
         dateFormatted: new Date(now - 7200000).toLocaleString('pt-BR'),
-        sourceName: 'Ramys - CanaisBR03.m3u8 (Carga Inicial)',
-        sourceUrl: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
+        sourceName: 'Grade de Canais Local (SQLite)',
+        sourceUrl: 'local://data/channels-config.json',
         totalFound: 287,
         duplicatesConsolidated: 0,
         newChannelsAdded: 287,
@@ -1141,7 +1181,7 @@ function unifyChannelCollections(
       let assignedOptionLabel = '';
 
       for (const src of incomingSources) {
-        if (!src.url) continue;
+        if (!src.url || isBannedStreamUrl(src.url)) continue;
         const normalizedUrl = src.url.toLowerCase().trim();
         if (!existingUrls.has(normalizedUrl)) {
           existingUrls.add(normalizedUrl);
@@ -1251,13 +1291,14 @@ function saveUnifiedGradeToDisk(
   details?: string
 ): { success: boolean; count: number; error?: string } {
   try {
+    const sanitizedChannels = channels.map(sanitizeChannelStreams);
     const finalDocument = {
       version: "2.0",
       updatedAt: new Date().toISOString(),
       updatedBy: author,
       description: "Grade Unificada Oficial de Canais de TV - Multi-Fontes e Opções Alternativas",
-      channelsCount: channels.length,
-      channels: channels
+      channelsCount: sanitizedChannels.length,
+      channels: sanitizedChannels
     };
 
     const formattedJson = JSON.stringify(finalDocument, null, 2);
@@ -1267,14 +1308,16 @@ function saveUnifiedGradeToDisk(
 
     // Persistência no SQLite 3
     try {
-      sqliteSaveAllChannels(channels);
-      console.log(`[SQLite 3] ${channels.length} canais salvos com sucesso na tabela channels.`);
+      sqliteSaveAllChannels(sanitizedChannels);
+      console.log(`[SQLite 3] ${sanitizedChannels.length} canais salvos com sucesso na tabela channels.`);
     } catch (sqliteErr) {
       console.warn('[SQLite 3] Erro ao sincronizar canais no SQLite:', sqliteErr);
     }
 
-    customConfigChannels = channels;
-    parsedRamysChannels = channels;
+    customConfigChannels = sanitizedChannels;
+    parsedRamysChannels = sanitizedChannels;
+    cachedChannelsResponse = null;
+    cachedChannelsTimestamp = 0;
 
     logChannelUpdate({
       type: 'unify_grade',
@@ -1293,184 +1336,55 @@ function saveUnifiedGradeToDisk(
   }
 }
 
-// Function to fetch and parse Ramys/Iptv-Brasil-2026 catalog (CanaisBR03.m3u8)
-async function loadRamysCatalog() {
+// Function to fetch and parse M3U sources registered in local SQLite database
+async function loadLocalM3uSources() {
   try {
-    const url = 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8';
-    const res = await fetch(url, { headers: { 'User-Agent': 'StreamingBrasil/1.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-
-    const result = parseM3UToChannels(text, 'ramys');
-
-    if (result.length > 0) {
-      parsedRamysChannels = result;
-      lastRamysFetch = Date.now();
-      console.log(`[Ramys IPTV Brasil 2026] Successfully loaded ${parsedRamysChannels.length} channels from CanaisBR03.m3u8!`);
-
-      // Unify with Saimo and current custom configuration
-      const baseForMerge = customConfigChannels.length > 0 ? customConfigChannels : parsedSaimoChannels;
-      const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount } = unifyChannelCollections(baseForMerge, result);
-
-      // If current configuration has fewer channels than the full catalog, update and persist immediately!
-      if (customConfigChannels.length < 500 || unified.length > customConfigChannels.length) {
-        saveUnifiedGradeToDisk(
-          unified,
-          'Sistema (Auto-Unificação)',
-          'Auto-Unificação da Grade CanaisBR03',
-          `Unificação automática executada: ${unified.length} canais únicos, ${mergedChannelsCount} canais com Opção 2/backup adicionada, totalizando ${totalSourcesCount} opções de stream.`
-        );
-      } else {
-        customConfigChannels = unified;
-      }
+    const localSources = sqliteGetAllM3uSources().filter(s => s.enabled);
+    if (localSources.length === 0) {
+      console.log('[LOCAL M3U LOADER] Nenhuma lista M3U cadastrada manualmente no banco local.');
+      return;
     }
-  } catch (err) {
-    console.warn('[Ramys IPTV Brasil 2026] Failed to fetch catalog:', err);
-  }
-}
 
-// Function to fetch and parse Ramys/Iptv-Brasil-2026 VOD (Filmes-Series.m3u8)
-async function loadRamysVod() {
-  try {
-    const url = 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8';
-    const res = await fetch(url, { headers: { 'User-Agent': 'StreamingBrasil/1.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-
-    const lines = text.split(/\r?\n/);
-    const result: any[] = [];
-    let currentMetadata: { name: string; logo: string; group: string } | null = null;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      if (line.startsWith('#EXTINF:')) {
-        const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
-        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-        const groupMatch = line.match(/group-title="([^"]+)"/);
-
-        const title = nameMatch ? nameMatch[1].trim() : 'Filme';
-        const logo = logoMatch ? logoMatch[1].trim() : '';
-        const group = groupMatch ? groupMatch[1].trim() : '';
-
-        currentMetadata = { name: title, logo, group };
-      } else if (!line.startsWith('#') && currentMetadata) {
-        if (line.startsWith('http://') || line.startsWith('https://')) {
-          const isSeries = currentMetadata.group.toLowerCase().includes('serie') || currentMetadata.group.toLowerCase().includes('novela');
-          const realStreamUrl = line;
-          const proxyStreamUrl = `/api/proxy?url=${encodeURIComponent(realStreamUrl)}`;
-
-          // Extract Year from title if present
-          let releaseYear = 2025;
-          const yearMatch = currentMetadata.name.match(/[\(\[]?(19\d{2}|20\d{2})[\)\]]?/);
-          if (yearMatch) {
-            const py = parseInt(yearMatch[1], 10);
-            if (py >= 1970 && py <= 2030) releaseYear = py;
+    let allLoadedChannels: ServerChannel[] = [];
+    for (const src of localSources) {
+      try {
+        console.log(`[LOCAL M3U LOADER] Carregando fonte local: ${src.name} (${src.url})`);
+        const res = await fetch(src.url, {
+          headers: { 'User-Agent': 'StreamingBrasil/1.0' },
+          signal: AbortSignal.timeout(15000)
+        });
+        if (res.ok) {
+          const text = await res.text();
+          const parsed = parseM3UToChannels(text, src.name);
+          if (parsed.length > 0) {
+            allLoadedChannels = allLoadedChannels.concat(parsed);
           }
-
-          const poster = currentMetadata.logo || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80';
-
-          result.push({
-            id: `ramys-vod-${result.length + 1}-${currentMetadata.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-            title: currentMetadata.name,
-            type: isSeries ? 'series' : 'movie',
-            year: releaseYear,
-            duration: isSeries ? 'Temporada Completa' : '1h 50m',
-            rating: releaseYear >= 2024 ? '14+' : '12+',
-            genre: [currentMetadata.group.replace('Filmes | ', '').replace('Series | ', '').replace('Séries | ', '').trim() || 'Geral'],
-            bannerUrl: poster,
-            posterUrl: poster,
-            synopsis: `Disponível no catálogo MAXTV (${currentMetadata.group}). Título oficial sincronizado do repositório IPTV Brasil 2026. Áudio em alta resolução.`,
-            streamUrl: proxyStreamUrl,
-            backupStreamUrl: realStreamUrl,
-            sources: [
-              { name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)', url: proxyStreamUrl, quality: '1080p' },
-              { name: 'Servidor 2 - Direto IPTV Brasil 2026', url: realStreamUrl, quality: '1080p' }
-            ],
-            featured: result.length < 8,
-            isVipOnly: result.length > 25
-          });
         }
-        currentMetadata = null;
-        if (result.length >= 250) break; // Curate top 250 VOD titles from the repo
+      } catch (srcErr: any) {
+        console.warn(`[LOCAL M3U LOADER] Falha ao carregar fonte ${src.name}:`, srcErr.message);
       }
     }
 
-    if (result.length > 0) {
-      parsedRamysVod = result;
-      console.log(`[Ramys IPTV Brasil 2026] Successfully loaded ${parsedRamysVod.length} real VOD titles from repository!`);
+    if (allLoadedChannels.length > 0) {
+      const { unified } = unifyChannelCollections(customConfigChannels, allLoadedChannels);
+      customConfigChannels = unified;
+      console.log(`[LOCAL M3U LOADER] ${allLoadedChannels.length} canais carregados das listas locais cadastradas.`);
     }
-  } catch (err) {
-    console.warn('[Ramys IPTV Brasil 2026] Failed to fetch VOD:', err);
+  } catch (err: any) {
+    console.warn('[LOCAL M3U LOADER] Erro ao carregar fontes locais:', err.message);
   }
 }
 
-// Function to fetch and parse Saimo-TV catalog
+async function loadRamysCatalog() {
+  await loadLocalM3uSources();
+}
+
+async function loadRamysVod() {
+  // Uses local VOD sources only
+}
+
 async function loadSaimoCatalog() {
-  try {
-    const url = 'https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/catalogo.txt';
-    const res = await fetch(url, { headers: { 'User-Agent': 'StreamingBrasil/1.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-
-    const lines = text.split(/\r?\n/);
-    const result: ServerChannel[] = [];
-    let current: Partial<ServerChannel> | null = null;
-    let currentSource: { url: string; referer?: string; userAgent?: string; quality?: string } | null = null;
-
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line || line.startsWith('#')) continue;
-
-      const colon = line.indexOf(':');
-      if (colon === -1) continue;
-
-      const key = line.slice(0, colon).trim().toLowerCase();
-      const val = line.slice(colon + 1).trim();
-
-      if (key === 'canal') {
-        if (current && current.name && current.sources && current.sources.length > 0) {
-          result.push(current as ServerChannel);
-        }
-        const cleanName = val;
-        current = {
-          id: `saimo-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-          name: cleanName,
-          category: categorizeChannel(cleanName),
-          logo: '',
-          sources: [],
-          isActive: true,
-          isVipOnly: !['globo', 'sbt', 'band', 'record', 'cazé', 'cnn brasil', 'cartoon', 'a&e', 'history', 'adult swim'].some(k => cleanName.toLowerCase().includes(k))
-        };
-        currentSource = null;
-      } else if (key === 'logo' && current) {
-        current.logo = val;
-      } else if (key === 'fonte' && current) {
-        currentSource = { 
-          url: val, 
-          quality: 'HD',
-          referer: val.includes('satlabscloud') ? 'https://reidoscanais.st/' : undefined
-        };
-        current.sources!.push(currentSource);
-      } else if (key === 'referer' && currentSource) {
-        currentSource.referer = val;
-      } else if (key === 'agente' && currentSource) {
-        currentSource.userAgent = val;
-      }
-    }
-
-    if (current && current.name && current.sources && current.sources.length > 0) {
-      result.push(current as ServerChannel);
-    }
-
-    // Preserve only genuine sources provided by the catalog - do not inject fake test streams
-    parsedSaimoChannels = result;
-    lastCatalogFetch = Date.now();
-    console.log(`[Saimo-TV API] Loaded ${parsedSaimoChannels.length} live channels from SaimoPlayer catalog!`);
-  } catch (err) {
-    console.warn('[Saimo-TV API] Failed to fetch catalog online, keeping local channels:', err);
-  }
+  await loadLocalM3uSources();
 }
 
 // Helper function to rewrite HLS M3U8 playlists so child manifests and segments route through proxy
@@ -2102,16 +2016,17 @@ app.get('/api/channels', (req, res) => {
   }
 
   const all = [...customAdminChannels, ...effectiveChannels].map(ch => {
-    const health = channelHealthStore.get(ch.id);
+    const sanitized = sanitizeChannelStreams(ch);
+    const health = channelHealthStore.get(sanitized.id);
     if (health) {
       return {
-        ...ch,
+        ...sanitized,
         healthStatus: health.status,
         latencyMs: health.latencyMs,
         lastChecked: health.lastChecked
       };
     }
-    return ch;
+    return sanitized;
   });
 
   let totalSources = 0;
@@ -3506,350 +3421,216 @@ app.delete('/api/admin/channels/:id', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/admin/channels/sync-ramys', async (req, res) => {
+// Sincronização exclusiva via listas M3U cadastradas no banco de dados local SQLite
+app.post('/api/admin/channels/sync-local-m3u', async (req, res) => {
   try {
-    await Promise.allSettled([loadRamysCatalog(), loadRamysVod()]);
-    const hist = logChannelUpdate({
-      type: 'sync_ramys',
-      actionName: 'Sincronização IPTV Brasil 2026 (Ramys)',
-      success: true,
-      channelsCount: parsedRamysChannels.length,
-      details: `${parsedRamysChannels.length} canais e ${parsedRamysVod.length} filmes/séries sincronizados do repositório oficial`,
-      author: req.body?.author || 'Administrador'
-    });
-
-    res.json({
-      success: true,
-      channelsCount: parsedRamysChannels.length,
-      vodCount: parsedRamysVod.length,
-      lastUpdate: hist,
-      message: `Sincronizados com sucesso ${parsedRamysChannels.length} canais e ${parsedRamysVod.length} filmes/séries do repositório Ramys/Iptv-Brasil-2026!`
-    });
-  } catch (err: any) {
-    const hist = logChannelUpdate({
-      type: 'sync_ramys',
-      actionName: 'Sincronização IPTV Brasil 2026 (Ramys)',
-      success: false,
-      channelsCount: 0,
-      details: `Falha na sincronização: ${err.message || err}`,
-      author: req.body?.author || 'Administrador',
-      errorMessage: err.message || String(err)
-    });
-    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar' });
-  }
-});
-
-app.post('/api/admin/channels/sync-saimo', async (req, res) => {
-  try {
-    await loadSaimoCatalog();
-    const hist = logChannelUpdate({
-      type: 'sync_saimo',
-      actionName: 'Sincronização Saimo-TV',
-      success: true,
-      channelsCount: parsedSaimoChannels.length,
-      details: `${parsedSaimoChannels.length} canais de alta estabilidade sincronizados via CDN Saimo-TV`,
-      author: req.body?.author || 'Administrador'
-    });
-
-    res.json({
-      success: true,
-      count: parsedSaimoChannels.length,
-      lastUpdate: hist,
-      message: `Sincronizados ${parsedSaimoChannels.length} canais com sucesso da Saimo-TV!`
-    });
-  } catch (err: any) {
-    const hist = logChannelUpdate({
-      type: 'sync_saimo',
-      actionName: 'Sincronização Saimo-TV',
-      success: false,
-      channelsCount: 0,
-      details: `Falha na sincronização Saimo-TV: ${err.message || err}`,
-      author: req.body?.author || 'Administrador',
-      errorMessage: err.message || String(err)
-    });
-    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar' });
-  }
-});
-
-// --- REPOSITORY LINKS UPDATER (IPTV Brasil 2026 - Ramys) ---
-
-app.get('/api/admin/repo-links/info', (req, res) => {
-  res.json({
-    success: true,
-    repoUrl: 'https://github.com/Ramys/Iptv-Brasil-2026',
-    branch: 'master',
-    files: [
-      {
-        name: 'CanaisBR03.m3u8',
-        description: 'Grade Essencial Brasil (988 canais com TV Aberta, Premiere, SporTV, ESPN, HBO, Telecine, Filmes e Desenhos)',
-        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
-        type: 'channels',
-        approxItems: 988,
-        primaryServer: 'tjtor8411.com:80'
-      },
-      {
-        name: 'Filmes-Series.m3u8',
-        description: 'Catálogo VOD Oficial (290.000+ títulos com metadados TMDB, Lançamentos 2024-2026, Séries e Novelas)',
-        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8',
-        type: 'vod',
-        approxItems: 290610,
-        primaryServer: 'hubby.cx:80'
-      },
-      {
-        name: 'CanaisBR01.m3u8',
-        description: 'Grade Master Brasil 01 (292.000 transmissões de todo o território nacional)',
-        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8',
-        type: 'channels',
-        approxItems: 292953,
-        primaryServer: 'up.kiwi'
-      },
-      {
-        name: 'CanaisBR02.m3u8',
-        description: 'Grade Alternativa Brasil 02 (298.000 transmissões espelho)',
-        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR02.m3u8',
-        type: 'channels',
-        approxItems: 298409,
-        primaryServer: 'tjtor8411.com'
-      },
-      {
-        name: 'CanaisEuropa.m3u8',
-        description: 'Canais Internacionais Europa (Portugal, Espanha, Reino Unido, França)',
-        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisEuropa.m3u8',
-        type: 'channels',
-        approxItems: 106539,
-        primaryServer: 'vip.europaiptv.vip:2086'
-      },
-      {
-        name: 'CanaisItalia.m3u8',
-        description: 'Canais Internacionais Itália (RAI, Sky Italia, Mediaset)',
-        url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisItalia.m3u8',
-        type: 'channels',
-        approxItems: 84200,
-        primaryServer: 'vip.europaiptv.vip:2086'
-      }
-    ],
-    currentStats: {
-      ramysChannels: parsedRamysChannels.length,
-      ramysVod: parsedRamysVod.length,
-      saimoChannels: parsedSaimoChannels.length,
-      lastRamysFetch,
-      lastCatalogFetch
-    }
-  });
-});
-
-app.post('/api/admin/repo-links/sync', async (req, res) => {
-  const { file, customUrl, author } = req.body || {};
-  const currentAuthor = author || 'Administrador';
-  const startTime = Date.now();
-
-  try {
-    if (file === 'Filmes-Series.m3u8') {
-      const { updateCatalogFromM3U } = await import('./scripts/updateContent');
-      const vodResult = await updateCatalogFromM3U({ source: 'ramys' });
-      await loadRamysVod();
-
-      const hist = logChannelUpdate({
-        type: 'repo_sync',
-        actionName: 'Atualização VOD: Filmes-Series.m3u8',
-        success: true,
-        channelsCount: vodResult.count || parsedRamysVod.length,
-        details: `Sincronizados ${vodResult.count || parsedRamysVod.length} filmes e séries atualizados diretamente do repositório Ramys/Iptv-Brasil-2026`,
-        author: currentAuthor,
-        durationMs: Date.now() - startTime
-      });
-
-      return res.json({
-        success: true,
-        message: `Catálogo VOD atualizado com sucesso (${vodResult.count || parsedRamysVod.length} títulos)!`,
-        vodCount: parsedRamysVod.length,
-        channelsCount: parsedRamysChannels.length,
-        durationMs: Date.now() - startTime,
-        lastUpdate: hist
+    const author = req.body?.author || (req.headers['x-admin-name'] as string) || 'Administrador';
+    const localSources = sqliteGetAllM3uSources().filter(s => s.enabled);
+    if (localSources.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhuma lista M3U cadastrada manualmente pelo administrador no banco de dados local. Cadastre uma lista M3U no painel.'
       });
     }
 
-    if (file === 'all') {
-      await loadRamysCatalog();
-      const { updateCatalogFromM3U } = await import('./scripts/updateContent');
-      await updateCatalogFromM3U({ source: 'ramys' });
-      await loadRamysVod();
+    const startTime = Date.now();
+    let allParsedChannels: ServerChannel[] = [];
+    const processedSources: string[] = [];
 
-      const hist = logChannelUpdate({
-        type: 'repo_sync',
-        actionName: 'Atualização Completa: Grade & VOD (IPTV Brasil 2026)',
-        success: true,
-        channelsCount: parsedRamysChannels.length,
-        details: `Sincronização global executada: ${parsedRamysChannels.length} canais ao vivo e ${parsedRamysVod.length} títulos VOD atualizados do GitHub.`,
-        author: currentAuthor,
-        durationMs: Date.now() - startTime
-      });
-
-      return res.json({
-        success: true,
-        message: `Sincronização global concluída! ${parsedRamysChannels.length} canais e ${parsedRamysVod.length} títulos VOD atualizados com sucesso.`,
-        channelsCount: parsedRamysChannels.length,
-        vodCount: parsedRamysVod.length,
-        durationMs: Date.now() - startTime,
-        lastUpdate: hist
-      });
-    }
-
-    // Default or specific channel list (CanaisBR03.m3u8, CanaisBR01.m3u8, CanaisEuropa, etc.)
-    const targetUrl = customUrl || (file ? `https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/${file}` : 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8');
-    
-    const fetchRes = await fetch(targetUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(30000)
-    });
-    if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status} ao obter ${targetUrl}`);
-    const text = await fetchRes.text();
-
-    const lines = text.split(/\r?\n/);
-    const result: ServerChannel[] = [];
-    let currentMetadata: { name: string; logo: string; group: string } | null = null;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      if (line.startsWith('#EXTINF:')) {
-        const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
-        const logoMatch = line.match(/tvg-logo="([^"]+)"/);
-        const groupMatch = line.match(/group-title="([^"]+)"/);
-
-        const channelName = nameMatch ? nameMatch[1].trim() : 'Canal';
-        const logo = logoMatch ? logoMatch[1].trim() : '';
-        const group = groupMatch ? groupMatch[1].trim() : '';
-
-        currentMetadata = { name: channelName, logo, group };
-      } else if (!line.startsWith('#') && currentMetadata) {
-        if (line.startsWith('http://') || line.startsWith('https://')) {
-          const rawGroup = currentMetadata.group.toLowerCase();
-          let cat = 'Variedades & Música';
-
-          if (rawGroup.includes('esporte') || rawGroup.includes('premiere') || rawGroup.includes('sportv') || rawGroup.includes('espn') || rawGroup.includes('nba') || rawGroup.includes('dazn') || rawGroup.includes('ppv')) {
-            cat = 'Esportes';
-          } else if (rawGroup.includes('aberto') || rawGroup.includes('globo') || rawGroup.includes('record')) {
-            cat = 'Abertos';
-          } else if (rawGroup.includes('notícia') || rawGroup.includes('noticia')) {
-            cat = 'Notícias';
-          } else if (rawGroup.includes('filme') || rawGroup.includes('serie') || rawGroup.includes('hbo') || rawGroup.includes('telecine')) {
-            cat = 'Filmes & Séries';
-          } else if (rawGroup.includes('infantil') || rawGroup.includes('desenho')) {
-            cat = 'Infantis';
-          } else if (rawGroup.includes('document')) {
-            cat = 'Documentários';
-          } else {
-            cat = categorizeChannel(currentMetadata.name);
-          }
-
-          const cleanLower = currentMetadata.name.toLowerCase();
-          const isFree = ['globo', 'sbt', 'band', 'record', 'cultura', 'tv brasil', 'cazé', 'cnn brasil'].some(k => cleanLower.includes(k));
-          const directStream = line;
-          const proxyStream = `/api/proxy?url=${encodeURIComponent(directStream)}`;
-
-          result.push({
-            id: `repo-${file || 'custom'}-${result.length + 1}-${cleanLower.replace(/[^a-z0-9]/g, '-')}`,
-            name: currentMetadata.name,
-            category: cat,
-            logo: currentMetadata.logo || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=200',
-            streamUrl: proxyStream,
-            backupStreamUrl: directStream,
-            sources: [
-              {
-                name: 'Servidor 1 - Stream HD Proxy (Anti-Bloqueio)',
-                url: proxyStream,
-                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p',
-                isWorking: true
-              },
-              {
-                name: 'Servidor 2 - Direto IPTV Brasil 2026',
-                url: directStream,
-                quality: currentMetadata.name.includes('4K') ? '4K' : currentMetadata.name.includes('FHD') ? '1080p' : '720p'
-              }
-            ],
-            isActive: true,
-            isVipOnly: !isFree
-          });
-        }
-        currentMetadata = null;
-        if (result.length >= 1200) break;
-      }
-    }
-
-    if (result.length > 0) {
-      parsedRamysChannels = result;
-      lastRamysFetch = Date.now();
-
-      // Unify with current channels and persist to disk for all users
-      const baseForMerge = customConfigChannels.length > 0 ? customConfigChannels : parsedSaimoChannels;
-      const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount } = unifyChannelCollections(baseForMerge, result);
-
-      const fileNameDisplay = file || (customUrl ? 'URL Personalizada' : 'CanaisBR03.m3u8');
-      saveUnifiedGradeToDisk(
-        unified,
-        currentAuthor,
-        `Sincronização & Unificação: ${fileNameDisplay}`,
-        `${result.length} canais processados de ${fileNameDisplay}. Resultado unificado: ${unified.length} canais ativos, ${mergedChannelsCount} fontes secundárias integradas (Opção 2+), totalizando ${totalSourcesCount} streams.`
-      );
-
+    for (const src of localSources) {
       try {
-        sqliteRecordAuditLog({
-          actionType: 'LINKS',
-          actionName: 'SYNC_REPO_LINKS',
-          description: `Sincronizou grade de canais com repositório (${fileNameDisplay}) - ${unified.length} canais ativos`,
-          adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
-          adminName: currentAuthor,
-          details: { file: fileNameDisplay, channelsCount: unified.length, mergedSources: mergedChannelsCount, durationMs: Date.now() - startTime }
+        console.log(`[SYNC LOCAL M3U] Processando fonte cadastrada no banco: ${src.name} (${src.url})`);
+        const fetchRes = await fetch(src.url, {
+          headers: { 'User-Agent': 'StreamingBrasil/1.0' },
+          signal: AbortSignal.timeout(20000)
         });
-      } catch {}
+        if (fetchRes.ok) {
+          const text = await fetchRes.text();
+          const parsed = parseM3UToChannels(text, src.name);
+          if (parsed.length > 0) {
+            allParsedChannels = allParsedChannels.concat(parsed);
+            processedSources.push(`${src.name} (${parsed.length} canais)`);
+          }
+        }
+      } catch (errSrc: any) {
+        console.warn(`[SYNC LOCAL M3U] Falha ao processar lista ${src.name}:`, errSrc.message);
+      }
+    }
 
-      return res.json({
-        success: true,
-        message: `Lista ${fileNameDisplay} unificada com sucesso! ${unified.length} canais ativos na grade (${mergedChannelsCount} receberam Opção 2/backup).`,
-        file: fileNameDisplay,
-        channelsCount: unified.length,
-        extractedCount: result.length,
-        mergedChannelsCount,
-        newChannelsCount,
-        totalSourcesCount,
-        durationMs: Date.now() - startTime,
-        lastUpdate: channelUpdateHistory[0] || null
+    if (allParsedChannels.length === 0) {
+      return res.status(502).json({
+        success: false,
+        message: 'Nenhum canal pôde ser extraído das listas cadastradas no banco local. Verifique a integridade dos links.'
       });
     }
 
-    const fileNameDisplay = file || (customUrl ? 'URL Personalizada' : 'CanaisBR03.m3u8');
+    const { unified, mergedChannelsCount, newChannelsCount, totalSourcesCount } = unifyChannelCollections(customConfigChannels, allParsedChannels);
+    saveUnifiedGradeToDisk(
+      unified,
+      author,
+      'Sincronização de Listas M3U Locais',
+      `Sincronização executada com sucesso a partir de ${localSources.length} fontes locais: ${unified.length} canais consolidados (${mergedChannelsCount} mesclados, ${newChannelsCount} novos).`
+    );
+
     const hist = logChannelUpdate({
-      type: 'repo_sync',
-      actionName: `Atualização de Links: ${fileNameDisplay}`,
+      type: 'm3u_sync' as any,
+      actionName: 'Sincronização de Listas M3U Locais',
       success: true,
-      channelsCount: result.length,
-      details: `${result.length} canais extraídos com sucesso do arquivo ${fileNameDisplay} no repositório Ramys/Iptv-Brasil-2026.`,
-      author: currentAuthor,
+      channelsCount: unified.length,
+      details: `${unified.length} canais consolidados a partir de ${processedSources.length} listas locais ativas (${totalSourcesCount} servidores totais)`,
+      author,
       durationMs: Date.now() - startTime
     });
 
     res.json({
       success: true,
-      message: `Lista ${fileNameDisplay} atualizada com sucesso (${result.length} canais carregados)!`,
-      file: fileNameDisplay,
-      channelsCount: result.length,
-      durationMs: Date.now() - startTime,
-      lastUpdate: hist
+      channelsCount: unified.length,
+      lastUpdate: hist,
+      sourcesCount: localSources.length,
+      sourcesUsed: processedSources,
+      message: `Grade sincronizada com sucesso a partir das listas M3U cadastradas no banco local! (${unified.length} canais ativos)`
     });
   } catch (err: any) {
-    const hist = logChannelUpdate({
-      type: 'repo_sync',
-      actionName: `Atualização de Links: ${file || 'Lista'}`,
+    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar listas locais' });
+  }
+});
+
+app.post('/api/admin/channels/sync-ramys', async (req, res) => {
+  // Redireciona para sincronização estrita de listas locais cadastradas
+  const localSources = sqliteGetAllM3uSources().filter(s => s.enabled);
+  if (localSources.length === 0) {
+    return res.status(400).json({
       success: false,
-      channelsCount: 0,
-      details: `Falha ao sincronizar links do repositório: ${err.message || err}`,
-      author: currentAuthor,
-      durationMs: Date.now() - startTime,
-      errorMessage: err.message || String(err)
+      message: 'O sistema utiliza exclusivamente listas M3U cadastradas no banco de dados local. Nenhuma lista local cadastrada.'
     });
-    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar links do repositório' });
+  }
+  await loadLocalM3uSources();
+  res.json({
+    success: true,
+    channelsCount: customConfigChannels.length,
+    message: `Canais sincronizados a partir das listas cadastradas no banco local (${customConfigChannels.length} canais).`
+  });
+});
+
+app.post('/api/admin/channels/sync-saimo', async (req, res) => {
+  const localSources = sqliteGetAllM3uSources().filter(s => s.enabled);
+  if (localSources.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'O sistema utiliza exclusivamente listas M3U cadastradas no banco de dados local. Nenhuma lista local cadastrada.'
+    });
+  }
+  await loadLocalM3uSources();
+  res.json({
+    success: true,
+    count: customConfigChannels.length,
+    message: `Canais sincronizados a partir das listas cadastradas no banco local (${customConfigChannels.length} canais).`
+  });
+});
+
+// Informações sobre listas M3U cadastradas no banco local SQLite
+app.get('/api/admin/repo-links/info', (req, res) => {
+  const localSources = sqliteGetAllM3uSources();
+  res.json({
+    success: true,
+    storage: 'SQLite 3 (Local)',
+    files: localSources.map(s => ({
+      name: s.name,
+      url: s.url,
+      enabled: s.enabled,
+      type: 'channels'
+    })),
+    currentStats: {
+      channels: customConfigChannels.length,
+      vod: parsedRamysVod.length,
+      sourcesCount: localSources.length
+    }
+  });
+});
+
+app.post('/api/admin/repo-links/sync', async (req, res) => {
+  const { customUrl, author } = req.body || {};
+  const currentAuthor = author || 'Administrador';
+  const startTime = Date.now();
+
+  try {
+    let targetUrls: { name: string; url: string }[] = [];
+
+    if (customUrl && typeof customUrl === 'string' && customUrl.startsWith('http')) {
+      // Validação prévia de conectividade antes de sincronizar
+      const val = await validateM3uUrl(customUrl.trim());
+      if (!val.valid) {
+        return res.status(400).json({
+          success: false,
+          error: `URL M3U inválida ou inacessível: ${val.error}`
+        });
+      }
+      targetUrls.push({ name: 'URL Informada', url: customUrl.trim() });
+    } else {
+      const localSources = sqliteGetAllM3uSources().filter(s => s.enabled);
+      if (localSources.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Nenhuma lista M3U cadastrada manualmente pelo administrador no banco local SQLite.'
+        });
+      }
+      targetUrls = localSources.map(s => ({ name: s.name, url: s.url }));
+    }
+
+    let allExtracted: ServerChannel[] = [];
+    for (const src of targetUrls) {
+      try {
+        const fetchRes = await fetch(src.url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 StreamingBrasil/1.0' },
+          signal: AbortSignal.timeout(20000)
+        });
+        if (fetchRes.ok) {
+          const text = await fetchRes.text();
+          const parsed = parseM3UToChannels(text, src.name);
+          allExtracted = allExtracted.concat(parsed);
+        }
+      } catch (err: any) {
+        console.warn(`[SYNC M3U] Erro ao baixar ${src.name}:`, err.message);
+      }
+    }
+
+    if (allExtracted.length > 0) {
+      const { unified, mergedChannelsCount, totalSourcesCount } = unifyChannelCollections(customConfigChannels, allExtracted);
+      saveUnifiedGradeToDisk(
+        unified,
+        currentAuthor,
+        'Sincronização de Lista M3U Local',
+        `${allExtracted.length} canais processados. Total ativo: ${unified.length} canais.`
+      );
+
+      const hist = logChannelUpdate({
+        type: 'm3u_sync' as any,
+        actionName: 'Sincronização M3U',
+        success: true,
+        channelsCount: unified.length,
+        details: `${unified.length} canais ativos na grade consolidada a partir do banco local SQLite`,
+        author: currentAuthor,
+        durationMs: Date.now() - startTime
+      });
+
+      return res.json({
+        success: true,
+        message: `Grade sincronizada com sucesso! ${unified.length} canais ativos.`,
+        channelsCount: unified.length,
+        extractedCount: allExtracted.length,
+        mergedChannelsCount,
+        totalSourcesCount,
+        durationMs: Date.now() - startTime,
+        lastUpdate: hist
+      });
+    }
+
+    return res.status(502).json({
+      success: false,
+      error: 'Não foi possível extrair canais das listas M3U cadastradas.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Falha ao sincronizar links M3U' });
   }
 });
 
@@ -4534,9 +4315,9 @@ app.delete('/api/admin/channels/sources/:id', (req, res) => {
   });
 });
 
-// POST /api/admin/channels/sources (Salvar ou cadastrar URL M3U8 com validação server-side e persistência garantida no SQLite)
+// POST /api/admin/channels/sources (Salvar ou cadastrar URL M3U8 com validação obrigatória de conectividade/estrutura e persistência no SQLite)
 app.post('/api/admin/channels/sources', async (req, res) => {
-  const { name, url, enabled = true, skipValidation = false } = req.body || {};
+  const { name, url, enabled = true } = req.body || {};
   if (!url || typeof url !== 'string' || !url.startsWith('http')) {
     const errObj = {
       id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -4553,34 +4334,32 @@ app.post('/api/admin/channels/sources', async (req, res) => {
   const cleanUrl = url.trim();
   const cleanName = (name && String(name).trim()) || cleanUrl.replace(/^https?:\/\//, '').slice(0, 50);
 
-  // Validação no lado do servidor antes de salvar para evitar entradas corrompidas
-  if (!skipValidation) {
-    console.log(`[URL VALIDATION] Validando link M3U no servidor antes de persistir: ${cleanUrl}`);
-    const validation = await validateM3uUrl(cleanUrl);
-    if (!validation.valid) {
-      console.warn(`[URL VALIDATION FAILED] Rejeitando URL inválida: ${cleanUrl} - Motivo: ${validation.error}`);
-      const errLog = {
-        id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        timestamp: new Date().toISOString(),
-        url: cleanUrl,
-        sourceName: cleanName,
-        errorType: validation.errorType || 'invalid_url',
-        errorMessage: validation.error || 'A URL informada não pôde ser validada.',
-        statusCode: validation.statusCode,
-        details: validation.details || { latencyMs: validation.latencyMs, contentType: validation.contentType }
-      };
-      sqliteSaveUrlErrorLog(errLog);
+  // Validação obrigatória de conectividade e estrutura M3U no lado do servidor
+  console.log(`[URL VALIDATION] Validando conectividade e estrutura M3U antes de salvar: ${cleanUrl}`);
+  const validation = await validateM3uUrl(cleanUrl);
+  if (!validation.valid) {
+    console.warn(`[URL VALIDATION FAILED] Rejeitando URL inválida: ${cleanUrl} - Motivo: ${validation.error}`);
+    const errLog = {
+      id: `err-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: cleanUrl,
+      sourceName: cleanName,
+      errorType: validation.errorType || 'invalid_url',
+      errorMessage: validation.error || 'A URL informada não passou no teste de conectividade ou estrutura M3U.',
+      statusCode: validation.statusCode,
+      details: validation.details || { latencyMs: validation.latencyMs, contentType: validation.contentType }
+    };
+    sqliteSaveUrlErrorLog(errLog);
 
-      return res.status(400).json({
-        success: false,
-        error: validation.error,
-        validationFailed: true,
-        validation,
-        log: errLog
-      });
-    }
-    console.log(`[URL VALIDATION SUCCESS] Link M3U aprovado com ${validation.channelsCount} canais em ${validation.latencyMs}ms.`);
+    return res.status(400).json({
+      success: false,
+      error: `Validação falhou: ${validation.error}. Verifique a conectividade e estrutura da lista M3U.`,
+      validationFailed: true,
+      validation,
+      log: errLog
+    });
   }
+  console.log(`[URL VALIDATION SUCCESS] Link M3U aprovado com ${validation.channelsCount} canais em ${validation.latencyMs}ms.`);
 
   try {
     const targetId = req.body?.id ? String(req.body.id).trim() : '';
@@ -4679,15 +4458,32 @@ app.put('/api/admin/channels/sources/:id', async (req, res) => {
     return res.status(404).json({ success: false, error: 'Fonte de link não encontrada para edição.' });
   }
 
+  const target = m3uAutoUpdateConfig.sources[existingIndex];
+
+  // Se a URL estiver sendo alterada, validar conectividade e estrutura
+  if (url && typeof url === 'string' && url.trim() !== target.url) {
+    const cleanUrl = url.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      return res.status(400).json({ success: false, error: 'URL deve começar com http:// ou https://' });
+    }
+    const val = await validateM3uUrl(cleanUrl);
+    if (!val.valid) {
+      return res.status(400).json({
+        success: false,
+        error: `Não é possível atualizar para URL inválida: ${val.error}`,
+        validation: val
+      });
+    }
+    target.url = cleanUrl;
+  }
+
   const nowIso = new Date().toISOString();
   const nowFormatted = new Date().toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', second: '2-digit'
   });
 
-  const target = m3uAutoUpdateConfig.sources[existingIndex];
   if (name && typeof name === 'string') target.name = name.trim();
-  if (url && typeof url === 'string') target.url = url.trim();
   if (enabled !== undefined) target.enabled = Boolean(enabled);
   if (type === 'vod' || type === 'channels') (target as any).type = type;
   target.updatedAt = nowIso;
@@ -4717,6 +4513,329 @@ app.put('/api/admin/channels/sources/:id', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: `Falha ao salvar edição no SQLite: ${err.message}` });
+  }
+});
+
+// =============================================================
+// XMLTV (EPG) VALIDATOR & SOURCES API ENDPOINTS
+// =============================================================
+
+// POST /api/admin/epg/validate-url (Validar link de XMLTV/EPG em tempo real sob demanda)
+app.post('/api/admin/epg/validate-url', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return res.status(400).json({
+      success: false,
+      valid: false,
+      error: 'URL do arquivo XMLTV (EPG) é obrigatória.'
+    });
+  }
+
+  const result = await validateXmltvUrl(url.trim());
+  if (!result.valid) {
+    sqliteSaveUrlErrorLog({
+      id: `err-epg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: url.trim(),
+      sourceName: 'Validador XMLTV (EPG)',
+      errorType: result.errorType || 'xmltv_validation_failed',
+      errorMessage: result.error || 'Falha na validação de estrutura XMLTV',
+      statusCode: result.statusCode,
+      details: {
+        latencyMs: result.latencyMs,
+        fileSizeBytes: result.fileSizeBytes,
+        isGzip: result.isGzip,
+        contentType: result.contentType
+      }
+    });
+  }
+
+  res.json({
+    success: true,
+    ...result
+  });
+});
+
+// GET /api/admin/epg/sources (Listar fontes EPG salvas no banco local SQLite)
+app.get('/api/admin/epg/sources', (req, res) => {
+  try {
+    const sources = sqliteGetAllEpgSources();
+    res.json({
+      success: true,
+      sources,
+      total: sources.length
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: `Falha ao carregar fontes EPG: ${err.message}`
+    });
+  }
+});
+
+// POST /api/admin/epg/sources (Salvar nova fonte EPG com validação OBRIGATÓRIA prévia)
+app.post('/api/admin/epg/sources', async (req, res) => {
+  const { name, url, enabled = true, priority = 1 } = req.body || {};
+
+  const cleanName = (name || '').trim();
+  const cleanUrl = (url || '').trim();
+
+  if (!cleanName) {
+    return res.status(400).json({ success: false, error: 'O nome da fonte XMLTV (EPG) é obrigatório.' });
+  }
+
+  if (!cleanUrl || (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://'))) {
+    return res.status(400).json({
+      success: false,
+      error: 'URL inválida. O link deve começar com http:// ou https://'
+    });
+  }
+
+  // Validação obrigatória da acessibilidade e estrutura XMLTV antes de permitir salvar no SQLite
+  console.log(`[XMLTV VALIDATOR] Testando integridade da URL EPG: ${cleanUrl}`);
+  const validation = await validateXmltvUrl(cleanUrl);
+
+  if (!validation.valid) {
+    console.warn(`[XMLTV VALIDATION FAILED] Rejeitando URL EPG inválida: ${cleanUrl} - ${validation.error}`);
+    const errLog = {
+      id: `err-epg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      url: cleanUrl,
+      sourceName: cleanName,
+      errorType: validation.errorType || 'invalid_xmltv',
+      errorMessage: validation.error || 'A URL informada falhou no teste de conectividade ou formato XMLTV.',
+      statusCode: validation.statusCode,
+      details: {
+        latencyMs: validation.latencyMs,
+        isGzip: validation.isGzip,
+        fileSizeBytes: validation.fileSizeBytes
+      }
+    };
+    sqliteSaveUrlErrorLog(errLog);
+
+    return res.status(400).json({
+      success: false,
+      error: `Validação obrigatória falhou: ${validation.error}. Corrija a URL para salvar no banco.`,
+      validationFailed: true,
+      validation,
+      log: errLog
+    });
+  }
+
+  console.log(`[XMLTV VALIDATION SUCCESS] EPG aprovado com ${validation.channelsCount} canais e ${validation.programmesCount} programas.`);
+
+  try {
+    const nowIso = new Date().toISOString();
+    const epgDoc = {
+      id: req.body?.id || `epg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: cleanName,
+      url: cleanUrl,
+      enabled: Boolean(enabled),
+      priority: Number(priority) || 1,
+      channelsCount: validation.channelsCount,
+      programmesCount: validation.programmesCount,
+      lastValidatedAt: nowIso,
+      lastStatus: 'valid' as const,
+      timeRange: validation.timeRange?.formattedRange,
+      sampleChannels: validation.sampleChannels.map(c => c.name),
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    sqliteSaveEpgSource(epgDoc);
+
+    try {
+      sqliteRecordAuditLog({
+        actionType: 'EPG',
+        actionName: 'CREATE_EPG_SOURCE',
+        description: `Cadastrou fonte XMLTV validada "${cleanName}" (${validation.programmesCount} programas)`,
+        adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+        adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+        targetId: epgDoc.id,
+        details: {
+          name: cleanName,
+          url: cleanUrl,
+          channelsCount: validation.channelsCount,
+          programmesCount: validation.programmesCount,
+          timeRange: validation.timeRange?.formattedRange
+        }
+      });
+    } catch {}
+
+    const allSources = sqliteGetAllEpgSources();
+
+    res.json({
+      success: true,
+      message: `Fonte XMLTV "${cleanName}" validada e salva com sucesso no banco SQLite!`,
+      source: epgDoc,
+      sources: allSources,
+      validation
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: `Falha ao persistir fonte EPG no SQLite: ${err.message}`
+    });
+  }
+});
+
+// PUT /api/admin/epg/sources/:id (Atualizar fonte EPG existente com validação se URL for alterada)
+app.put('/api/admin/epg/sources/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, url, enabled, priority } = req.body || {};
+
+  try {
+    const existing = sqliteGetEpgSourceById(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Fonte EPG não encontrada.' });
+    }
+
+    const cleanName = name !== undefined ? String(name).trim() : existing.name;
+    const cleanUrl = url !== undefined ? String(url).trim() : existing.url;
+
+    let validation: any = null;
+    if (cleanUrl !== existing.url) {
+      validation = await validateXmltvUrl(cleanUrl);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: `A nova URL informada falhou na validação: ${validation.error}`,
+          validationFailed: true,
+          validation
+        });
+      }
+    }
+
+    const updatedDoc = {
+      ...existing,
+      name: cleanName,
+      url: cleanUrl,
+      enabled: enabled !== undefined ? Boolean(enabled) : existing.enabled,
+      priority: priority !== undefined ? Number(priority) : existing.priority,
+      channelsCount: validation ? validation.channelsCount : existing.channelsCount,
+      programmesCount: validation ? validation.programmesCount : existing.programmesCount,
+      lastValidatedAt: validation ? new Date().toISOString() : existing.lastValidatedAt,
+      lastStatus: validation ? ('valid' as const) : existing.lastStatus,
+      timeRange: validation ? validation.timeRange?.formattedRange : existing.timeRange,
+      sampleChannels: validation ? validation.sampleChannels.map((c: any) => c.name) : existing.sampleChannels,
+      updatedAt: new Date().toISOString()
+    };
+
+    sqliteSaveEpgSource(updatedDoc);
+
+    res.json({
+      success: true,
+      message: `Fonte EPG "${cleanName}" atualizada com sucesso!`,
+      source: updatedDoc,
+      sources: sqliteGetAllEpgSources()
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Erro ao atualizar fonte EPG: ${err.message}` });
+  }
+});
+
+// DELETE /api/admin/epg/sources/:id (Remover fonte EPG do banco local SQLite)
+app.delete('/api/admin/epg/sources/:id', (req, res) => {
+  const { id } = req.params;
+  try {
+    sqliteDeleteEpgSource(id);
+    try {
+      sqliteRecordAuditLog({
+        actionType: 'EPG',
+        actionName: 'DELETE_EPG_SOURCE',
+        description: `Removeu a fonte de Guia XMLTV (ID: ${id})`,
+        adminEmail: (req.headers['x-admin-email'] as string) || 'cebolao1302@gmail.com',
+        adminName: (req.headers['x-admin-name'] as string) || 'Administrador',
+        targetId: id
+      });
+    } catch {}
+
+    res.json({
+      success: true,
+      message: 'Fonte EPG removida com sucesso.',
+      sources: sqliteGetAllEpgSources()
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: `Erro ao excluir fonte EPG: ${err.message}` });
+  }
+});
+
+// POST /api/admin/epg/sync (Sincronizar programação EPG dos arquivos XMLTV para a grade de canais)
+app.post('/api/admin/epg/sync', async (req, res) => {
+  try {
+    const epgSources = sqliteGetAllEpgSources().filter(s => s.enabled);
+    if (epgSources.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhuma fonte XMLTV (EPG) ativa cadastrada no SQLite. Adicione e ative uma fonte para sincronizar.'
+      });
+    }
+
+    console.log(`[EPG SYNC] Sincronizando programação a partir de ${epgSources.length} fontes ativas...`);
+    const combinedProgrammes = new Map<string, any[]>();
+
+    for (const src of epgSources) {
+      try {
+        console.log(`[EPG SYNC] Baixando XMLTV de "${src.name}" (${src.url})...`);
+        const xmlText = await fetchXmltvText(src.url, 25000);
+        const map = parseXmltvProgrammes(xmlText);
+        for (const [key, list] of map.entries()) {
+          const current = combinedProgrammes.get(key) || [];
+          combinedProgrammes.set(key, [...current, ...list]);
+        }
+      } catch (srcErr: any) {
+        console.warn(`[EPG SYNC] Falha ao processar fonte "${src.name}":`, srcErr.message);
+      }
+    }
+
+    if (combinedProgrammes.size === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Não foi possível extrair programações das fontes XMLTV cadastradas.'
+      });
+    }
+
+    const now = new Date();
+    let updatedCount = 0;
+
+    let targetChannels = customConfigChannels && customConfigChannels.length > 0 
+      ? [...customConfigChannels] 
+      : sqliteGetAllChannels();
+
+    // Atualiza canais em memória e banco
+    targetChannels = targetChannels.map(ch => {
+      const match = findCurrentAndNextProgram(ch.name, (ch as any).epgId, combinedProgrammes, now);
+      if (match.nowTitle || match.nextTitle) {
+        updatedCount++;
+        return {
+          ...ch,
+          epgNow: match.nowTitle || ch.epgNow,
+          epgNext: match.nextTitle || ch.epgNext
+        };
+      }
+      return ch;
+    });
+
+    customConfigChannels = targetChannels;
+
+    try {
+      sqliteSaveAllChannels(targetChannels);
+    } catch (saveErr) {
+      console.warn('[EPG SYNC] Erro ao salvar canais atualizados no SQLite:', saveErr);
+    }
+
+    res.json({
+      success: true,
+      message: `Grade de programação EPG sincronizada com sucesso! ${updatedCount} canais atualizados com No Ar / A Seguir.`,
+      updatedChannelsCount: updatedCount,
+      totalChannels: targetChannels.length,
+      timestamp: now.toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: `Erro ao sincronizar EPG: ${err.message}`
+    });
   }
 });
 
@@ -5090,17 +5209,18 @@ async function runAutoUpdateCycle(triggerReason: string = 'Agendador Automático
   const sourcesUsed: string[] = [];
 
   try {
-    let enabledSources = m3uAutoUpdateConfig.sources.filter(s => s.enabled);
+    let enabledSources = sqliteGetAllM3uSources().filter(s => s.enabled);
     if (enabledSources.length === 0) {
-      enabledSources = [
-        {
-          id: 'src-ramys-br03',
-          name: 'Ramys Oficial - CanaisBR03.m3u8 (IPTV Brasil 2026)',
-          url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR03.m3u8',
-          enabled: true,
-          priority: 1
-        }
-      ];
+      enabledSources = m3uAutoUpdateConfig.sources.filter(s => s.enabled);
+    }
+    if (enabledSources.length === 0) {
+      m3uAutoUpdateConfig.lastStatus = 'error';
+      m3uAutoUpdateConfig.lastMessage = 'Nenhuma lista M3U cadastrada manualmente no banco local SQLite.';
+      saveAutoUpdateConfigToDisk();
+      return {
+        success: false,
+        message: 'Nenhuma fonte M3U cadastrada manualmente pelo administrador no banco local.'
+      };
     }
 
     for (const source of enabledSources) {
@@ -6060,6 +6180,9 @@ app.post('/api/admin/settings', (req, res) => {
 // Vite Middleware for SPA development & Production static serving
 async function startServer() {
   try {
+    // Serve public folder statically (sample-epg.xml, icons, etc.)
+    app.use(express.static(path.join(process.cwd(), 'public')));
+
     if (process.env.NODE_ENV !== 'production') {
       const vite = await createViteServer({
         server: { middlewareMode: true },

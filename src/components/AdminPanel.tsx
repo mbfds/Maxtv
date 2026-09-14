@@ -6,7 +6,7 @@ import {
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
   Activity, Film, WifiOff, FileCode, GitBranch, Layers, Lock,
-  Download, Database, HardDrive, Server
+  Download, Database, HardDrive, Server, Calendar
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
@@ -16,6 +16,7 @@ import { ChannelUpdateHistory } from './ChannelUpdateHistory';
 import { M3uUnifierManager } from './M3uUnifierManager';
 import { UrlErrorLogsViewer } from './UrlErrorLogsViewer';
 import { UnifiedLinksManager } from './UnifiedLinksManager';
+import { XmltvValidatorManager } from './XmltvValidatorManager';
 import { SalesAndGrantsHistory } from './SalesAndGrantsHistory';
 import { AuditLogsViewer } from './AuditLogsViewer';
 import { RealtimeMetricsDashboard } from './RealtimeMetricsDashboard';
@@ -42,6 +43,7 @@ type AdminTab =
   | 'm3u-sources-unifier' 
   | 'unify-m3u' 
   | 'repo-sync' 
+  | 'epg-validator'
   | 'channels-config' 
   | 'channels-history' 
   | 'channel-health' 
@@ -113,7 +115,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
 
   // VOD Sync Modal State
   const [isSyncVodModalOpen, setIsSyncVodModalOpen] = useState<boolean>(false);
-  const [vodSyncSource, setVodSyncSource] = useState<'both' | 'ramys' | 'saimo' | 'custom'>('both');
+  const [vodSyncSource, setVodSyncSource] = useState<'local' | 'custom'>('local');
   const [customVodUrl, setCustomVodUrl] = useState<string>('');
   const [vodSyncLoading, setVodSyncLoading] = useState<boolean>(false);
 
@@ -319,27 +321,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
     }
   };
 
-  const handleSyncRamys = async () => {
+  const handleSyncLocalM3u = async () => {
     try {
       setIsLoading(true);
-      const res = await api.syncRamysChannels();
-      showFeedback(res.message);
-      const cRes = await api.getChannels();
-      if (cRes.channels) setChannels(cRes.channels);
-      const hRes = await api.getChannelUpdateHistory();
-      if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
-      setHistoryRefreshTrigger(prev => prev + 1);
-    } catch (e: any) {
-      alert(e.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSyncSaimo = async () => {
-    try {
-      setIsLoading(true);
-      const res = await api.syncSaimoChannels();
+      const res = await api.syncLocalM3uChannels();
       showFeedback(res.message);
       const cRes = await api.getChannels();
       if (cRes.channels) setChannels(cRes.channels);
@@ -464,7 +449,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Servidor Conectado • Liberação Imediata de Meses • Grade Ramys/Saimo Ativa
+              Servidor Conectado • Liberação Imediata de Meses • Listas M3U Locais Ativas
             </p>
           </div>
         </div>
@@ -685,6 +670,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               </div>
               <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30">
                 M3U / Hub
+              </span>
+            </button>
+
+            {/* VALIDADOR DE XMLTV (EPG) */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('epg-validator')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'epg-validator'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-400/50'
+                  : 'text-indigo-300 bg-indigo-950/20 border border-indigo-500/20 hover:bg-indigo-950/40'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-4 h-4 text-indigo-400" />
+                <span>Validador XMLTV (EPG)</span>
+              </div>
+              <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                Grade
               </span>
             </button>
 
@@ -1754,6 +1758,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             />
           )}
 
+          {/* TAB: VALIDADOR XMLTV (EPG) */}
+          {activeTab === 'epg-validator' && (
+            <XmltvValidatorManager
+              currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
+              onRefreshChannels={async () => {
+                try {
+                  const cRes = await api.getChannels();
+                  if (cRes.channels) setChannels(cRes.channels);
+                } catch {}
+              }}
+            />
+          )}
+
           {/* TAB 5: GRADE DE CANAIS */}
           {activeTab === 'channels' && (
             <div className="space-y-6">
@@ -1801,19 +1818,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
 
                   <button
                     type="button"
-                    onClick={handleSyncRamys}
+                    onClick={handleSyncLocalM3u}
                     className="flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-950/70 hover:bg-emerald-900/70 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition-colors"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Sincronizar IPTV Brasil 2026 (Ramys)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSyncSaimo}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/10 text-xs font-semibold transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Saimo-TV</span>
+                    <span>Sincronizar Listas M3U Locais</span>
                   </button>
                   <button
                     type="button"
@@ -2000,7 +2009,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             <ChannelUpdateHistory
               onOpenConfigEditor={() => setActiveTab('channels-config')}
               onOpenRepoSync={() => setActiveTab('repo-sync')}
-              onTriggerSync={(source) => source === 'ramys' ? handleSyncRamys() : handleSyncSaimo()}
+              onTriggerSync={() => handleSyncLocalM3u()}
               refreshTrigger={historyRefreshTrigger}
             />
           )}
@@ -2072,7 +2081,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                     </div>
 
                     <p className="text-[11px] text-slate-400 leading-relaxed">
-                      Define a cada quantas horas o servidor fará requisições automáticas para os links M3U8 cadastrados (ex: CanaisBR03 oficial do Ramys e backups), consolidando novos canais e gerando opções de backup na grade.
+                      Define a cada quantas horas o servidor fará requisições automáticas para as listas M3U/M3U8 cadastradas manualmente no banco local SQLite, consolidando novos canais e gerando opções de backup na grade.
                     </p>
 
                     <div className="flex flex-wrap gap-2 pt-1">
@@ -2439,11 +2448,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               <label className="text-xs font-semibold text-slate-300 block">Selecione a Fonte do Catálogo</label>
 
               <div className="space-y-2">
-                {/* AMBOS (RECOMENDADO) */}
+                {/* BANCO SQLITE LOCAL (RECOMENDADO) */}
                 <label
-                  onClick={() => setVodSyncSource('both')}
+                  onClick={() => setVodSyncSource('local')}
                   className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
-                    vodSyncSource === 'both'
+                    vodSyncSource === 'local'
                       ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
                       : 'bg-slate-950/60 border-white/10 hover:border-white/20'
                   }`}
@@ -2451,65 +2460,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   <input
                     type="radio"
                     name="vodSource"
-                    checked={vodSyncSource === 'both'}
-                    onChange={() => setVodSyncSource('both')}
+                    checked={vodSyncSource === 'local'}
+                    onChange={() => setVodSyncSource('local')}
                     className="mt-1 accent-purple-500"
                   />
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white">Ambos os Projetos GitHub (Recomendado)</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">DUAL-REPO</span>
+                      <span className="text-xs font-bold text-white">Listas VOD do Banco Local SQLite (Recomendado)</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">LOCAL SQLITE</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Combina <strong>Ramys IPTV Brasil 2026</strong> + <strong>Gabriel Saimo VOD</strong>. Deduplica títulos e cria servidores espelho redundantes (Hubby, TJTOR, Kiwi e Ramys).
-                    </p>
-                  </div>
-                </label>
-
-                {/* RAMYS */}
-                <label
-                  onClick={() => setVodSyncSource('ramys')}
-                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
-                    vodSyncSource === 'ramys'
-                      ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
-                      : 'bg-slate-950/60 border-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="vodSource"
-                    checked={vodSyncSource === 'ramys'}
-                    onChange={() => setVodSyncSource('ramys')}
-                    className="mt-1 accent-purple-500"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-white">Ramys IPTV Brasil 2026</span>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Atualiza a partir da lista oficial <code className="text-purple-300">Filmes-Series.m3u8</code> com metadados e logos TMDB.
-                    </p>
-                  </div>
-                </label>
-
-                {/* SAIMO */}
-                <label
-                  onClick={() => setVodSyncSource('saimo')}
-                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
-                    vodSyncSource === 'saimo'
-                      ? 'bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40'
-                      : 'bg-slate-950/60 border-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="vodSource"
-                    checked={vodSyncSource === 'saimo'}
-                    onChange={() => setVodSyncSource('saimo')}
-                    className="mt-1 accent-purple-500"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-white">Gabriel Saimo (SaimoPlayer VOD)</span>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Atualiza diretamente do catálogo indexado VOD do Gabriel Saimo (TJTOR, Hubby e Kiwi).
+                      Atualiza e consolida o catálogo VOD de filmes e séries utilizando exclusivamente as fontes cadastradas manualmente pelo administrador no banco local SQLite.
                     </p>
                   </div>
                 </label>
@@ -2533,7 +2494,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   <div className="flex-1">
                     <span className="text-xs font-bold text-white">Lista M3U / M3U8 Personalizada</span>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Cole qualquer link de playlist M3U ou M3U8 de filmes/séries.
+                      Cole qualquer link direto de playlist M3U ou M3U8 de filmes/séries para sincronizar.
                     </p>
                     {vodSyncSource === 'custom' && (
                       <input

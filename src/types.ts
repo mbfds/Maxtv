@@ -288,13 +288,17 @@ export interface RepoFileMeta {
 }
 
 export interface RepoLinksInfo {
-  repoUrl: string;
-  branch: string;
+  storage?: string;
+  repoUrl?: string;
+  branch?: string;
   files: RepoFileMeta[];
   currentStats: {
-    ramysChannels: number;
-    ramysVod: number;
-    saimoChannels: number;
+    channels: number;
+    vod: number;
+    sourcesCount?: number;
+    ramysChannels?: number;
+    ramysVod?: number;
+    saimoChannels?: number;
     lastRamysFetch?: number;
     lastCatalogFetch?: number;
   };

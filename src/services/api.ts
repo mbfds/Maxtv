@@ -370,16 +370,27 @@ export const api = {
     return await res.json();
   },
 
+  async syncLocalM3uChannels(author?: string): Promise<{ success: boolean; channelsCount: number; message: string; lastUpdate?: any }> {
+    const res = await adminFetch('/api/admin/channels/sync-local-m3u', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || data.error || 'Falha ao sincronizar listas M3U locais');
+    }
+    return data;
+  },
+
   async syncRamysChannels(): Promise<{ success: boolean; channelsCount: number; vodCount: number; message: string }> {
-    const res = await adminFetch('/api/admin/channels/sync-ramys', { method: 'POST' });
-    if (!res.ok) throw new Error('Falha ao sincronizar com Ramys/Iptv-Brasil-2026');
-    return await res.json();
+    const res = await this.syncLocalM3uChannels();
+    return { success: res.success, channelsCount: res.channelsCount, vodCount: 0, message: res.message };
   },
 
   async syncSaimoChannels(): Promise<{ success: boolean; count: number; message: string }> {
-    const res = await adminFetch('/api/admin/channels/sync-saimo', { method: 'POST' });
-    if (!res.ok) throw new Error('Falha ao sincronizar com Saimo-TV');
-    return await res.json();
+    const res = await this.syncLocalM3uChannels();
+    return { success: res.success, count: res.channelsCount, message: res.message };
   },
 
   // Channels Configuration File (JSON Editor & Validation)
@@ -457,7 +468,18 @@ export const api = {
     return await res.json();
   },
 
-  async syncVodM3U(options?: { m3uUrl?: string; source?: 'both' | 'ramys' | 'saimo' } | string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
+  async syncLocalM3u(payload?: { author?: string }): Promise<{
+    success: boolean;
+    channelsCount: number;
+    message: string;
+    sourcesCount?: number;
+    sourcesUsed?: string[];
+    lastUpdate?: any;
+  }> {
+    return this.syncLocalM3uChannels(payload?.author);
+  },
+
+  async syncVodM3U(options?: { m3uUrl?: string; source?: 'local_db' | 'custom' | string } | string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
     const payload = typeof options === 'string' ? { m3uUrl: options } : options || {};
     const res = await adminFetch('/api/admin/vod/sync-m3u', {
       method: 'POST',
@@ -855,6 +877,90 @@ export const api = {
       body: JSON.stringify({ url })
     });
     return await res.json();
+  },
+
+  // Validação Live de URL XMLTV (EPG) no Servidor
+  async validateXmltvUrl(url: string): Promise<{
+    success: boolean;
+    valid: boolean;
+    error?: string;
+    errorType?: string;
+    statusCode?: number;
+    latencyMs?: number;
+    channelsCount?: number;
+    programmesCount?: number;
+    timeRange?: {
+      earliestStartIso?: string;
+      latestStopIso?: string;
+      formattedRange?: string;
+      durationHours?: number;
+    };
+    sampleChannels?: Array<{ id: string; name: string; icon?: string }>;
+    sampleProgrammes?: Array<{ channelId: string; title: string; start: string; stop: string; desc?: string; category?: string }>;
+    fileSizeBytes?: number;
+    fileSizeFormatted?: string;
+    isGzip?: boolean;
+    contentType?: string;
+  }> {
+    const res = await adminFetch('/api/admin/epg/validate-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    return await res.json();
+  },
+
+  async getEpgSources(): Promise<{ success: boolean; sources: any[]; total: number }> {
+    const res = await adminFetch('/api/admin/epg/sources');
+    return await res.json();
+  },
+
+  async saveEpgSource(source: { id?: string; name: string; url: string; enabled?: boolean; priority?: number }): Promise<any> {
+    const res = await adminFetch('/api/admin/epg/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(source)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao salvar fonte EPG');
+    }
+    return data;
+  },
+
+  async updateEpgSource(id: string, updates: any): Promise<any> {
+    const res = await adminFetch(`/api/admin/epg/sources/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao atualizar fonte EPG');
+    }
+    return data;
+  },
+
+  async deleteEpgSource(id: string): Promise<any> {
+    const res = await adminFetch(`/api/admin/epg/sources/${id}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao excluir fonte EPG');
+    }
+    return data;
+  },
+
+  async syncEpgProgrammes(): Promise<{ success: boolean; message: string; updatedChannelsCount: number; totalChannels: number }> {
+    const res = await adminFetch('/api/admin/epg/sync', {
+      method: 'POST'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao sincronizar programação EPG');
+    }
+    return data;
   },
 
   async runM3uAutoUpdateNow(author?: string): Promise<{ success: boolean; message: string; stats?: any }> {

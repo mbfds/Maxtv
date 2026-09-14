@@ -893,15 +893,6 @@ export default function App() {
                 <span>Acesso Admin</span>
               </button>
             )}
-            <a 
-              href="https://github.com/gabrielsaimo/Saimo-TV" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-xs font-semibold px-3 py-2 border border-white/10 rounded-lg hover:bg-white/5 text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1.5"
-            >
-              <span>API Saimo-TV</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
           </div>
 
           <div className="text-center md:text-right">

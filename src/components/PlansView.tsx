@@ -121,7 +121,7 @@ export const PlansView: React.FC<PlansViewProps> = ({ onSelectPlan, isVip }) => 
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5">
             <h4 className="font-semibold text-white mb-1">Quais canais estão inclusos na MAXTV?</h4>
             <p className="text-slate-400 leading-relaxed">
-              O catálogo inclui todos os canais da API Saimo-TV (abertos, notícias, infantis, documentários e os principais canais esportivos de futebol brasileiro e internacional), além de filmes e séries em alta definição.
+              O catálogo inclui os canais ao vivo cadastrados na grade (abertos, notícias, infantis, documentários e os principais canais esportivos de futebol brasileiro e internacional), além de filmes e séries em alta definição.
             </p>
           </div>
 

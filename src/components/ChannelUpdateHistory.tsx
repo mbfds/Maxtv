@@ -10,7 +10,7 @@ import { ChannelUpdateHistoryEntry } from '../types';
 interface ChannelUpdateHistoryProps {
   onOpenConfigEditor?: () => void;
   onOpenRepoSync?: () => void;
-  onTriggerSync?: (source: 'ramys' | 'saimo') => void;
+  onTriggerSync?: () => void;
   refreshTrigger?: number;
 }
 
@@ -70,7 +70,7 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
   const filteredHistory = history.filter(item => {
     if (filterType !== 'all') {
       if (filterType === 'json' && item.type !== 'json_edit') return false;
-      if (filterType === 'sync' && item.type !== 'sync_ramys' && item.type !== 'sync_saimo') return false;
+      if (filterType === 'sync' && item.type !== 'm3u_sync' && item.type !== 'm3u_import' && item.type !== 'unify_grade') return false;
       if (filterType === 'manual' && !item.type.startsWith('manual')) return false;
     }
     if (!searchTerm.trim()) return true;
@@ -95,12 +95,15 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
             Edição JSON
           </span>
         );
-      case 'sync_ramys':
-      case 'sync_saimo':
+      case 'm3u_sync' as any:
+      case 'sync_ramys' as any:
+      case 'sync_saimo' as any:
+      case 'm3u_import':
+      case 'unify_grade':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/30">
             <RefreshCw className="w-2.5 h-2.5" />
-            Sincronização CDN
+            Sincronização M3U Local
           </span>
         );
       case 'manual_add':
@@ -162,8 +165,8 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
                 onClick={onOpenRepoSync}
                 className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition-all"
               >
-                <GitBranch className="w-3.5 h-3.5" />
-                <span>Atualizar Links (2026)</span>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Gerenciar Links M3U</span>
               </button>
             )}
 
@@ -269,9 +272,9 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
           </div>
         </div>
         <div className="p-4 rounded-xl bg-slate-900 border border-white/10">
-          <span className="text-[11px] text-slate-400">Sincronizações CDN</span>
+          <span className="text-[11px] text-slate-400">Sincronizações M3U</span>
           <div className="text-xl font-black text-cyan-400 mt-1">
-            {history.filter(h => h.type === 'sync_ramys' || h.type === 'sync_saimo').length}
+            {history.filter(h => h.type === 'm3u_sync' || h.type === 'm3u_import' || h.type === 'unify_grade' || (h.type as any) === 'sync_ramys' || (h.type as any) === 'sync_saimo').length}
           </div>
         </div>
       </div>

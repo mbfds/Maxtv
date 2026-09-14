@@ -327,6 +327,26 @@ export function initSqlite(): { success: boolean; dbPath: string; error?: string
       CREATE INDEX IF NOT EXISTS idx_audit_admin ON audit_logs(admin_email);
     `);
 
+    // 13. EPG Sources Table (Fontes de Guia de Programação XMLTV)
+    dbInstance.exec(`
+      CREATE TABLE IF NOT EXISTS epg_sources (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        url TEXT UNIQUE NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        priority INTEGER DEFAULT 1,
+        channels_count INTEGER DEFAULT 0,
+        programmes_count INTEGER DEFAULT 0,
+        last_validated_at TEXT,
+        last_status TEXT DEFAULT 'unknown',
+        last_error TEXT,
+        time_range TEXT,
+        sample_channels TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+    `);
+
     console.log('[SQLite] Banco de dados SQLite 3 inicializado com sucesso em:', DB_FILE);
     return { success: true, dbPath: DB_FILE };
   } catch (err: any) {
@@ -777,6 +797,11 @@ export function sqliteGetM3uLogs(limit = 100): any[] {
 // -------------------------------------------------------------
 // CHANNELS CRUD (PERSISTÊNCIA SQLITE PARA A GRADE DE CANAIS)
 // -------------------------------------------------------------
+function isBannedTestStream(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return url.includes('test-streams.mux.dev') || url.includes('x36xhzz');
+}
+
 export function sqliteSaveAllChannels(channels: any[]): void {
   const db = getSqliteDb();
   const now = new Date().toISOString();
@@ -810,18 +835,34 @@ export function sqliteSaveAllChannels(channels: any[]): void {
 
     let index = 0;
     for (const ch of channels) {
+      let sources = Array.isArray(ch.sources)
+        ? ch.sources.filter((s: any) => s && s.url && !isBannedTestStream(s.url))
+        : [];
+      let streamUrl = ch.streamUrl || '';
+      let backupStreamUrl = ch.backupStreamUrl || null;
+
+      if (isBannedTestStream(streamUrl)) {
+        streamUrl = sources.length > 0 ? sources[0].url : '';
+      }
+      if (isBannedTestStream(backupStreamUrl)) {
+        backupStreamUrl = sources.length > 1 ? sources[1].url : null;
+      }
+      if (!streamUrl && sources.length > 0) {
+        streamUrl = sources[0].url;
+      }
+
       stmt.run(
         ch.id,
         ch.name,
         ch.category || 'Geral',
         ch.logo || '',
-        ch.streamUrl || '',
-        ch.backupStreamUrl || null,
+        streamUrl,
+        backupStreamUrl,
         ch.quality || 'HD',
         ch.epgId || null,
         ch.isVip ? 1 : 0,
         ch.isAdult ? 1 : 0,
-        ch.sources ? JSON.stringify(ch.sources) : null,
+        sources.length > 0 ? JSON.stringify(sources) : null,
         ch.lastChecked || now,
         ch.isWorking === false ? 0 : 1,
         index++,
@@ -849,23 +890,41 @@ export function sqliteGetChannelsCount(): number {
 export function sqliteGetAllChannels(): any[] {
   const db = getSqliteDb();
   const rows = db.prepare('SELECT * FROM channels ORDER BY sort_order ASC, name ASC').all() as any[];
-  return rows.map(r => ({
-    id: r.id,
-    name: r.name,
-    category: r.category,
-    logo: r.logo,
-    streamUrl: r.stream_url,
-    backupStreamUrl: r.backup_stream_url || undefined,
-    quality: r.quality || 'HD',
-    epgId: r.epg_id || undefined,
-    isVip: Boolean(r.is_vip),
-    isAdult: Boolean(r.is_adult),
-    sources: r.sources_json ? JSON.parse(r.sources_json) : undefined,
-    lastChecked: r.last_checked || undefined,
-    isWorking: Boolean(r.is_working),
-    createdAt: r.created_at,
-    updatedAt: r.updated_at
-  }));
+  return rows.map(r => {
+    let sources = r.sources_json ? JSON.parse(r.sources_json) : undefined;
+    if (Array.isArray(sources)) {
+      sources = sources.filter((s: any) => s && s.url && !isBannedTestStream(s.url));
+    }
+    let streamUrl = r.stream_url || '';
+    let backupStreamUrl = r.backup_stream_url || undefined;
+    if (isBannedTestStream(streamUrl)) {
+      streamUrl = (sources && sources.length > 0) ? sources[0].url : '';
+    }
+    if (isBannedTestStream(backupStreamUrl)) {
+      backupStreamUrl = (sources && sources.length > 1) ? sources[1].url : undefined;
+    }
+    if (!streamUrl && sources && sources.length > 0) {
+      streamUrl = sources[0].url;
+    }
+
+    return {
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      logo: r.logo,
+      streamUrl: streamUrl,
+      backupStreamUrl: backupStreamUrl,
+      quality: r.quality || 'HD',
+      epgId: r.epg_id || undefined,
+      isVip: Boolean(r.is_vip),
+      isAdult: Boolean(r.is_adult),
+      sources: sources && sources.length > 0 ? sources : undefined,
+      lastChecked: r.last_checked || undefined,
+      isWorking: Boolean(r.is_working),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    };
+  });
 }
 
 // -------------------------------------------------------------
@@ -1341,6 +1400,159 @@ export function sqliteGetTopWatchedChannelsFromSessions(limit = 10): any[] {
   } catch (err) {
     console.warn('[SQLite 3] Erro ao buscar top canais de sessões:', err);
     return [];
+  }
+}
+
+// -------------------------------------------------------------
+// EPG (XMLTV) SOURCES REPOSITORY
+// -------------------------------------------------------------
+export interface SqliteEpgSourceDoc {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  priority?: number;
+  channelsCount?: number;
+  programmesCount?: number;
+  lastValidatedAt?: string;
+  lastStatus?: 'valid' | 'invalid' | 'unknown';
+  lastError?: string;
+  timeRange?: string;
+  sampleChannels?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export function sqliteSaveEpgSource(source: SqliteEpgSourceDoc): SqliteEpgSourceDoc {
+  const db = getSqliteDb();
+  const now = new Date().toISOString();
+
+  const stmt = db.prepare(`
+    INSERT INTO epg_sources (
+      id, name, url, enabled, priority, channels_count, programmes_count,
+      last_validated_at, last_status, last_error, time_range, sample_channels, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
+    ON CONFLICT(url) DO UPDATE SET
+      name = excluded.name,
+      enabled = excluded.enabled,
+      priority = excluded.priority,
+      channels_count = excluded.channels_count,
+      programmes_count = excluded.programmes_count,
+      last_validated_at = excluded.last_validated_at,
+      last_status = excluded.last_status,
+      last_error = excluded.last_error,
+      time_range = excluded.time_range,
+      sample_channels = excluded.sample_channels,
+      updated_at = excluded.updated_at
+  `);
+
+  stmt.run(
+    source.id,
+    source.name,
+    source.url.trim(),
+    source.enabled ? 1 : 0,
+    source.priority || 1,
+    source.channelsCount || 0,
+    source.programmesCount || 0,
+    source.lastValidatedAt || now,
+    source.lastStatus || 'valid',
+    source.lastError || null,
+    source.timeRange || null,
+    source.sampleChannels ? JSON.stringify(source.sampleChannels) : null,
+    source.createdAt || now,
+    now
+  );
+
+  return source;
+}
+
+export function sqliteGetAllEpgSources(): SqliteEpgSourceDoc[] {
+  const db = getSqliteDb();
+  try {
+    const rows = db.prepare('SELECT * FROM epg_sources ORDER BY priority ASC, created_at ASC').all() as any[];
+    return rows.map(r => {
+      let sampleChannels: string[] = [];
+      try {
+        if (r.sample_channels) sampleChannels = JSON.parse(r.sample_channels);
+      } catch {}
+
+      return {
+        id: r.id,
+        name: r.name,
+        url: r.url,
+        enabled: Boolean(r.enabled),
+        priority: r.priority,
+        channelsCount: r.channels_count || 0,
+        programmesCount: r.programmes_count || 0,
+        lastValidatedAt: r.last_validated_at || undefined,
+        lastStatus: (r.last_status as any) || 'unknown',
+        lastError: r.last_error || undefined,
+        timeRange: r.time_range || undefined,
+        sampleChannels,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      };
+    });
+  } catch (err) {
+    console.warn('[SQLite] Erro ao carregar fontes EPG:', err);
+    return [];
+  }
+}
+
+export function sqliteGetEpgSourceById(idOrUrl: string): SqliteEpgSourceDoc | null {
+  const db = getSqliteDb();
+  try {
+    const r = db.prepare('SELECT * FROM epg_sources WHERE id = ? OR url = ?').get(idOrUrl, idOrUrl) as any;
+    if (!r) return null;
+    let sampleChannels: string[] = [];
+    try {
+      if (r.sample_channels) sampleChannels = JSON.parse(r.sample_channels);
+    } catch {}
+
+    return {
+      id: r.id,
+      name: r.name,
+      url: r.url,
+      enabled: Boolean(r.enabled),
+      priority: r.priority,
+      channelsCount: r.channels_count || 0,
+      programmesCount: r.programmes_count || 0,
+      lastValidatedAt: r.last_validated_at || undefined,
+      lastStatus: (r.last_status as any) || 'unknown',
+      lastError: r.last_error || undefined,
+      timeRange: r.time_range || undefined,
+      sampleChannels,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function sqliteDeleteEpgSource(idOrUrl: string): boolean {
+  const db = getSqliteDb();
+  try {
+    const stmt = db.prepare('DELETE FROM epg_sources WHERE id = ? OR url = ?');
+    stmt.run(idOrUrl, idOrUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function sqliteUpdateEpgSource(id: string, updates: Partial<SqliteEpgSourceDoc>): boolean {
+  const db = getSqliteDb();
+  try {
+    const current = sqliteGetEpgSourceById(id);
+    if (!current) return false;
+    const merged = { ...current, ...updates };
+    sqliteSaveEpgSource(merged);
+    return true;
+  } catch {
+    return false;
   }
 }
 
