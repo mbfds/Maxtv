@@ -93,11 +93,11 @@ function formatDateBr(d: Date): string {
 
 /**
  * Utilitário completo para validar links de XMLTV (EPG) antes de salvar no sistema.
- * Verifica conectividade, status HTTP, descompressão gzip transparente e estrutura XMLTV válida.
+ * Suporta arquivos de grande porte (50MB - 250MB+), descompressão GZIP e timeouts estendidos.
  */
 export async function validateXmltvUrl(
   url: string,
-  timeoutMs: number = 20000
+  timeoutMs: number = 60000
 ): Promise<XmltvValidationResult> {
   const startTime = Date.now();
   const cleanUrl = (url || '').trim();
@@ -518,9 +518,9 @@ export async function validateXmltvUrl(
 }
 
 /**
- * Baixa e decodifica o texto completo de um XMLTV (suporta gzip).
+ * Baixa e decodifica o texto completo de um XMLTV (suporta gzip e arquivos grandes).
  */
-export async function fetchXmltvText(url: string, timeoutMs: number = 30000): Promise<string> {
+export async function fetchXmltvText(url: string, timeoutMs: number = 120000): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 

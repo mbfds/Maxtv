@@ -345,6 +345,18 @@ export function initSqlite(): { success: boolean; dbPath: string; error?: string
         created_at TEXT,
         updated_at TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS epg_ai_descriptions (
+        id TEXT PRIMARY KEY,
+        program_title TEXT NOT NULL,
+        channel_name TEXT,
+        category TEXT,
+        description TEXT NOT NULL,
+        tags TEXT,
+        highlights TEXT,
+        rating TEXT,
+        created_at TEXT
+      );
     `);
 
     console.log('[SQLite] Banco de dados SQLite 3 inicializado com sucesso em:', DB_FILE);
@@ -1554,5 +1566,82 @@ export function sqliteUpdateEpgSource(id: string, updates: Partial<SqliteEpgSour
   } catch {
     return false;
   }
+}
+
+export interface SqliteEpgAiDescriptionDoc {
+  id: string;
+  programTitle: string;
+  channelName?: string;
+  category?: string;
+  description: string;
+  tags?: string[];
+  highlights?: string[];
+  rating?: string;
+  createdAt?: string;
+}
+
+export function sqliteSaveEpgAiDescription(data: SqliteEpgAiDescriptionDoc): void {
+  const db = getSqliteDb();
+  const stmt = db.prepare(`
+    INSERT INTO epg_ai_descriptions (
+      id, program_title, channel_name, category, description, tags, highlights, rating, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      description = excluded.description,
+      tags = excluded.tags,
+      highlights = excluded.highlights,
+      rating = excluded.rating,
+      created_at = excluded.created_at
+  `);
+  stmt.run(
+    data.id,
+    data.programTitle,
+    data.channelName || '',
+    data.category || '',
+    data.description,
+    JSON.stringify(data.tags || []),
+    JSON.stringify(data.highlights || []),
+    data.rating || 'Livre',
+    data.createdAt || new Date().toISOString()
+  );
+}
+
+export function sqliteGetEpgAiDescription(programTitle: string, channelName?: string): SqliteEpgAiDescriptionDoc | null {
+  const db = getSqliteDb();
+  if (!programTitle) return null;
+
+  if (channelName) {
+    const idWithChan = `${channelName.toLowerCase().trim()}::${programTitle.toLowerCase().trim()}`;
+    const stmt = db.prepare('SELECT * FROM epg_ai_descriptions WHERE id = ? LIMIT 1');
+    const row = stmt.get(idWithChan) as any;
+    if (row) {
+      return {
+        id: row.id,
+        programTitle: row.program_title,
+        channelName: row.channel_name,
+        category: row.category,
+        description: row.description,
+        tags: row.tags ? JSON.parse(row.tags) : [],
+        highlights: row.highlights ? JSON.parse(row.highlights) : [],
+        rating: row.rating,
+        createdAt: row.created_at
+      };
+    }
+  }
+
+  const stmt = db.prepare('SELECT * FROM epg_ai_descriptions WHERE LOWER(program_title) = ? LIMIT 1');
+  const row = stmt.get(programTitle.toLowerCase().trim()) as any;
+  if (!row) return null;
+  return {
+    id: row.id,
+    programTitle: row.program_title,
+    channelName: row.channel_name,
+    category: row.category,
+    description: row.description,
+    tags: row.tags ? JSON.parse(row.tags) : [],
+    highlights: row.highlights ? JSON.parse(row.highlights) : [],
+    rating: row.rating,
+    createdAt: row.created_at
+  };
 }
 

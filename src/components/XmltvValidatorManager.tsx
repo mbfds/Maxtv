@@ -375,6 +375,10 @@ export const XmltvValidatorManager: React.FC<XmltvValidatorManagerProps> = ({
                   <ShieldCheck className="w-3 h-3" />
                   SQLite Persistente
                 </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center gap-1">
+                  <Zap className="w-3 h-3" />
+                  Suporta até 250MB (.xml / .xml.gz)
+                </span>
               </div>
               <p className="text-xs text-slate-400 mt-1 max-w-2xl">
                 Valida a acessibilidade HTTP, descompressão GZIP e a integridade da estrutura XML

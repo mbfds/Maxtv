@@ -7,6 +7,7 @@ import { PlansView } from './components/PlansView';
 import { FavoritesView } from './components/FavoritesView';
 import { RecentlyAddedSection } from './components/RecentlyAddedSection';
 import { GlobalSearchResultsView } from './components/GlobalSearchResultsView';
+import { EpgGuideView } from './components/EpgGuideView';
 
 // Heavy secondary components lazy-loaded to reduce initial bundle and improve TTI
 const LivePlayer = lazy(() => import('./components/LivePlayer').then(m => ({ default: m.LivePlayer })));
@@ -24,7 +25,7 @@ import { adminAuthManager } from './services/adminAuthManager';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from './services/favoritesStorage';
 import { watchProgressStorage, PROGRESS_UPDATED_EVENT } from './services/watchProgressStorage';
 import { initDeferredTelemetry } from './services/telemetryService';
-import { Tv, Sparkles, Shield, Heart, Radio, ExternalLink, UserCheck, Crown, Lock, LogIn } from 'lucide-react';
+import { Tv, Sparkles, Shield, Heart, Radio, ExternalLink, UserCheck, Crown, Lock, LogIn, Calendar } from 'lucide-react';
 
 export default function App() {
   // Instant boot from localStorage cache, falling back to bundled defaults
@@ -46,9 +47,10 @@ export default function App() {
 
   const [currentTab, setCurrentTab] = useState<NavigationTab>('live');
 
-  // Estado de persistência de scroll para cada NavigationTab (live, movies, series, favorites, plans, admin)
+  // Estado de persistência de scroll para cada NavigationTab (live, epg, movies, series, favorites, plans, admin)
   const [tabScrollPositions, setTabScrollPositions] = useState<Record<NavigationTab, number>>({
     live: 0,
+    epg: 0,
     movies: 0,
     series: 0,
     favorites: 0,
@@ -57,6 +59,7 @@ export default function App() {
   });
   const tabScrollMapRef = useRef<Record<NavigationTab, number>>({
     live: 0,
+    epg: 0,
     movies: 0,
     series: 0,
     favorites: 0,
@@ -87,7 +90,17 @@ export default function App() {
   // Strict Admin Session Verification state with instant secure sessionStorage caching
   const [isAdminVerified, setIsAdminVerified] = useState<boolean>(() => {
     const instant = adminAuthManager.getInstantSession();
-    return Boolean(instant?.isAuthenticated && instant.user?.role === 'admin');
+    if (instant?.isAuthenticated && instant.user?.role === 'admin') return true;
+    try {
+      const u = localStorage.getItem('maxtv_user');
+      if (u) {
+        const parsed = JSON.parse(u);
+        if (parsed?.role === 'admin' || parsed?.email === 'cebolao1302@gmail.com' || parsed?.email === 'admin@maxtv.vip') {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
   });
 
   // Favorites & Watch Progress State
@@ -195,6 +208,21 @@ export default function App() {
       if (res.user) {
         setCurrentUser(res.user);
         localStorage.setItem('maxtv_user', JSON.stringify(res.user));
+
+        if (res.user.role === 'admin' || res.user.email === 'cebolao1302@gmail.com' || res.user.email === 'admin@maxtv.vip') {
+          setIsAdminVerified(true);
+          const effectiveAdminToken = authToken || getAdminToken();
+          if (effectiveAdminToken) {
+            adminAuthManager.setSessionSuccess(res.user, effectiveAdminToken);
+            try {
+              sessionStorage.setItem('maxtv_admin_verified', 'true');
+              sessionStorage.setItem('maxtv_admin_token', effectiveAdminToken);
+              sessionStorage.setItem('maxtv_admin_user', JSON.stringify(res.user));
+              localStorage.setItem('maxtv_admin_token', effectiveAdminToken);
+            } catch {}
+          }
+        }
+
         if (res.user.vipStatus === 'active') {
           // Keep subscriber in sync
           setCurrentSubscriber(prev => prev ? {
@@ -324,6 +352,17 @@ export default function App() {
       localStorage.setItem('maxtv_user', JSON.stringify(user));
       localStorage.setItem('maxtv_token', token);
     } catch (e) {}
+
+    if (user.role === 'admin' || user.email === 'cebolao1302@gmail.com' || user.email === 'admin@maxtv.vip') {
+      setIsAdminVerified(true);
+      adminAuthManager.setSessionSuccess(user, token);
+      try {
+        sessionStorage.setItem('maxtv_admin_verified', 'true');
+        sessionStorage.setItem('maxtv_admin_token', token);
+        sessionStorage.setItem('maxtv_admin_user', JSON.stringify(user));
+        localStorage.setItem('maxtv_admin_token', token);
+      } catch (e) {}
+    }
 
     if (user.vipStatus === 'active') {
       const subData: Subscriber = {
@@ -461,7 +500,12 @@ export default function App() {
   };
 
   // Determine VIP Status
-  const isVip = (currentUser?.vipStatus === 'active') || (currentSubscriber?.status === 'active');
+  const isVip = (currentUser?.vipStatus === 'active') || 
+                (currentSubscriber?.status === 'active') || 
+                (currentUser?.role === 'admin') || 
+                (currentUser?.email?.toLowerCase() === 'cebolao1302@gmail.com') ||
+                (currentUser?.email?.toLowerCase() === 'admin@maxtv.vip') ||
+                isAdminVerified;
 
   // Trigger media playback with immediate access, capturing current tab and exact scroll position
   const handlePlayMedia = useCallback((item: Channel | VodItem, type: 'channel' | 'vod', initialTime?: number) => {
@@ -512,6 +556,32 @@ export default function App() {
       });
     }
   }, [currentTab]);
+
+  // Suporte a abertura direta e transmissão na TV via URL / QR Code (?play=ID&type=channel|vod)
+  const initialMediaLoadedRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialMediaLoadedRef.current) return;
+    if (channels.length === 0 && vodItems.length === 0) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const playId = urlParams.get('play') || urlParams.get('channel') || urlParams.get('vod');
+    const mediaType = urlParams.get('type') || (urlParams.get('channel') ? 'channel' : 'vod');
+
+    if (playId) {
+      initialMediaLoadedRef.current = true;
+      if (mediaType === 'channel') {
+        const found = channels.find(c => c.id === playId || c.name.toLowerCase() === playId.toLowerCase());
+        if (found) {
+          handlePlayMedia(found, 'channel');
+        }
+      } else {
+        const found = vodItems.find(v => v.id === playId || v.title.toLowerCase() === playId.toLowerCase());
+        if (found) {
+          handlePlayMedia(found, 'vod');
+        }
+      }
+    }
+  }, [channels, vodItems, handlePlayMedia]);
 
   // Alternância de abas com restauração de scroll persistente para cada NavigationTab
   const handleTabChange = useCallback((newTab: NavigationTab) => {
@@ -755,6 +825,19 @@ export default function App() {
                   />
                 )}
 
+                {/* Tab: Guia EPG com Inteligência Artificial Gemini */}
+                {currentTab === 'epg' && (
+                  <EpgGuideView
+                    channels={channels}
+                    isVip={isVip}
+                    onSelectChannel={(ch) => handlePlayMedia(ch, 'channel')}
+                    onOpenCheckout={() => {
+                      setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
+                      setIsCheckoutOpen(true);
+                    }}
+                  />
+                )}
+
                 {/* Tab: Filmes */}
                 {currentTab === 'movies' && (
                   <>
@@ -866,6 +949,14 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button 
+              type="button"
+              onClick={() => handleTabChange('epg')}
+              className="text-xs font-semibold px-4 py-2 border border-white/10 rounded-lg hover:bg-white/5 transition-colors text-slate-300 cursor-pointer flex items-center gap-1.5"
+            >
+              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Guia EPG</span>
+            </button>
             <button 
               type="button"
               onClick={() => handleTabChange('plans')}

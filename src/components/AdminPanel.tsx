@@ -6,10 +6,11 @@ import {
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
   Activity, Film, WifiOff, FileCode, GitBranch, Layers, Lock,
-  Download, Database, HardDrive, Server, Calendar
+  Download, Database, HardDrive, Server, Calendar, Pencil, Wand2
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
+import { cleanStreamUrl, inspectAndCleanUrl, sanitizeStreamUrl } from '../utils/urlSanitizer';
 import { ChannelHealthChecker } from './ChannelHealthChecker';
 import { ChannelConfigEditor } from './ChannelConfigEditor';
 import { ChannelUpdateHistory } from './ChannelUpdateHistory';
@@ -112,6 +113,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
 
   const [isAddChannelModalOpen, setIsAddChannelModalOpen] = useState<boolean>(false);
   const [newChannelData, setNewChannelData] = useState({ name: '', category: 'Abertos', logo: '', streamUrl: '', referer: '', isVipOnly: false });
+
+  // Edit Channel Modal State
+  const [isEditChannelModalOpen, setIsEditChannelModalOpen] = useState<boolean>(false);
+  const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
+  const [editChannelData, setEditChannelData] = useState({
+    id: '',
+    name: '',
+    category: 'Abertos',
+    logo: '',
+    streamUrl: '',
+    referer: '',
+    isVipOnly: false
+  });
 
   // VOD Sync Modal State
   const [isSyncVodModalOpen, setIsSyncVodModalOpen] = useState<boolean>(false);
@@ -363,18 +377,124 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
     }
   };
 
+  // Função central de limpeza e higienização de URLs no AdminPanel
+  const handleCleanStreamUrl = (
+    url: string,
+    onCleaned: (cleaned: string) => void,
+    fieldLabel: string = 'Stream'
+  ) => {
+    if (!url || !url.trim()) {
+      showFeedback(`O campo ${fieldLabel} está em branco.`);
+      return;
+    }
+    const report = inspectAndCleanUrl(url);
+    if (report.wasModified) {
+      onCleaned(report.cleanedUrl);
+      showFeedback(`✨ URL de ${fieldLabel} limpa com sucesso! Espaços acidentais e caracteres invisíveis foram removidos.`);
+    } else if (report.isValid) {
+      showFeedback(`✅ URL de ${fieldLabel} já está limpa e pronta para o player.`);
+    } else {
+      showFeedback(`⚠️ ${report.reason || 'Verifique se a URL inicia com http:// ou https://'}`);
+    }
+  };
+
   const handleAddChannel = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await api.addCustomChannel(newChannelData);
+      // Limpeza profunda de URL removendo espaços em branco acidentais e caracteres de controle
+      const streamReport = inspectAndCleanUrl(newChannelData.streamUrl);
+      const sanitizedStreamUrl = streamReport.cleanedUrl;
+      const sanitizedLogo = cleanStreamUrl(newChannelData.logo);
+
+      if (!sanitizedStreamUrl) {
+        alert('A URL do stream é obrigatória.');
+        return;
+      }
+
+      if (!streamReport.isValid) {
+        alert(`URL do stream inválida: ${streamReport.reason || 'Certifique-se de que inicia com http:// ou https://'}`);
+        return;
+      }
+
+      const payload = {
+        ...newChannelData,
+        name: newChannelData.name.trim(),
+        streamUrl: sanitizedStreamUrl,
+        logo: sanitizedLogo,
+        referer: newChannelData.referer?.trim() || undefined
+      };
+
+      const res = await api.addCustomChannel(payload);
       if (res.success) {
         setChannels(prev => [res.channel, ...prev]);
         setIsAddChannelModalOpen(false);
         setNewChannelData({ name: '', category: 'Abertos', logo: '', streamUrl: '', referer: '', isVipOnly: false });
-        showFeedback('Canal adicionado à grade com sucesso!');
+        if (streamReport.wasModified) {
+          showFeedback('Canal adicionado! URL higienizada automaticamente (espaços/caracteres invisíveis removidos).');
+        } else {
+          showFeedback('Canal adicionado à grade com sucesso!');
+        }
       }
     } catch (e: any) {
       alert(e.message);
+    }
+  };
+
+  const handleOpenEditChannel = (ch: Channel) => {
+    setEditingChannel(ch);
+    const currentUrl = ch.sources?.[0]?.url || (ch as any).streamUrl || '';
+    setEditChannelData({
+      id: ch.id,
+      name: ch.name,
+      category: ch.category || 'Abertos',
+      logo: ch.logo || '',
+      streamUrl: currentUrl,
+      referer: ch.sources?.[0]?.referer || '',
+      isVipOnly: Boolean(ch.isVipOnly)
+    });
+    setIsEditChannelModalOpen(true);
+  };
+
+  const handleUpdateChannel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingChannel) return;
+    try {
+      // Limpeza profunda de URL antes de salvar
+      const streamReport = inspectAndCleanUrl(editChannelData.streamUrl);
+      const sanitizedStreamUrl = streamReport.cleanedUrl;
+      const sanitizedLogo = cleanStreamUrl(editChannelData.logo);
+
+      if (!sanitizedStreamUrl) {
+        alert('A URL do stream é obrigatória.');
+        return;
+      }
+
+      if (!streamReport.isValid) {
+        alert(`URL do stream inválida: ${streamReport.reason || 'Certifique-se de que inicia com http:// ou https://'}`);
+        return;
+      }
+
+      const res = await api.updateChannel(editingChannel.id, {
+        name: editChannelData.name.trim(),
+        category: editChannelData.category,
+        logo: sanitizedLogo,
+        streamUrl: sanitizedStreamUrl,
+        referer: editChannelData.referer?.trim() || undefined,
+        isVipOnly: editChannelData.isVipOnly
+      });
+
+      if (res.success) {
+        setChannels(prev => prev.map(c => (c.id === editingChannel.id ? res.channel : c)));
+        setIsEditChannelModalOpen(false);
+        setEditingChannel(null);
+        if (streamReport.wasModified) {
+          showFeedback('Canal atualizado! URL higienizada e corrigida para garantir reprodução no player.');
+        } else {
+          showFeedback('Canal atualizado com sucesso!');
+        }
+      }
+    } catch (e: any) {
+      alert(e.message || 'Erro ao atualizar canal');
     }
   };
 
@@ -1958,6 +2078,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                           <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
+                              onClick={() => handleOpenEditChannel(ch)}
+                              className="p-1.5 rounded-full bg-slate-800 hover:bg-indigo-900/60 text-slate-400 hover:text-indigo-300 transition-colors"
+                              title="Editar Canal e URL do Stream (com Limpeza de URL)"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => onPreviewChannel(ch)}
                               className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
                               title="Testar Player"
@@ -2379,24 +2507,92 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 block mb-1">URL do Stream (HLS .m3u8 ou MPEG-TS .ts)</label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://servidor.com/live/canal/playlist.m3u8"
-                  value={newChannelData.streamUrl}
-                  onChange={e => setNewChannelData({ ...newChannelData, streamUrl: e.target.value })}
-                  className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10 font-mono text-[11px]"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300">URL do Stream (HLS .m3u8 ou MPEG-TS .ts)</label>
+                  <button
+                    type="button"
+                    onClick={() => handleCleanStreamUrl(newChannelData.streamUrl, val => setNewChannelData({ ...newChannelData, streamUrl: val }), 'Stream')}
+                    className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium transition-colors"
+                    title="Remover espaços em branco acidentais e caracteres de controle invisíveis"
+                  >
+                    <Wand2 className="w-3 h-3" />
+                    <span>Limpar URL</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="https://servidor.com/live/canal/playlist.m3u8"
+                    value={newChannelData.streamUrl}
+                    onChange={e => setNewChannelData({ ...newChannelData, streamUrl: e.target.value })}
+                    onBlur={() => {
+                      if (newChannelData.streamUrl) {
+                        const cleaned = cleanStreamUrl(newChannelData.streamUrl);
+                        if (cleaned !== newChannelData.streamUrl) {
+                          setNewChannelData({ ...newChannelData, streamUrl: cleaned });
+                          showFeedback('✨ URL de stream limpa automaticamente ao sair do campo.');
+                        }
+                      }
+                    }}
+                    className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10 font-mono text-[11px] focus:outline-none focus:border-teal-500 pr-9"
+                  />
+                  {newChannelData.streamUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleCleanStreamUrl(newChannelData.streamUrl, val => setNewChannelData({ ...newChannelData, streamUrl: val }), 'Stream')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-300 p-1 transition-colors"
+                      title="Higienizar URL agora"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Alerta inteligente de espaços acidentais ou caracteres de controle */}
+                {newChannelData.streamUrl && inspectAndCleanUrl(newChannelData.streamUrl).wasModified && (
+                  <div className="mt-1.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span className="truncate">Espaços ou caracteres de controle detectados. Serão removidos ao salvar!</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewChannelData({ ...newChannelData, streamUrl: cleanStreamUrl(newChannelData.streamUrl) })}
+                      className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-bold flex-shrink-0"
+                    >
+                      Limpar Agora
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 block mb-1">Logo URL</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300">Logo URL</label>
+                  {newChannelData.logo && (
+                    <button
+                      type="button"
+                      onClick={() => handleCleanStreamUrl(newChannelData.logo, val => setNewChannelData({ ...newChannelData, logo: val }), 'Logo')}
+                      className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium"
+                    >
+                      <Wand2 className="w-3 h-3" /> Limpar
+                    </button>
+                  )}
+                </div>
                 <input
-                  type="url"
+                  type="text"
                   placeholder="https://exemplo.com/logo.png"
                   value={newChannelData.logo}
                   onChange={e => setNewChannelData({ ...newChannelData, logo: e.target.value })}
+                  onBlur={() => {
+                    if (newChannelData.logo) {
+                      const cleaned = cleanStreamUrl(newChannelData.logo);
+                      if (cleaned !== newChannelData.logo) {
+                        setNewChannelData({ ...newChannelData, logo: cleaned });
+                      }
+                    }
+                  }}
                   className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10"
                 />
               </div>
@@ -2414,6 +2610,190 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
                 >
                   Salvar Canal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR CANAL COM LIMPEZA DE URL */}
+      {isEditChannelModalOpen && editingChannel && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Editar Canal da Grade</h3>
+                  <p className="text-xs text-slate-400">Atualize dados e higienize links de stream</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditChannelModalOpen(false);
+                  setEditingChannel(null);
+                }}
+                className="p-1 rounded-full hover:bg-white/10 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateChannel} className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">Nome do Canal</label>
+                <input
+                  type="text"
+                  required
+                  value={editChannelData.name}
+                  onChange={e => setEditChannelData({ ...editChannelData, name: e.target.value })}
+                  className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1">Categoria</label>
+                  <select
+                    value={editChannelData.category}
+                    onChange={e => setEditChannelData({ ...editChannelData, category: e.target.value })}
+                    className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10"
+                  >
+                    <option value="Abertos">Abertos</option>
+                    <option value="Esportes">Esportes</option>
+                    <option value="Notícias">Notícias</option>
+                    <option value="Filmes & Séries">Filmes & Séries</option>
+                    <option value="Infantis">Infantis</option>
+                    <option value="Documentários">Documentários</option>
+                    <option value="Variedades & Música">Variedades & Música</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1">Tipo de Acesso</label>
+                  <select
+                    value={editChannelData.isVipOnly ? 'vip' : 'free'}
+                    onChange={e => setEditChannelData({ ...editChannelData, isVipOnly: e.target.value === 'vip' })}
+                    className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10"
+                  >
+                    <option value="free">Aberto a Todos</option>
+                    <option value="vip">Exclusivo VIP</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300">URL do Stream (HLS .m3u8 ou MPEG-TS .ts)</label>
+                  <button
+                    type="button"
+                    onClick={() => handleCleanStreamUrl(editChannelData.streamUrl, val => setEditChannelData({ ...editChannelData, streamUrl: val }), 'Stream')}
+                    className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium transition-colors"
+                    title="Remover espaços em branco e caracteres invisíveis de controle"
+                  >
+                    <Wand2 className="w-3 h-3" />
+                    <span>Limpar URL</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="https://servidor.com/live/canal/playlist.m3u8"
+                    value={editChannelData.streamUrl}
+                    onChange={e => setEditChannelData({ ...editChannelData, streamUrl: e.target.value })}
+                    onBlur={() => {
+                      if (editChannelData.streamUrl) {
+                        const cleaned = cleanStreamUrl(editChannelData.streamUrl);
+                        if (cleaned !== editChannelData.streamUrl) {
+                          setEditChannelData({ ...editChannelData, streamUrl: cleaned });
+                          showFeedback('✨ URL de stream limpa automaticamente ao sair do campo.');
+                        }
+                      }
+                    }}
+                    className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10 font-mono text-[11px] focus:outline-none focus:border-teal-500 pr-9"
+                  />
+                  {editChannelData.streamUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleCleanStreamUrl(editChannelData.streamUrl, val => setEditChannelData({ ...editChannelData, streamUrl: val }), 'Stream')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-teal-300 p-1 transition-colors"
+                      title="Higienizar URL agora"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Alerta inteligente de espaços acidentais ou caracteres de controle */}
+                {editChannelData.streamUrl && inspectAndCleanUrl(editChannelData.streamUrl).wasModified && (
+                  <div className="mt-1.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <span className="truncate">Espaços ou caracteres de controle detectados. Serão removidos ao salvar!</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditChannelData({ ...editChannelData, streamUrl: cleanStreamUrl(editChannelData.streamUrl) })}
+                      className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-bold flex-shrink-0"
+                    >
+                      Limpar Agora
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300">Logo URL</label>
+                  {editChannelData.logo && (
+                    <button
+                      type="button"
+                      onClick={() => handleCleanStreamUrl(editChannelData.logo, val => setEditChannelData({ ...editChannelData, logo: val }), 'Logo')}
+                      className="text-[11px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium"
+                    >
+                      <Wand2 className="w-3 h-3" /> Limpar
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="https://exemplo.com/logo.png"
+                  value={editChannelData.logo}
+                  onChange={e => setEditChannelData({ ...editChannelData, logo: e.target.value })}
+                  onBlur={() => {
+                    if (editChannelData.logo) {
+                      const cleaned = cleanStreamUrl(editChannelData.logo);
+                      if (cleaned !== editChannelData.logo) {
+                        setEditChannelData({ ...editChannelData, logo: cleaned });
+                      }
+                    }
+                  }}
+                  className="w-full bg-slate-950 text-xs text-white rounded-xl px-3 py-2 border border-white/10"
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditChannelModalOpen(false);
+                    setEditingChannel(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Salvar Alterações
                 </button>
               </div>
             </form>

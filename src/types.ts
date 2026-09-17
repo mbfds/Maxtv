@@ -212,7 +212,7 @@ export interface ChannelHealthSummary {
   lastChecked?: string;
 }
 
-export type NavigationTab = 'live' | 'movies' | 'series' | 'favorites' | 'plans' | 'admin';
+export type NavigationTab = 'live' | 'movies' | 'series' | 'favorites' | 'plans' | 'admin' | 'epg';
 
 export interface WatchProgress {
   id: string; // vod id
@@ -502,6 +502,45 @@ export interface RealtimeDashboardData {
   topChannels: TopChannelMetric[];
   recentAudits: AuditLogEntry[];
 }
+
+export interface EpgProgram {
+  id: string;
+  channelId: string;
+  channelName: string;
+  title: string;
+  description?: string;
+  category?: string;
+  start: string; // ISO 8601
+  end: string; // ISO 8601
+  startFormatted: string; // "14:00"
+  endFormatted: string; // "15:30"
+  durationMinutes: number;
+  rating?: string; // "Livre", "10", "12", "14", "16", "18"
+  isLiveNow: boolean;
+  progressPercent: number;
+  aiEnriched?: boolean;
+  aiTags?: string[];
+  aiHighlights?: string[];
+  source?: 'xmltv' | 'gemini' | 'system';
+}
+
+export interface ChannelEpgSchedule {
+  channel: Channel;
+  programs: EpgProgram[];
+  currentProgram?: EpgProgram;
+  nextProgram?: EpgProgram;
+}
+
+export interface EpgEnrichResponse {
+  success: boolean;
+  description: string;
+  rating?: string;
+  tags?: string[];
+  highlights?: string[];
+  source?: string;
+  cached?: boolean;
+}
+
 
 
 

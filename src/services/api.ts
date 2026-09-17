@@ -1,4 +1,4 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData, ChannelEpgSchedule, EpgEnrichResponse } from '../types';
 import { getPrefetchedChannels, getPrefetchedVod } from './prefetchService';
 
 const ONE_HOUR_MS = 60 * 60 * 1000; // 1 hour TTL
@@ -1199,14 +1199,12 @@ export const api = {
     isVip: boolean;
     deltaSeconds: number;
     userEmail?: string;
-    adblockDetected?: boolean;
     resetCycle?: boolean;
   }): Promise<{
     success: boolean;
     totalWatchSeconds: number;
     isLimitExceeded: boolean;
     remainingSeconds?: number;
-    adblockBlocked?: boolean;
   }> {
     const res = await fetch('/api/session/heartbeat', {
       method: 'POST',
@@ -1215,18 +1213,6 @@ export const api = {
     });
     if (!res.ok) throw new Error('Falha no heartbeat de sessão');
     return await res.json();
-  },
-
-  async checkAdShield(): Promise<boolean> {
-    try {
-      const res = await fetch('/api/ads/telemetry', {
-        method: 'GET',
-        cache: 'no-store'
-      });
-      return res.ok;
-    } catch {
-      return false; // Request was blocked by AdBlocker
-    }
   },
 
   async getAuditLogs(limit = 100, type?: string, search?: string): Promise<{ success: boolean; count: number; logs: AuditLogEntry[] }> {
@@ -1268,4 +1254,48 @@ export const api = {
     if (!res.ok) throw new Error('Falha ao obter métricas em tempo real');
     return await res.json();
   },
+
+  // EPG - Electronic Program Guide com Gemini AI
+  async getEpgSchedule(params?: {
+    channelId?: string;
+    category?: string;
+    date?: string;
+  }): Promise<{
+    success: boolean;
+    schedules: ChannelEpgSchedule[];
+    timestamp: string;
+    totalChannels: number;
+    currentTimeFormatted: string;
+  }> {
+    const query = new URLSearchParams();
+    if (params?.channelId) query.set('channelId', params.channelId);
+    if (params?.category && params.category !== 'Todos') query.set('category', params.category);
+    if (params?.date) query.set('date', params.date);
+
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    const res = await fetch(`/api/epg/schedule${qs}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha ao carregar guia EPG' }));
+      throw new Error(err.error || 'Falha ao carregar grade EPG');
+    }
+    return await res.json();
+  },
+
+  async enrichEpgProgramWithGemini(payload: {
+    programTitle: string;
+    channelName?: string;
+    category?: string;
+    currentDescription?: string;
+  }): Promise<EpgEnrichResponse> {
+    const res = await fetch('/api/epg/enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Falha na resposta do Gemini para EPG' }));
+      throw new Error(err.error || 'Falha ao gerar sinopse com IA');
+    }
+    return await res.json();
+  }
 };

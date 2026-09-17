@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound, Heart, X, Play, ChevronRight } from 'lucide-react';
+import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound, Heart, X, Play, ChevronRight, Calendar } from 'lucide-react';
 import { Subscriber, User, NavigationTab, Channel, VodItem } from '../types';
 
 interface HeaderProps {
@@ -155,6 +155,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <span>Ao Vivo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentTab('epg')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              currentTab === 'epg'
+                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'
+            }`}
+          >
+            <Calendar className="w-4 h-4 text-indigo-400" />
+            <span>Guia EPG</span>
           </button>
 
           <button
@@ -640,6 +653,16 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Tv className="w-4 h-4" />
           <span>Ao Vivo</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrentTab('epg')}
+          className={`flex flex-col items-center text-xs gap-1 py-1 px-3 rounded-lg transition-colors cursor-pointer ${
+            currentTab === 'epg' ? 'text-indigo-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Guia EPG</span>
         </button>
         <button
           type="button"

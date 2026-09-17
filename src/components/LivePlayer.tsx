@@ -3,14 +3,14 @@ import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
 import * as dashjs from 'dashjs';
 import { 
-  Play, Pause, Volume2, Volume1, VolumeX, Maximize2, Minimize2, 
+  Play, Pause, Volume2, Volume1, Volume, VolumeX, Maximize2, Minimize2, 
   RotateCcw, X, ShieldAlert, Sparkles, Crown, Radio, 
   Tv, AlertTriangle, ExternalLink, FastForward, Rewind,
   Server, RefreshCw, Film, PictureInPicture, Camera, 
   Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
   HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
   Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText, SkipForward, ListOrdered,
-  ChevronDown, ArrowLeft
+  ChevronDown, ArrowLeft, Cast, Airplay
 } from 'lucide-react';
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { api } from '../services/api';
@@ -20,6 +20,8 @@ import { isBrazilHostedUrl } from '../utils/sourcePrioritizer';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
 import { watchProgressStorage } from '../services/watchProgressStorage';
 import { ChannelTroubleshootModal } from './ChannelTroubleshootModal';
+import { CastModal } from './CastModal';
+import { castService } from '../services/castService';
 import {
   SubtitleCue,
   SubtitleStyleConfig,
@@ -139,6 +141,26 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const lastSavedProgressTimeRef = useRef<number>(0);
   const [resumePrompt, setResumePrompt] = useState<{ time: number; formatted: string } | null>(null);
 
+  // Transmissão para TV / Outra Tela (Chromecast / AirPlay / Smart TV)
+  const [isCastModalOpen, setIsCastModalOpen] = useState<boolean>(false);
+  const [castState, setCastState] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const [isCastSupported, setIsCastSupported] = useState<boolean>(false);
+  const [isAirPlaySupported, setIsAirPlaySupported] = useState<boolean>(false);
+
+  // Status de Rede (Online/Offline) e Lógica de Reconexão Automática & Re-buffer
+  const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
+  const [rebufferCount, setRebufferCount] = useState<number>(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const webPlayerUrl = React.useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const itemId = item.id;
+    return `${origin}/?play=${encodeURIComponent(itemId)}&type=${type}`;
+  }, [item.id, type]);
+
   useEffect(() => {
     const handleFavUpdate = () => {
       setIsFav(favoritesStorage.isFavorite(item.id, currentUser?.email));
@@ -218,7 +240,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [sessionId] = useState<string>(() => `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
   const [guestWatchSeconds, setGuestWatchSeconds] = useState<number>(0);
   const [isFiveMinLimitReached, setIsFiveMinLimitReached] = useState<boolean>(false);
-  const [isAdblockDetected, setIsAdblockDetected] = useState<boolean>(false);
   const isLocked = false; // Todos os usuários acessam com direito aos 5 minutos de degustação
 
   // Series identification and episode tracking (Piloto Automático applies specifically to series)
@@ -555,7 +576,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     if (isFiveMinLimitReached) return;
 
     const interval = setInterval(() => {
-      if (isPlaying && !isFiveMinLimitReached && !isAdblockDetected) {
+      if (isPlaying && !isFiveMinLimitReached) {
         setGuestWatchSeconds(prev => {
           const next = prev + 1;
           if (next >= 300) { // 5 minutos = 300s
@@ -567,9 +588,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, isVip, isFiveMinLimitReached, isAdblockDetected, terminatePlayerAndClearCache]);
+  }, [isPlaying, isVip, isFiveMinLimitReached, terminatePlayerAndClearCache]);
 
-  // Session heartbeat: tracks watch time, adblock & syncs with MongoDB
+  // Session heartbeat: tracks watch time & syncs with database
   useEffect(() => {
     const sendHeartbeat = async (reset = false) => {
       try {
@@ -580,7 +601,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           isVip,
           deltaSeconds: reset ? 0 : 15,
           userEmail: currentUser?.email,
-          adblockDetected: isAdblockDetected,
           resetCycle: reset
         });
         if (res && res.isLimitExceeded && !isVip) {
@@ -591,24 +611,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       }
     };
 
-    if (!isVip && isPlaying && !isFiveMinLimitReached && !isAdblockDetected) {
+    if (!isVip && isPlaying && !isFiveMinLimitReached) {
       const hbTimer = setInterval(() => {
         sendHeartbeat(false);
       }, 15000);
       return () => clearInterval(hbTimer);
     }
-  }, [sessionId, item.id, type, isVip, isPlaying, isFiveMinLimitReached, isAdblockDetected, currentUser]);
-
-  // Anti-AdBlock Probe (Desativado/Seguro para evitar falsos positivos de proteção de rastreamento nativa de navegadores móveis e desktop)
-  const probeAdblock = useCallback(async () => {
-    // Mantém falso por padrão para garantir reprodução fluida sem bloqueios indevidos
-    setIsAdblockDetected(false);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    probeAdblock();
-  }, [probeAdblock]);
+  }, [sessionId, item.id, type, isVip, isPlaying, isFiveMinLimitReached, currentUser]);
 
   // Handler for restarting transmission after 5 min limit
   const handleRestartPlayback = () => {
@@ -805,9 +814,192 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 1000);
   }, []);
 
+  // Tentativa inteligente de re-buffer para transmissões HLS/DASH/TS quando houver micro-travamento ou queda momentânea
+  const attemptRebuffer = useCallback((reason: string) => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    recentStallsRef.current += 1;
+    setRebufferCount(prev => prev + 1);
+
+    // 1. Re-buffer em fluxo HLS
+    if (hlsRef.current) {
+      try {
+        hlsRef.current.startLoad();
+        if (type === 'channel') {
+          if (hlsRef.current.liveSyncPosition) {
+            v.currentTime = hlsRef.current.liveSyncPosition;
+          } else if (v.buffered && v.buffered.length > 0) {
+            const bufEnd = v.buffered.end(v.buffered.length - 1);
+            if (bufEnd - v.currentTime > 0.4 || v.currentTime > bufEnd) {
+              v.currentTime = Math.max(0, bufEnd - 0.2);
+            }
+          }
+        } else {
+          v.currentTime += 0.2;
+        }
+      } catch (e) {
+        console.warn('[HLS] Falha ao tentar re-buffer:', e);
+      }
+    }
+
+    // 2. Re-buffer em fluxo DASH
+    if (dashPlayerRef.current) {
+      try {
+        dashPlayerRef.current.refreshManifest();
+        if (type === 'channel') {
+          dashPlayerRef.current.seek(dashPlayerRef.current.duration());
+        } else {
+          dashPlayerRef.current.seek(v.currentTime + 0.2);
+        }
+      } catch (e) {
+        console.warn('[DASH] Falha ao tentar re-buffer:', e);
+      }
+    }
+
+    // 3. Re-buffer para streams HTML5 nativas / MPEG-TS
+    if (!hlsRef.current && !dashPlayerRef.current) {
+      try {
+        if (v.buffered && v.buffered.length > 0) {
+          const bufEnd = v.buffered.end(v.buffered.length - 1);
+          v.currentTime = Math.max(0, bufEnd - 0.1);
+        } else {
+          v.currentTime += 0.15;
+        }
+      } catch (e) {}
+    }
+
+    // Tenta retomar reprodução ativa
+    const playPromise = v.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {});
+    }
+  }, [type]);
+
+  const attemptRebufferRef = useRef(attemptRebuffer);
+  attemptRebufferRef.current = attemptRebuffer;
+
+  // Lógica de reconexão automática e tentativa de re-buffer caso a conexão com a stream caia
+  const triggerStreamReconnection = useCallback((reason: string) => {
+    if (isReconnecting) return;
+    setIsReconnecting(true);
+    setIsLoading(true);
+    setIsConnectionUnstable(true);
+
+    const nextAttempt = reconnectAttempt + 1;
+    setReconnectAttempt(nextAttempt);
+
+    showToast(`Instabilidade detectada (${reason}). Reconectando transmissão (${nextAttempt}/5)...`);
+
+    // Dispara tentativa imediata de re-buffer
+    attemptRebuffer(reason);
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      const v = videoRef.current;
+      // Se a reprodução recuperou e o vídeo já está rodando normalmente
+      if (v && !v.paused && v.readyState >= 3) {
+        setIsReconnecting(false);
+        setReconnectAttempt(0);
+        setRebufferCount(0);
+        setIsLoading(false);
+        setIsConnectionUnstable(false);
+        showToast('Transmissão restabelecida com sucesso!');
+        return;
+      }
+
+      // Se após 3 tentativas ainda falhar, tenta failover para outro servidor se disponível
+      if (nextAttempt >= 3 && sources.length > 1) {
+        const switched = triggerAutomaticFailover(`Falha de conexão contínua (${reason})`);
+        if (switched) {
+          setIsReconnecting(false);
+          return;
+        }
+      }
+
+      if (nextAttempt < 5) {
+        setReloadCounter(c => c + 1);
+      } else {
+        // Excedeu o limite de reconexão: inicia backoff exponencial estruturado
+        setIsReconnecting(false);
+        setHasError(true);
+        setErrorMessage('A transmissão ao vivo perdeu o sinal e não pôde reconectar automaticamente. Verifique sua conexão.');
+        setIsLoading(false);
+        startExponentialBackoff();
+      }
+    }, 2500);
+  }, [isReconnecting, reconnectAttempt, showToast, attemptRebuffer, sources.length, triggerAutomaticFailover, startExponentialBackoff]);
+
+  const triggerStreamReconnectionRef = useRef(triggerStreamReconnection);
+  triggerStreamReconnectionRef.current = triggerStreamReconnection;
+
+  // Monitoramento de conectividade de rede do navegador (Online / Offline)
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsNetworkOnline(true);
+      showToast('Conexão de rede restabelecida! Reconectando transmissão...');
+      triggerStreamReconnectionRef.current('Internet restabelecida');
+    };
+
+    const handleOffline = () => {
+      setIsNetworkOnline(false);
+      showToast('Conexão de internet perdida (Offline). Aguardando sinal...');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showToast]);
+
+  // Watchdog de fluxo ao vivo: detecta congelamento silencioso ou queda do fluxo e re-bufferiza
+  useEffect(() => {
+    if (type !== 'channel' || !isPlaying || hasError || isReconnecting) return;
+
+    let previousTime = -1;
+    let freezeTimeCount = 0;
+
+    const interval = setInterval(() => {
+      const v = videoRef.current;
+      if (!v || v.paused || v.ended || hasError) {
+        freezeTimeCount = 0;
+        return;
+      }
+
+      // Se a posição não avançou e está aguardando buffer
+      if (v.currentTime === previousTime && v.readyState < 3) {
+        freezeTimeCount += 2;
+        if (freezeTimeCount >= 4 && freezeTimeCount < 8) {
+          attemptRebufferRef.current('Watchdog: travamento de buffer ao vivo');
+        } else if (freezeTimeCount >= 8) {
+          freezeTimeCount = 0;
+          triggerStreamReconnectionRef.current('Watchdog: transmissão congelada');
+        }
+      } else {
+        previousTime = v.currentTime;
+        freezeTimeCount = 0;
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [type, isPlaying, hasError, isReconnecting]);
+
   const handleForceReload = () => {
     autoRetryCountRef.current = 0;
     setAutoRetryCount(0);
+    setIsReconnecting(false);
+    setReconnectAttempt(0);
+    setRebufferCount(0);
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     if (backoffTimerRef.current) {
       clearInterval(backoffTimerRef.current);
       backoffTimerRef.current = null;
@@ -1116,27 +1308,21 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             setIsConnectionUnstable(false);
           });
 
+          dashPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_STALLED, () => {
+            attemptRebufferRef.current('Stall de reprodução DASH');
+          });
+
+          dashPlayer.on(dashjs.MediaPlayer.events.BUFFER_EMPTY, () => {
+            setIsLoading(true);
+            attemptRebufferRef.current('Buffer vazio DASH');
+          });
+
+          dashPlayer.on(dashjs.MediaPlayer.events.BUFFER_LOADED, () => {
+            setIsLoading(false);
+          });
+
           dashPlayer.on(dashjs.MediaPlayer.events.ERROR, () => {
-            if (triggerAutomaticFailover('Erro protocolo DASH')) {
-              return;
-            }
-            if (!usingProxy) {
-              setForceProxy(true);
-            } else if (autoRetryCountRef.current < 2) {
-              const nextAttempt = autoRetryCountRef.current + 1;
-              autoRetryCountRef.current = nextAttempt;
-              setAutoRetryCount(nextAttempt);
-              connectionAttemptsRef.current += 1;
-              setConnectionAttempts(connectionAttemptsRef.current);
-              setIsConnectionUnstable(true);
-              setReloadCounter(c => c + 1);
-            } else {
-              setHasError(true);
-              setErrorMessage('Falha ao decodificar a transmissão via protocolo DASH. Tente alternar o Modo de Compatibilidade para HLS ou trocar de servidor.');
-              setIsLoading(false);
-              setIsConnectionUnstable(true);
-              startExponentialBackoff();
-            }
+            triggerStreamReconnectionRef.current('Erro protocolo DASH');
           });
         } catch (err) {
           video.src = streamUrl;
@@ -1267,72 +1453,38 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
-          // Recuperação inteligente de micro-travamentos de buffer com expansão dinâmica
-          if (!data.fatal && data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+          // Recuperação inteligente de micro-travamentos de buffer com re-buffer automático
+          if (!data.fatal && (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || data.details === Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE || data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL)) {
             recentStallsRef.current += 1;
             if (hls.config) {
               hls.config.maxBufferLength = Math.min(130, (hls.config.maxBufferLength || 60) + 20);
               hls.config.liveSyncDurationCount = Math.min(10, (hls.config.liveSyncDurationCount || 5) + 1);
             }
-            if (video && !video.paused && video.readyState >= 2) {
-              video.currentTime += 0.15;
-            }
+            attemptRebufferRef.current('Micro-travamento de buffer HLS');
             return;
           }
 
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                if (triggerAutomaticFailover('Instabilidade de rede HLS')) {
-                  return;
-                }
-                if (!usingProxy) {
-                  setForceProxy(true);
-                } else if (autoRetryCountRef.current < 2) {
-                  const nextAttempt = autoRetryCountRef.current + 1;
-                  autoRetryCountRef.current = nextAttempt;
-                  setAutoRetryCount(nextAttempt);
-                  connectionAttemptsRef.current += 1;
-                  setConnectionAttempts(connectionAttemptsRef.current);
-                  setIsConnectionUnstable(true);
-                  setReloadCounter(c => c + 1);
-                } else {
-                  setHasError(true);
-                  setErrorMessage('Falha na conexão de rede com a transmissão.');
-                  setIsLoading(false);
-                  setIsConnectionUnstable(true);
-                  startExponentialBackoff();
-                }
+                try {
+                  hls.startLoad();
+                } catch (e) {}
+                triggerStreamReconnectionRef.current('Instabilidade de rede HLS');
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 try {
                   hls.recoverMediaError();
+                  attemptRebufferRef.current('Recuperação de mídia HLS');
                 } catch {
-                  if (triggerAutomaticFailover('Erro de decodificação HLS')) return;
+                  triggerStreamReconnectionRef.current('Erro de decodificação HLS');
                 }
                 break;
               default:
-                hls.destroy();
-                if (triggerAutomaticFailover('Decodificação fatal')) {
-                  return;
-                }
-                if (!usingProxy) {
-                  setForceProxy(true);
-                } else if (autoRetryCountRef.current < 2) {
-                  const nextAttempt = autoRetryCountRef.current + 1;
-                  autoRetryCountRef.current = nextAttempt;
-                  setAutoRetryCount(nextAttempt);
-                  connectionAttemptsRef.current += 1;
-                  setConnectionAttempts(connectionAttemptsRef.current);
-                  setIsConnectionUnstable(true);
-                  setReloadCounter(c => c + 1);
-                } else {
-                  setHasError(true);
-                  setErrorMessage('O formato desta transmissão não pôde ser decodificado.');
-                  setIsLoading(false);
-                  setIsConnectionUnstable(true);
-                  startExponentialBackoff();
-                }
+                try {
+                  hls.destroy();
+                } catch (e) {}
+                triggerStreamReconnectionRef.current('Falha geral no stream HLS');
                 break;
             }
           }
@@ -1471,6 +1623,119 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       v.removeEventListener('leavepictureinpicture', onLeavePiP);
     };
   }, []);
+
+  // Detecção e eventos de Transmissão para TV (Chromecast / Google RemotePlayback / Apple AirPlay)
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    // Inscrição no serviço Google Cast SDK e DLNA
+    const unsubscribeCast = castService.subscribe((state, device) => {
+      setCastState(state);
+      if (state === 'connected' && device) {
+        showToast(`Transmitindo na TV: ${device.name}`);
+      }
+    });
+
+    // RemotePlayback API (Google Chrome, Edge, Android)
+    const remote = (v as any).remote;
+    if (remote) {
+      setIsCastSupported(true);
+      const updateCastState = () => {
+        const s = remote.state || 'disconnected';
+        setCastState(s);
+        if (s === 'connected') {
+          showToast('Transmitindo na TV');
+        } else if (s === 'disconnected') {
+          showToast('Transmissão na TV desconectada');
+        }
+      };
+      updateCastState();
+      try {
+        remote.addEventListener('connecting', updateCastState);
+        remote.addEventListener('connect', updateCastState);
+        remote.addEventListener('disconnect', updateCastState);
+      } catch {
+        // ignore
+      }
+
+      return () => {
+        unsubscribeCast();
+        try {
+          remote.removeEventListener('connecting', updateCastState);
+          remote.removeEventListener('connect', updateCastState);
+          remote.removeEventListener('disconnect', updateCastState);
+        } catch {
+          // ignore
+        }
+      };
+    }
+
+    return () => {
+      unsubscribeCast();
+    };
+
+    // WebKit AirPlay API (Safari / macOS / iOS)
+    if (typeof (v as any).webkitShowPlaybackTargetPicker === 'function') {
+      setIsAirPlaySupported(true);
+      const onTargetAvailabilityChange = (e: any) => {
+        if (e.availability === 'available') {
+          setIsAirPlaySupported(true);
+        }
+      };
+      v.addEventListener('webkitplaybacktargetavailabilitychanged', onTargetAvailabilityChange);
+      return () => {
+        v.removeEventListener('webkitplaybacktargetavailabilitychanged', onTargetAvailabilityChange);
+      };
+    }
+  }, [showToast]);
+
+  const triggerNativeCast = useCallback(async (): Promise<boolean> => {
+    const v = videoRef.current;
+    if (!v) return false;
+
+    // 1. Tenta API W3C Remote Playback (Chrome / Edge / Android / Smart TV)
+    const remote = (v as any).remote;
+    if (remote && typeof remote.prompt === 'function') {
+      try {
+        showToast('Buscando dispositivos para transmitir...');
+        await remote.prompt();
+        return true;
+      } catch (err: any) {
+        if (err?.name !== 'NotFoundError' && err?.name !== 'AbortError') {
+          // Permite que o modal continue aberto para opções alternativas
+        }
+      }
+    }
+
+    // 2. Tenta Apple AirPlay (Safari / Apple TV / iPhone / iPad / Mac)
+    if (typeof (v as any).webkitShowPlaybackTargetPicker === 'function') {
+      try {
+        (v as any).webkitShowPlaybackTargetPicker();
+        showToast('Abrindo seletor Apple AirPlay...');
+        return true;
+      } catch {
+        // ignore
+      }
+    }
+
+    return false;
+  }, [showToast]);
+
+  const disconnectCast = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const remote = (v as any).remote;
+    if (remote && typeof remote.disconnect === 'function') {
+      try {
+        remote.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+    setCastState('disconnected');
+    showToast('Transmissão na TV desconectada');
+  }, [showToast]);
 
   // Video event handlers
   const handleVideoError = () => {
@@ -2159,6 +2424,11 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           togglePiP();
           resetControlsTimer();
           break;
+        case 't':
+          e.preventDefault();
+          setIsCastModalOpen(prev => !prev);
+          resetControlsTimer();
+          break;
         case 'c':
           e.preventDefault();
           captureScreenshot();
@@ -2335,43 +2605,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             <p className="text-xs text-indigo-200">Suporta arquivos WebVTT (.vtt) e SubRip (.srt)</p>
           </div>
         )}
-        {/* Anti-AdBlock Modal / Overlay (Caso ativado manualmente, permite dispensar sem travar o usuário) */}
-        {isAdblockDetected && (
-          <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-50 animate-fadeIn backdrop-blur-md">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10 mb-4 text-amber-400">
-              <ShieldAlert className="w-8 h-8 animate-pulse" />
-            </div>
-            <span className="text-xs uppercase font-bold tracking-wider text-amber-400 mb-1">
-              Aviso de Transmissão
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2 tracking-tight">
-              Ajuste de Reprodução
-            </h3>
-            <p className="text-sm text-slate-300 max-w-md mb-6 leading-relaxed">
-              Caso seu navegador utilize filtros automáticos ou proteção contra rastreadores, você pode continuar assistindo normalmente.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsAdblockDetected(false)}
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span>Continuar Transmissão</span>
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-3 rounded-full bg-slate-800 hover:bg-slate-700 text-white text-sm font-semibold border border-white/10 transition-colors cursor-pointer"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* 5-Minute Guest Limit Modal / Overlay */}
-        {isFiveMinLimitReached && !isVip && !isAdblockDetected && (
+        {isFiveMinLimitReached && !isVip && (
           <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center z-50 animate-fadeIn backdrop-blur-md">
             <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30 mb-4 text-white">
               <Clock className="w-8 h-8 text-amber-300" />
@@ -2464,6 +2699,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             <video
               ref={videoRef}
               playsInline
+              {...({ 'x-webkit-airplay': 'allow' } as any)}
               className={`w-full h-full cursor-pointer bg-black ${getAspectClass()} transition-all duration-700 ease-out ${
                 hasError 
                   ? 'filter blur-xl brightness-[0.25] scale-[1.03] pointer-events-none' 
@@ -2490,6 +2726,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   applyDynamicBufferToHls(hlsRef.current, dyn);
                   setActiveBufferProfileLabel(dyn.profileLabel);
                 }
+                attemptRebufferRef.current('Buffer em espera');
+              }}
+              onStalled={() => {
+                setIsLoading(true);
+                setIsConnectionUnstable(true);
+                attemptRebufferRef.current('Fluxo de dados interrompido (stalled)');
               }}
               onPlaying={() => { 
                 hasCanPlayFiredRef.current = true;
@@ -2501,6 +2743,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   clearInterval(backoffTimerRef.current);
                   backoffTimerRef.current = null;
                 }
+                if (reconnectTimeoutRef.current) {
+                  clearTimeout(reconnectTimeoutRef.current);
+                  reconnectTimeoutRef.current = null;
+                }
+                setIsReconnecting(false);
+                setReconnectAttempt(0);
+                setRebufferCount(0);
                 setIsBackoffActive(false);
                 setBackoffSecondsLeft(null);
                 autoRetryCountRef.current = 0;
@@ -2522,6 +2771,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   clearInterval(backoffTimerRef.current);
                   backoffTimerRef.current = null;
                 }
+                if (reconnectTimeoutRef.current) {
+                  clearTimeout(reconnectTimeoutRef.current);
+                  reconnectTimeoutRef.current = null;
+                }
+                setIsReconnecting(false);
+                setReconnectAttempt(0);
+                setRebufferCount(0);
                 setIsBackoffActive(false);
                 setBackoffSecondsLeft(null);
                 autoRetryCountRef.current = 0;
@@ -2590,6 +2846,98 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
             {toastMessage && (
               <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-slate-900/90 text-white text-xs font-semibold px-4 py-2 rounded-full border border-white/15 shadow-xl backdrop-blur-md transition-all animate-fadeIn">
                 {toastMessage}
+              </div>
+            )}
+
+            {/* Active Cast Floating Pill */}
+            {castState === 'connected' && !toastMessage && (
+              <button
+                type="button"
+                onClick={() => setIsCastModalOpen(true)}
+                className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-indigo-950/90 hover:bg-indigo-900 text-indigo-200 text-xs font-semibold px-4 py-1.5 rounded-full border border-indigo-400/40 shadow-xl backdrop-blur-md transition-all animate-fadeIn flex items-center gap-2 cursor-pointer active:scale-95"
+                title="Transmitindo na TV. Clique para opções de transmissão."
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <Cast className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Transmitindo na TV</span>
+              </button>
+            )}
+
+            {/* Overlay de Reconexão Automática e Re-buffer */}
+            {isReconnecting && (
+              <div 
+                id="player-auto-reconnect-overlay"
+                className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-slate-950/95 text-white text-xs font-semibold px-4 sm:px-5 py-2.5 rounded-2xl border border-amber-500/50 shadow-2xl backdrop-blur-xl transition-all animate-fadeIn flex items-center gap-3"
+              >
+                <RefreshCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
+                <div className="text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-bold">Reconectando transmissão</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                      {reconnectAttempt}/5
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Restabelecendo conexão e sincronizando buffers HLS/DASH...
+                  </p>
+                </div>
+                <button
+                  id="btn-force-reconnect"
+                  type="button"
+                  onClick={handleForceReload}
+                  className="ml-2 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-all cursor-pointer active:scale-95 shrink-0"
+                >
+                  Forçar
+                </button>
+              </div>
+            )}
+
+            {/* Indicador de Status de Rede (Online/Offline) no canto do player para transmissões ao vivo */}
+            {type === 'channel' && (
+              <div 
+                id="corner-network-status-badge"
+                className={`absolute z-35 pointer-events-none transition-all duration-300 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold shadow-lg backdrop-blur-md border select-none ${
+                  showControls 
+                    ? 'top-16 right-4 sm:top-16 sm:right-6' 
+                    : 'top-3.5 right-3.5 sm:top-4 sm:right-4'
+                } ${
+                  isNetworkOnline && !isReconnecting && !hasError
+                    ? 'bg-slate-950/80 text-emerald-300 border-emerald-500/40 shadow-black/40'
+                    : isReconnecting
+                    ? 'bg-amber-950/90 text-amber-300 border-amber-500/50 shadow-black/50 animate-pulse'
+                    : 'bg-red-950/90 text-red-300 border-red-500/50 shadow-black/50 animate-pulse'
+                }`}
+                title={
+                  isNetworkOnline && !isReconnecting && !hasError
+                    ? 'Status da Rede: Online (Transmissão Ao Vivo Ativa)'
+                    : isReconnecting
+                    ? `Reconectando transmissão... (Tentativa ${reconnectAttempt}/5)`
+                    : 'Status da Rede: Sem Conexão (Offline)'
+                }
+              >
+                <span className={`w-2 h-2 rounded-full ${
+                  isNetworkOnline && !isReconnecting && !hasError
+                    ? 'bg-emerald-400 animate-pulse'
+                    : isReconnecting
+                    ? 'bg-amber-400 animate-spin'
+                    : 'bg-red-400'
+                }`} />
+                {isNetworkOnline && !isReconnecting && !hasError ? (
+                  <>
+                    <Wifi className="w-3 h-3 text-emerald-400" />
+                    <span>Online</span>
+                  </>
+                ) : isReconnecting ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
+                    <span>Reconectando...</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-3 h-3 text-red-400" />
+                    <span>Offline</span>
+                  </>
+                )}
               </div>
             )}
 
@@ -2816,10 +3164,49 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                       {'name' in item ? item.name : item.title}
                     </span>
                     {type === 'channel' ? (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-[10px] font-bold rounded uppercase tracking-tighter text-white shadow-sm shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        AO VIVO
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-[10px] font-bold rounded uppercase tracking-tighter text-white shadow-sm shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          AO VIVO
+                        </span>
+
+                        {/* Status de Rede Online/Offline no Header */}
+                        <span
+                          id="header-network-status-badge"
+                          className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-tight border backdrop-blur-md transition-colors shrink-0 ${
+                            isNetworkOnline && !isReconnecting && !hasError
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                              : isReconnecting
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                              : 'bg-red-600/30 text-red-200 border-red-500/50 animate-pulse'
+                          }`}
+                          title={`Status da Conexão: ${isNetworkOnline ? (isReconnecting ? 'Reconectando...' : 'Online') : 'Offline'}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            isNetworkOnline && !isReconnecting && !hasError
+                              ? 'bg-emerald-400 animate-pulse'
+                              : isReconnecting
+                              ? 'bg-amber-400 animate-spin'
+                              : 'bg-red-400'
+                          }`} />
+                          {isNetworkOnline && !isReconnecting && !hasError ? (
+                            <>
+                              <Wifi className="w-2.5 h-2.5" />
+                              <span>Online</span>
+                            </>
+                          ) : isReconnecting ? (
+                            <>
+                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                              <span>Reconectando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <WifiOff className="w-2.5 h-2.5" />
+                              <span>Offline</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
                     ) : (
                       <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600/80 text-[10px] font-bold rounded uppercase tracking-tighter text-white border border-indigo-400/30 shrink-0">
                         <Film className="w-3 h-3" />
@@ -2978,6 +3365,24 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <Heart className={`w-4 h-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} />
                 </button>
 
+                {/* Transmitir para TV / Outra Tela (Cast) Button */}
+                <button
+                  id="player-top-cast-btn"
+                  type="button"
+                  onClick={() => setIsCastModalOpen(true)}
+                  className={`p-2 sm:p-2.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shrink-0 ${
+                    castState === 'connected'
+                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                      : castState === 'connecting'
+                      ? 'bg-amber-600/40 text-amber-300 border-amber-500/50 animate-pulse'
+                      : 'bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border-white/10'
+                  }`}
+                  title="Transmitir para TV / Outra Tela (T)"
+                  aria-label="Transmitir para TV ou outra tela"
+                >
+                  <Cast className="w-4 h-4" />
+                </button>
+
                 {/* Keyboard Shortcuts Help Button */}
                 <button
                   type="button"
@@ -3023,6 +3428,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   <div className="flex justify-between items-center"><span className="text-slate-400">M</span><span className="font-semibold text-white">Silenciar / Mudo</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">F</span><span className="font-semibold text-white">Tela Cheia</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">P</span><span className="font-semibold text-white">Picture-in-Picture</span></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-400">T</span><span className="font-semibold text-indigo-300">Transmitir para TV (Cast)</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">C</span><span className="font-semibold text-white">Capturar Imagem</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">↑ / ↓</span><span className="font-semibold text-white">Volume ±10%</span></div>
                   <div className="flex justify-between items-center"><span className="text-slate-400">← / →</span><span className="font-semibold text-white">Avançar / Voltar 10s</span></div>
@@ -3749,36 +4155,55 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   )}
 
                   {/* Volume Controls & Slider */}
-                  <div className="flex items-center gap-1.5 group/vol">
+                  <div 
+                    id="player-volume-control-group"
+                    className="flex items-center gap-1.5 sm:gap-2 group/vol"
+                    onWheel={(e) => {
+                      e.stopPropagation();
+                      adjustVolumeBy(e.deltaY < 0 ? 0.05 : -0.05);
+                    }}
+                  >
                     <button
+                      id="player-mute-btn"
                       type="button"
                       onClick={toggleMute}
-                      className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-                      title={isMuted || volume === 0 ? 'Reativar Áudio (M)' : 'Silenciar Áudio (M)'}
+                      className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer active:scale-95"
+                      title={isMuted || volume === 0 ? 'Reativar Áudio (Tecla M)' : 'Silenciar Áudio (Tecla M)'}
+                      aria-label={isMuted || volume === 0 ? 'Reativar Áudio' : 'Silenciar Áudio'}
                     >
                       {isMuted || volume === 0 ? (
                         <VolumeX className="w-5 h-5 text-red-400" />
-                      ) : volume < 0.5 ? (
-                        <Volume1 className="w-5 h-5" />
+                      ) : volume < 0.25 ? (
+                        <Volume className="w-5 h-5 text-indigo-300" />
+                      ) : volume < 0.65 ? (
+                        <Volume1 className="w-5 h-5 text-indigo-300" />
                       ) : (
-                        <Volume2 className="w-5 h-5" />
+                        <Volume2 className="w-5 h-5 text-indigo-300" />
                       )}
                     </button>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <input
+                        id="player-volume-slider"
                         type="range"
                         min="0"
                         max="1"
-                        step="0.05"
+                        step="0.02"
                         value={isMuted ? 0 : volume}
                         onChange={handleVolumeChange}
-                        className="w-16 sm:w-22 accent-indigo-500 h-1.5 bg-white/20 rounded-lg cursor-pointer"
-                        title="Ajustar Volume"
+                        className="w-18 sm:w-24 md:w-28 group-hover/vol:w-28 sm:group-hover/vol:w-36 accent-indigo-500 h-2 bg-white/20 hover:bg-white/30 rounded-lg cursor-pointer transition-all duration-200"
+                        title={`Ajustar Volume: ${isMuted ? '0%' : `${Math.round(volume * 100)}%`}`}
+                        aria-label="Controle deslizante de volume"
                       />
-                      <span className="hidden sm:inline text-[10px] font-mono text-slate-400 w-7">
+                      <button
+                        id="player-volume-percentage"
+                        type="button"
+                        onClick={toggleMute}
+                        className="text-[11px] font-mono font-semibold text-slate-300 hover:text-white w-9 text-right select-none cursor-pointer transition-colors"
+                        title="Clique para alternar mudo (M)"
+                      >
                         {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
-                      </span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -3826,6 +4251,27 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     title="Modo Picture-in-Picture (P)"
                   >
                     <PictureInPicture className="w-4 h-4" />
+                  </button>
+
+                  {/* Transmitir para TV / Cast / AirPlay */}
+                  <button
+                    id="player-bottom-cast-btn"
+                    type="button"
+                    onClick={() => setIsCastModalOpen(true)}
+                    className={`p-2 rounded-full transition-colors cursor-pointer relative ${
+                      castState === 'connected'
+                        ? 'text-indigo-400 bg-white/15 ring-1 ring-indigo-400/50'
+                        : castState === 'connecting'
+                        ? 'text-amber-400 bg-white/10 animate-pulse'
+                        : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Transmitir para TV ou Outra Tela (T)"
+                    aria-label="Transmitir para TV ou outra tela"
+                  >
+                    <Cast className="w-4 h-4" />
+                    {castState === 'connected' && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-black animate-pulse" />
+                    )}
                   </button>
 
                   {/* Subtitles Menu Toggle (WebVTT / Closed Captions) */}
@@ -3898,6 +4344,23 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         onForceReload={handleForceReload}
         userEmail={currentUser?.email}
         onShowToast={showToast}
+      />
+
+      {/* Transmitir para TV / Cast Modal */}
+      <CastModal
+        isOpen={isCastModalOpen}
+        onClose={() => setIsCastModalOpen(false)}
+        mediaTitle={'name' in item ? item.name : item.title}
+        mediaType={type}
+        mediaLogo={'logo' in item ? item.logo : 'posterUrl' in item ? item.posterUrl : undefined}
+        streamUrl={streamUrl}
+        webPlayerUrl={webPlayerUrl}
+        castState={castState}
+        isCastSupported={isCastSupported}
+        isAirPlaySupported={isAirPlaySupported}
+        videoElement={videoRef.current}
+        onTriggerNativeCast={triggerNativeCast}
+        onDisconnectCast={disconnectCast}
       />
     </div>
   );

@@ -765,12 +765,17 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
         <div className="space-y-6">
           <form onSubmit={handleImportUrl} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Link className="w-4 h-4 text-teal-400" />
-                Inserir Link de Lista M3U / M3U8 para Unificar
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Link className="w-4 h-4 text-teal-400" />
+                  Inserir Link de Lista M3U / M3U8 para Unificar
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Alta Capacidade (até 250MB & GZIP)
+                </span>
+              </div>
               <p className="text-xs text-slate-400 mt-1">
-                Cole abaixo a URL direta da sua lista M3U ou M3U8 (.m3u / .m3u8). O sistema processará todos os canais e unificará com a grade existente, mapeando servidores de contingência automaticamente.
+                Cole abaixo a URL direta da sua lista M3U ou M3U8 (.m3u / .m3u8). O sistema agora suporta links com muitos megabytes (até 250MB e arquivos compactados .gz), processando dezenas de milhares de canais com streaming inteligente e descompressão automática.
               </p>
             </div>
 
@@ -908,7 +913,9 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                   'Clique para selecionar um arquivo .m3u ou .m3u8'
                 )}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Tamanho máximo recomendado: 10MB</p>
+              <p className="text-xs text-teal-400/90 font-medium mt-1">
+                Suporta arquivos de até 250MB (.m3u, .m3u8, texto e compactados em .gz)
+              </p>
               <input
                 type="file"
                 accept=".m3u,.m3u8,text/plain"
