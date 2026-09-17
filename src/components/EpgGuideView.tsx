@@ -19,10 +19,16 @@ import {
   Flame,
   CheckCircle,
   Share2,
-  ListFilter
+  ListFilter,
+  Bell,
+  BellRing,
+  Check,
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
-import { Channel, ChannelCategory, ChannelEpgSchedule, EpgProgram } from '../types';
+import { Channel, ChannelCategory, ChannelEpgSchedule, EpgProgram, User, EpgReminder } from '../types';
 import { api } from '../services/api';
+import { epgReminderService, EPG_REMINDER_TRIGGERED_EVENT } from '../services/epgReminderService';
 
 const CATEGORIES: ChannelCategory[] = [
   'Todos',
@@ -38,6 +44,8 @@ const CATEGORIES: ChannelCategory[] = [
 interface EpgGuideViewProps {
   channels: Channel[];
   isVip: boolean;
+  currentUser?: User | null;
+  onOpenAuth?: () => void;
   onSelectChannel: (channel: Channel) => void;
   onOpenCheckout: () => void;
 }
@@ -45,6 +53,8 @@ interface EpgGuideViewProps {
 export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
   channels,
   isVip,
+  currentUser,
+  onOpenAuth,
   onSelectChannel,
   onOpenCheckout
 }) => {
@@ -64,6 +74,87 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
   } | null>(null);
   const [isEnrichingAi, setIsEnrichingAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Lembretes Locais & Notificações no Navegador
+  const [reminders, setReminders] = useState<EpgReminder[]>([]);
+  const [showRemindersModal, setShowRemindersModal] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<{
+    id: string;
+    text: string;
+    type?: 'info' | 'success' | 'alert';
+    actionLabel?: string;
+    action?: () => void;
+  } | null>(null);
+
+  // Carrega lembretes persistidos para o usuário atual
+  useEffect(() => {
+    setReminders(epgReminderService.getReminders(currentUser?.email));
+  }, [currentUser?.email]);
+
+  // Listener para quando um programa iniciar e disparar notificação
+  useEffect(() => {
+    const handleReminderTriggered = (e: any) => {
+      const rem: EpgReminder = e.detail;
+      setReminders(epgReminderService.getReminders(currentUser?.email));
+      const targetChannel = channels.find(c => c.id === rem.channelId);
+      setToastMessage({
+        id: `toast_${Date.now()}`,
+        text: `Começou agora: "${rem.programTitle}" no canal ${rem.channelName}!`,
+        type: 'alert',
+        actionLabel: 'Assistir Agora',
+        action: targetChannel ? () => onSelectChannel(targetChannel) : undefined
+      });
+    };
+
+    window.addEventListener(EPG_REMINDER_TRIGGERED_EVENT, handleReminderTriggered);
+    return () => window.removeEventListener(EPG_REMINDER_TRIGGERED_EVENT, handleReminderTriggered);
+  }, [channels, currentUser?.email, onSelectChannel]);
+
+  // Auto-dismiss do toast após 7 segundos (exceto se for alerta)
+  useEffect(() => {
+    if (!toastMessage || toastMessage.type === 'alert') return;
+    const timer = setTimeout(() => setToastMessage(null), 6000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
+  // Handler para agendar ou remover lembrete de programa futuro
+  const handleToggleReminder = async (program: EpgProgram, channel: Channel) => {
+    if (!currentUser) {
+      setToastMessage({
+        id: `toast_${Date.now()}`,
+        text: 'Faça login na sua conta para agendar lembretes no navegador.',
+        type: 'info',
+        actionLabel: 'Fazer Login',
+        action: () => onOpenAuth?.()
+      });
+      if (onOpenAuth) onOpenAuth();
+      return;
+    }
+
+    const permission = await epgReminderService.requestNotificationPermission();
+    const result = epgReminderService.toggleReminder(program, channel, currentUser.email);
+    setReminders(epgReminderService.getReminders(currentUser.email));
+
+    if (result.scheduled) {
+      setToastMessage({
+        id: `toast_${Date.now()}`,
+        text: permission === 'granted'
+          ? `Lembrete agendado para "${program.title}" às ${program.startFormatted}! Você será avisado no navegador.`
+          : `Lembrete salvo para "${program.title}" às ${program.startFormatted}. Habilite notificações no navegador para alertas sonoros.`,
+        type: 'success'
+      });
+    } else {
+      setToastMessage({
+        id: `toast_${Date.now()}`,
+        text: `Lembrete de "${program.title}" cancelado.`,
+        type: 'info'
+      });
+    }
+  };
+
+  const isProgramReminderScheduled = (programId: string) => {
+    return reminders.some(r => r.programId === programId);
+  };
 
   // Relógio do Horário Atual
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -353,6 +444,37 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                 <ListFilter className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Botão de Lembretes Agendados */}
+            <button
+              id="btn-epg-view-reminders"
+              type="button"
+              onClick={() => {
+                if (!currentUser && onOpenAuth) {
+                  onOpenAuth();
+                } else {
+                  setShowRemindersModal(true);
+                }
+              }}
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
+                reminders.length > 0
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-white/10 hover:text-white hover:bg-white/5'
+              }`}
+              title="Ver lembretes de programas agendados"
+            >
+              {reminders.length > 0 ? (
+                <BellRing className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+              ) : (
+                <Bell className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">Lembretes</span>
+              {reminders.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
+                  {reminders.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -506,10 +628,34 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                                       IA
                                     </span>
                                   )}
-                                  {isLive && (
+                                  {isLive ? (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-600 text-[10px] font-extrabold text-white uppercase tracking-wider animate-pulse shadow-sm">
                                       No Ar
                                     </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleReminder(prog, item.channel);
+                                      }}
+                                      className={`p-1 rounded-lg transition-all cursor-pointer ${
+                                        isProgramReminderScheduled(prog.id)
+                                          ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                                          : 'text-slate-400 hover:text-amber-300 hover:bg-white/10'
+                                      }`}
+                                      title={
+                                        isProgramReminderScheduled(prog.id)
+                                          ? 'Lembrete agendado no navegador (Clique para remover)'
+                                          : 'Agendar lembrete no navegador para o início deste programa'
+                                      }
+                                    >
+                                      {isProgramReminderScheduled(prog.id) ? (
+                                        <BellRing className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                                      ) : (
+                                        <Bell className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
                                   )}
                                 </div>
                               </div>
@@ -655,9 +801,34 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           A Seguir
                         </span>
-                        <span className="text-[10px] font-semibold text-slate-500">
-                          {nextProg.startFormatted}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {nextProg.startFormatted}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleReminder(nextProg, item.channel);
+                            }}
+                            className={`p-1 rounded-lg transition-all cursor-pointer ${
+                              isProgramReminderScheduled(nextProg.id)
+                                ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                                : 'text-slate-400 hover:text-amber-300 hover:bg-white/10'
+                            }`}
+                            title={
+                              isProgramReminderScheduled(nextProg.id)
+                                ? 'Lembrete agendado no navegador (Clique para remover)'
+                                : 'Agendar lembrete no navegador para quando começar'
+                            }
+                          >
+                            {isProgramReminderScheduled(nextProg.id) ? (
+                              <BellRing className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                            ) : (
+                              <Bell className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                       <h6 className="text-xs font-semibold text-slate-200 truncate">
                         {nextProg.title}
@@ -855,6 +1026,33 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                 )}
               </button>
 
+              {/* Botão Agendar Lembrete no Navegador para programas futuros */}
+              {!selectedProgram.program.isLiveNow && (
+                <button
+                  id="btn-epg-schedule-reminder"
+                  type="button"
+                  onClick={() => handleToggleReminder(selectedProgram.program, selectedProgram.channel)}
+                  className={`w-full sm:w-auto py-3.5 px-5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                    isProgramReminderScheduled(selectedProgram.program.id)
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-white border-white/10'
+                  }`}
+                  title="Receber notificação nativa no navegador quando o programa iniciar"
+                >
+                  {isProgramReminderScheduled(selectedProgram.program.id) ? (
+                    <>
+                      <BellRing className="w-4 h-4 text-amber-400" />
+                      <span>Lembrete Agendado (Cancelar)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="w-4 h-4 text-indigo-400" />
+                      <span>Agendar Lembrete no Navegador</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setSelectedProgram(null)}
@@ -864,6 +1062,157 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Modal de Lembretes Agendados do Usuário */}
+      {showRemindersModal && (
+        <div
+          id="modal-epg-user-reminders"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setShowRemindersModal(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <BellRing className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Meus Lembretes no Navegador</h3>
+                  <p className="text-xs text-slate-400">Você será notificado assim que cada programa entrar no ar</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRemindersModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {reminders.length === 0 ? (
+              <div className="text-center py-10 bg-slate-950/40 rounded-2xl border border-white/5 p-6">
+                <Bell className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+                <h4 className="text-sm font-bold text-white mb-1">Nenhum lembrete agendado</h4>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                  Navegue pela grade de horários e clique no sino de qualquer programa futuro para ser avisado no navegador!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                {reminders.map(rem => {
+                  const targetChannel = channels.find(c => c.id === rem.channelId);
+
+                  return (
+                    <div
+                      key={rem.id}
+                      className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/5 hover:border-indigo-500/30 transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-slate-800 border border-white/10 p-1 flex items-center justify-center shrink-0">
+                          {rem.channelLogo ? (
+                            <img
+                              src={rem.channelLogo}
+                              alt={rem.channelName}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <Tv className="w-4 h-4 text-slate-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="text-xs font-bold text-white truncate">{rem.programTitle}</h5>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            <span className="text-indigo-400 font-semibold">{rem.channelName}</span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-2.5 h-2.5" />
+                              {rem.formattedTime}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {targetChannel && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowRemindersModal(false);
+                              onSelectChannel(targetChannel);
+                            }}
+                            className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer"
+                            title={`Assistir canal ${rem.channelName}`}
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            epgReminderService.removeReminder(rem.programId, currentUser?.email);
+                            setReminders(epgReminderService.getReminders(currentUser?.email));
+                          }}
+                          className="p-2 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 transition-all cursor-pointer"
+                          title="Excluir lembrete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification for Reminders */}
+      {toastMessage && (
+        <div
+          id="epg-reminder-toast-alert"
+          className="fixed top-20 right-4 sm:right-8 z-50 max-w-md bg-slate-900/95 border border-indigo-500/50 shadow-2xl rounded-2xl p-4 flex items-start gap-3 backdrop-blur-xl animate-fadeIn"
+        >
+          <div
+            className={`p-2 rounded-xl shrink-0 ${
+              toastMessage.type === 'alert'
+                ? 'bg-rose-500/20 text-rose-300'
+                : toastMessage.type === 'success'
+                ? 'bg-emerald-500/20 text-emerald-300'
+                : 'bg-indigo-500/20 text-indigo-300'
+            }`}
+          >
+            <BellRing className="w-5 h-5 animate-bounce" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-white font-medium leading-relaxed">{toastMessage.text}</p>
+            {toastMessage.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  toastMessage.action?.();
+                  setToastMessage(null);
+                }}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer"
+              >
+                <Play className="w-3 h-3 fill-current" />
+                <span>{toastMessage.actionLabel || 'Assistir'}</span>
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-slate-400 hover:text-white p-1 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

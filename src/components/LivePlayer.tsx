@@ -1981,6 +1981,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   }, [flushProgress]);
 
   const handleClose = () => {
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture().catch(() => {});
+    }
     flushProgress();
     onClose();
   };
@@ -2087,14 +2090,22 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
         setIsPiP(false);
-        showToast('Mini-player fechado');
+        showToast('Picture-in-Picture restaurado');
       } else if (document.pictureInPictureEnabled) {
         await video.requestPictureInPicture();
         setIsPiP(true);
-        showToast('Mini-player (PiP) ativado');
+        showToast('Picture-in-Picture ativado! Você pode navegar pelo catálogo.');
+      } else if ((video as any).webkitSetPresentationMode) {
+        // Suporte Safari / WebKit iOS/macOS
+        const currentMode = (video as any).webkitPresentationMode;
+        (video as any).webkitSetPresentationMode(currentMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture');
+        setIsPiP(currentMode !== 'picture-in-picture');
+      } else {
+        showToast('Picture-in-Picture não suportado neste navegador.');
       }
-    } catch {
-      showToast('Picture-in-Picture não suportado neste navegador.');
+    } catch (err: any) {
+      console.warn('Erro ao alternar Picture-in-Picture:', err);
+      showToast('Não foi possível ativar Picture-in-Picture.');
     }
   }, [showToast]);
 
@@ -2540,26 +2551,82 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     <div 
       id="player-modal-backdrop"
       onClick={(e) => {
-        // Clicar fora do reprodutor (no backdrop) fecha o vídeo e retorna para a navegação de onde parou
-        if (e.target === e.currentTarget || (e.target as HTMLElement)?.id === 'player-modal-backdrop') {
+        // Clicar fora do reprodutor fecha o vídeo e retorna para a navegação
+        if (!isPiP && (e.target === e.currentTarget || (e.target as HTMLElement)?.id === 'player-modal-backdrop')) {
           handleClose();
         }
       }}
-      className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn cursor-pointer"
+      className={isPiP 
+        ? "fixed bottom-5 right-5 z-50 pointer-events-auto" 
+        : "fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn cursor-pointer"}
     >
-      {/* Persistent Global Close Button (Always visible and accessible at all times across all screen sizes and TV) */}
-      <button
-        id="player-global-close-btn"
-        type="button"
-        tabIndex={0}
-        onClick={handleClose}
-        className="fixed top-3 right-3 sm:top-5 sm:right-5 z-[80] min-w-[44px] min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-slate-900/95 hover:bg-red-600 focus:bg-red-600 text-white border border-white/30 hover:border-red-500 shadow-2xl backdrop-blur-xl transition-all hover:scale-105 focus:ring-4 focus:ring-red-500 focus:outline-none focus:scale-110 active:scale-95 cursor-pointer group"
-        title="Fechar Vídeo (ESC)"
-        aria-label="Fechar Vídeo"
-      >
-        <X className="w-4 h-4 text-white group-hover:rotate-90 transition-transform duration-200" />
-        <span className="text-xs font-bold tracking-wide">Fechar</span>
-      </button>
+      {/* Persistent Global Close Button (visible when not in PiP) */}
+      {!isPiP && (
+        <button
+          id="player-global-close-btn"
+          type="button"
+          tabIndex={0}
+          onClick={handleClose}
+          className="fixed top-3 right-3 sm:top-5 sm:right-5 z-[80] min-w-[44px] min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-slate-900/95 hover:bg-red-600 focus:bg-red-600 text-white border border-white/30 hover:border-red-500 shadow-2xl backdrop-blur-xl transition-all hover:scale-105 focus:ring-4 focus:ring-red-500 focus:outline-none focus:scale-110 active:scale-95 cursor-pointer group"
+          title="Fechar Vídeo (ESC)"
+          aria-label="Fechar Vídeo"
+        >
+          <X className="w-4 h-4 text-white group-hover:rotate-90 transition-transform duration-200" />
+          <span className="text-xs font-bold tracking-wide">Fechar</span>
+        </button>
+      )}
+
+      {/* Floating mini dock widget when Picture-in-Picture is active */}
+      {isPiP && (
+        <div 
+          id="pip-floating-dock-card"
+          className="w-80 sm:w-96 rounded-2xl bg-slate-900/95 border border-indigo-500/40 shadow-2xl p-3 flex items-center justify-between gap-3 backdrop-blur-xl animate-scaleUp text-white"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-slate-950 border border-white/10 p-1 flex items-center justify-center shrink-0">
+              {('logo' in item && item.logo) ? (
+                <img src={item.logo} alt={item.name} className="w-full h-full object-contain" />
+              ) : (
+                <Tv className="w-5 h-5 text-indigo-400" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[10px] text-indigo-400 font-bold uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>PiP Ativo</span>
+              </div>
+              <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={togglePlay}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              title={isPlaying ? 'Pausar' : 'Reproduzir'}
+            >
+              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+            </button>
+            <button
+              type="button"
+              onClick={togglePiP}
+              className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors cursor-pointer"
+              title="Restaurar Player em Tela Cheia"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-2 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white transition-colors cursor-pointer"
+              title="Encerrar Transmissão"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Container */}
       <div 
@@ -2571,8 +2638,24 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className="relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none cursor-default"
+        className={isPiP 
+          ? "w-1 h-1 opacity-0 pointer-events-none absolute overflow-hidden" 
+          : "relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none cursor-default"}
       >
+        {/* Dedicated Top-Right Navigation PiP Button inside Container */}
+        <button
+          id="player-container-pip-nav-btn"
+          type="button"
+          tabIndex={0}
+          onClick={togglePiP}
+          className="absolute top-3 right-28 sm:top-4 sm:right-32 z-[75] min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-black/85 hover:bg-indigo-600 focus:bg-indigo-600 text-white border border-white/30 hover:border-indigo-500 shadow-2xl backdrop-blur-xl transition-all focus:ring-4 focus:ring-indigo-500 focus:outline-none cursor-pointer group"
+          title="Picture-in-Picture (Continuar assistindo enquanto navega pelo catálogo)"
+          aria-label="Picture-in-Picture"
+        >
+          <PictureInPicture className="w-4 h-4 text-indigo-300 group-hover:text-white" />
+          <span className="text-xs font-bold tracking-wide hidden sm:inline">Navegar no App (PiP)</span>
+        </button>
+
         {/* Dedicated Absolute Top-Right Close Button inside Container for small screens & TV navigation */}
         <button
           id="player-container-close-btn"

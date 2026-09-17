@@ -504,6 +504,16 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                   </div>
 
+                  <button
+                    id="btn-header-my-profile"
+                    type="button"
+                    onClick={() => { setShowUserMenu(false); setCurrentTab('profile'); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <UserIcon className="w-4 h-4 text-indigo-400" />
+                    <span>Minha Conta & Assinatura</span>
+                  </button>
+
                   {!isVip && (
                     <button
                       type="button"

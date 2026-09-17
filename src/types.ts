@@ -212,7 +212,22 @@ export interface ChannelHealthSummary {
   lastChecked?: string;
 }
 
-export type NavigationTab = 'live' | 'movies' | 'series' | 'favorites' | 'plans' | 'admin' | 'epg';
+export type NavigationTab = 'live' | 'movies' | 'series' | 'favorites' | 'plans' | 'admin' | 'epg' | 'profile';
+
+export interface EpgReminder {
+  id: string;
+  programId: string;
+  programTitle: string;
+  channelId: string;
+  channelName: string;
+  channelLogo?: string;
+  startTime: string; // ISO 8601 string
+  formattedTime: string;
+  durationMinutes?: number;
+  userEmail: string;
+  createdAt: string;
+  notified?: boolean;
+}
 
 export interface WatchProgress {
   id: string; // vod id

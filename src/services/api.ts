@@ -219,6 +219,18 @@ export const api = {
     return await res.json();
   },
 
+  async getUserSubscription(token?: string, email?: string): Promise<{ success: boolean; subscriber: Subscriber | null; transactions: PixTransaction[] }> {
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const url = email ? `/api/user/subscription?email=${encodeURIComponent(email)}` : '/api/user/subscription';
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Erro ao carregar dados da assinatura' }));
+      throw new Error(err.error || 'Erro ao carregar assinatura');
+    }
+    return await res.json();
+  },
+
   // Admin
   async getAdminMetrics(): Promise<{ success: boolean; metrics: AdminMetrics }> {
     const res = await adminFetch('/api/admin/metrics');

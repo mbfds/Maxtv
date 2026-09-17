@@ -830,6 +830,15 @@ export default function App() {
                   <EpgGuideView
                     channels={channels}
                     isVip={isVip}
+                    currentUser={currentUser}
+                    onOpenAuth={() => {
+                      setAuthModalConfig({
+                        mode: 'login',
+                        title: 'Acessar Conta',
+                        subtitle: 'Faça login para agendar lembretes no navegador e salvar preferências'
+                      });
+                      setIsAuthModalOpen(true);
+                    }}
                     onSelectChannel={(ch) => handlePlayMedia(ch, 'channel')}
                     onOpenCheckout={() => {
                       setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
