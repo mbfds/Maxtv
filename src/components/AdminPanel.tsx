@@ -775,7 +775,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               </p>
             </div>
 
-            {/* UNIFICAR E ATUALIZAR LINKS (JUNTOS) */}
+            {/* CENTRAL ÚNICA DE LINKS IPTV */}
             <button
               type="button"
               onClick={() => setActiveTab('m3u-sources-unifier')}
@@ -787,10 +787,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
             >
               <div className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-teal-400" />
-                <span>Unificar & Atualizar Links</span>
+                <span>Central de Links IPTV</span>
               </div>
               <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30">
-                M3U / Hub
+                1 ÚNICA CENTRAL
               </span>
             </button>
 
@@ -2854,8 +2854,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">LOCAL SQLITE</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Atualiza e consolida o catálogo VOD de filmes e séries utilizando exclusivamente as fontes cadastradas manualmente pelo administrador no banco local SQLite.
+                      Atualiza e consolida o catálogo VOD de filmes e séries utilizando as fontes de filmes cadastradas na Central de Links IPTV.
                     </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsSyncVodModalOpen(false);
+                        setActiveTab('m3u-sources-unifier');
+                      }}
+                      className="mt-2 text-[11px] font-bold text-purple-300 hover:text-white underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>→ Gerenciar ou cadastrar novas listas na Central de Links IPTV</span>
+                    </button>
                   </div>
                 </label>
 

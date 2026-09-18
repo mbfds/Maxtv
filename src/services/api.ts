@@ -491,7 +491,7 @@ export const api = {
     return this.syncLocalM3uChannels(payload?.author);
   },
 
-  async syncVodM3U(options?: { m3uUrl?: string; source?: 'local_db' | 'custom' | string } | string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string }> {
+  async syncVodM3U(options?: { m3uUrl?: string; source?: 'local_db' | 'custom' | string } | string): Promise<{ success: boolean; count: number; moviesCount?: number; seriesCount?: number; message?: string; error?: string; items?: any[] }> {
     const payload = typeof options === 'string' ? { m3uUrl: options } : options || {};
     const res = await adminFetch('/api/admin/vod/sync-m3u', {
       method: 'POST',
@@ -507,7 +507,21 @@ export const api = {
     if (!res.ok || !data?.success) {
       throw new Error(data?.error || data?.message || 'Falha ao sincronizar catálogo VOD M3U/M3U8');
     }
+    if (data?.success) {
+      this.clearVodCache();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('maxtv_vod_revalidated', { detail: data }));
+      }
+    }
     return data;
+  },
+
+  clearVodCache(): void {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(VOD_CACHE_KEY);
+      }
+    } catch {}
   },
 
   async getVodCatalog(options: { forceRefresh?: boolean } = {}): Promise<{ success: boolean; count: number; items: any[] }> {
@@ -878,7 +892,7 @@ export const api = {
     return data;
   },
 
-  async saveM3uSource(payload: { name?: string; url: string; enabled?: boolean; skipValidation?: boolean; type?: 'channels' | 'vod'; author?: string }): Promise<{
+  async saveM3uSource(payload: { id?: string; name?: string; url: string; enabled?: boolean; skipValidation?: boolean; type?: 'channels' | 'vod' | 'all'; author?: string }): Promise<{
     success: boolean;
     source: any;
     sources: any[];

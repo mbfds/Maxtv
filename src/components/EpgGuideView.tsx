@@ -66,6 +66,13 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
   const [selectedDateOffset, setSelectedDateOffset] = useState<number>(0); // 0 = Hoje, 1 = Amanhã, -1 = Ontem
   const [onlyLiveNow, setOnlyLiveNow] = useState(false);
   const [activeViewMode, setActiveViewMode] = useState<'timeline' | 'cards'>('timeline');
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+
+  // Relógio do Horário Atual
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Modal de Detalhes do Programa com Gemini AI
   const [selectedProgram, setSelectedProgram] = useState<{
@@ -155,13 +162,6 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
   const isProgramReminderScheduled = (programId: string) => {
     return reminders.some(r => r.programId === programId);
   };
-
-  // Relógio do Horário Atual
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Formatação de data selecionada
   const selectedDate = useMemo(() => {

@@ -89,12 +89,12 @@ export function detectGenre(group: string, title: string): string[] {
 /**
  * Baixa e analisa lista M3U / M3U8 de forma ultra-rápida via Streaming
  */
-export async function fetchM3UVod(url: string, limit: number = 300): Promise<ExtractedVodItem[]> {
+export async function fetchM3UVod(url: string, limit: number = 800): Promise<ExtractedVodItem[]> {
   console.log(`[M3U VOD] Baixando lista M3U/M3U8 via streaming: ${url}...`);
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(60000)
     });
 
     if (!res.ok) {
@@ -130,10 +130,37 @@ export async function fetchM3UVod(url: string, limit: number = 300): Promise<Ext
         currentMetadata = { rawName, logo, group };
       } else if (!trimmed.startsWith('#') && currentMetadata) {
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+          const lowerGroup = (currentMetadata.group || '').toLowerCase();
+          const lowerUrl = trimmed.toLowerCase();
+
+          // Detecção de VOD vs Canal de TV Ao Vivo
+          const isVodUrl = lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mkv') || lowerUrl.endsWith('.avi') ||
+                           lowerUrl.endsWith('.mov') || lowerUrl.endsWith('.webm') ||
+                           lowerUrl.includes('/movie/') || lowerUrl.includes('/series/') || lowerUrl.includes('/vod/');
+
+          const isVodGroup = lowerGroup.includes('filme') || lowerGroup.includes('movie') || 
+                             lowerGroup.includes('série') || lowerGroup.includes('serie') || 
+                             lowerGroup.includes('novela') || lowerGroup.includes('cinema') || 
+                             lowerGroup.includes('vod') || lowerGroup.includes('anime') || 
+                             lowerGroup.includes('desenho');
+
+          const isLiveGroup = lowerGroup.includes('abertos') || lowerGroup.includes('canais') || 
+                              lowerGroup.includes('notícias') || lowerGroup.includes('noticias') || 
+                              lowerGroup.includes('esportes ao vivo') || lowerUrl.includes('/live/');
+
+          // Se for manifestamente um canal de TV ao vivo em lista mista, ignorar no catálogo de VOD
+          if (isLiveGroup && !isVodUrl && !isVodGroup) {
+            currentMetadata = null;
+            continue;
+          }
+
           const { title, year } = cleanTitle(currentMetadata.rawName);
-          const isSeries = currentMetadata.group.toLowerCase().includes('serie') || 
-                           currentMetadata.group.toLowerCase().includes('novela') ||
-                           /S\d{1,2}E\d{1,2}/i.test(currentMetadata.rawName);
+          const isSeries = lowerGroup.includes('serie') || 
+                           lowerGroup.includes('série') || 
+                           lowerGroup.includes('novela') ||
+                           lowerUrl.includes('/series/') ||
+                           /S\d{1,2}E\d{1,2}/i.test(currentMetadata.rawName) ||
+                           /T\d{1,2}\s*EP\d{1,2}/i.test(currentMetadata.rawName);
 
           const genres = detectGenre(currentMetadata.group, title);
           const poster = currentMetadata.logo || 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&auto=format&fit=crop&q=80';
@@ -160,7 +187,7 @@ export async function fetchM3UVod(url: string, limit: number = 300): Promise<Ext
               { name: 'Servidor 2 - Direto HLS', url: realStreamUrl, quality: '1080p' }
             ],
             featured: items.length < 10,
-            isVipOnly: items.length > 30
+            isVipOnly: items.length > 40
           });
 
           if (items.length >= limit) {
@@ -220,24 +247,45 @@ export async function updateCatalogFromM3U(options?: { targetUrl?: string; sourc
 
     if (customUrl && customUrl.startsWith('http')) {
       // Lista personalizada informada pelo administrador
-      items = await fetchM3UVod(customUrl, 300);
+      items = await fetchM3UVod(customUrl, 800);
     } else {
-      // Carregar exclusivamente do banco de dados local SQLite
+      // Carregar do banco de dados local SQLite e configuração unificada
       const localSources = sqliteGetAllM3uSources().filter(s => s.enabled);
-      if (localSources.length === 0) {
+      let allSources: { name: string; url: string; enabled: boolean; type?: string }[] = [...localSources];
+
+      try {
+        const configPath = path.join(process.cwd(), 'public', 'data', 'm3u-auto-update-config.json');
+        if (fs.existsSync(configPath)) {
+          const raw = fs.readFileSync(configPath, 'utf-8');
+          const parsed = JSON.parse(raw);
+          if (parsed.sources && Array.isArray(parsed.sources)) {
+            for (const s of parsed.sources) {
+              if (s.enabled && !allSources.some(existing => existing.url === s.url)) {
+                allSources.push(s);
+              }
+            }
+          }
+        }
+      } catch {}
+
+      if (allSources.length === 0) {
         console.warn('Nenhuma lista M3U cadastrada e habilitada no banco local pelo administrador.');
         return { 
           success: false, 
           count: 0, 
-          error: 'Nenhuma lista M3U cadastrada manualmente pelo administrador no banco local SQLite.' 
+          error: 'Nenhuma lista M3U cadastrada na Central de Links IPTV. Adicione uma lista com filmes ou lista completa primeiro.' 
         };
       }
 
-      console.log(`Carregando ${localSources.length} fontes M3U do banco SQLite...`);
+      // Priorizar fontes marcadas como VOD ou Completa
+      const vodSources = allSources.filter(s => s.type === 'vod' || s.type === 'all');
+      const targetSources = vodSources.length > 0 ? vodSources : allSources;
+
+      console.log(`Carregando filmes de ${targetSources.length} fontes M3U...`);
       const extractedBatches: ExtractedVodItem[][] = [];
 
-      for (const src of localSources) {
-        const batch = await fetchM3UVod(src.url, 200);
+      for (const src of targetSources) {
+        const batch = await fetchM3UVod(src.url, 500);
         if (batch.length > 0) {
           extractedBatches.push(batch);
         }

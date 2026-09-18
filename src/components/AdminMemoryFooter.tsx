@@ -80,7 +80,7 @@ export const AdminMemoryFooter: React.FC = () => {
                 onClick={() => setIsAlertDismissed(false)}
               />
             ) : (
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" title="Consumo dentro da margem segura" />
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
             )}
           </div>
 

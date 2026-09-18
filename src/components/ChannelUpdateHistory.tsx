@@ -70,7 +70,7 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
   const filteredHistory = history.filter(item => {
     if (filterType !== 'all') {
       if (filterType === 'json' && item.type !== 'json_edit') return false;
-      if (filterType === 'sync' && item.type !== 'm3u_sync' && item.type !== 'm3u_import' && item.type !== 'unify_grade') return false;
+      if (filterType === 'sync' && item.type !== 'm3u_import' && item.type !== 'unify_grade') return false;
       if (filterType === 'manual' && !item.type.startsWith('manual')) return false;
     }
     if (!searchTerm.trim()) return true;
@@ -274,7 +274,7 @@ export const ChannelUpdateHistory: React.FC<ChannelUpdateHistoryProps> = ({
         <div className="p-4 rounded-xl bg-slate-900 border border-white/10">
           <span className="text-[11px] text-slate-400">Sincronizações M3U</span>
           <div className="text-xl font-black text-cyan-400 mt-1">
-            {history.filter(h => h.type === 'm3u_sync' || h.type === 'm3u_import' || h.type === 'unify_grade' || (h.type as any) === 'sync_ramys' || (h.type as any) === 'sync_saimo').length}
+            {history.filter(h => h.type === ('m3u_sync' as any) || h.type === 'm3u_import' || h.type === 'unify_grade' || (h.type as any) === 'sync_ramys' || (h.type as any) === 'sync_saimo').length}
           </div>
         </div>
       </div>

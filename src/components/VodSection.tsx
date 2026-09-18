@@ -235,7 +235,7 @@ const ObserverVodCard: React.FC<ObserverVodCardProps> = React.memo(({
                 {item.title}
               </h3>
               {isWatched && (
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" title="Assistido" />
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
@@ -404,10 +404,10 @@ export const VodSection: React.FC<VodSectionProps> = ({
       {watchProgress.length > 0 && !searchQuery && selectedSubgenre === 'Todos' && (
         <div className="mb-8">
           <ContinueWatchingRow
-            progressItems={watchProgress}
+            items={watchProgress}
             allVodItems={items}
-            onPlayVod={onPlayVod}
-            onRemoveProgress={onRemoveProgress}
+            onPlay={onPlayVod}
+            onRemove={onRemoveProgress}
           />
         </div>
       )}

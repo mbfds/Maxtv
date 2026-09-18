@@ -437,20 +437,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
   // By default, IPTV channels, HTTP streams, and M3U8/MPD route through /api/proxy
   const needsProxy = React.useMemo(() => {
-    if (rawUrl.endsWith('.mp4') && rawUrl.startsWith('https://')) {
-      return false;
-    }
-    return (
-      type === 'channel' ||
-      rawUrl.startsWith('http://') ||
-      rawUrl.includes('satlabscloud.com.br') ||
-      rawUrl.includes('reidoscanais') ||
-      rawUrl.includes('hubby.cx') ||
-      rawUrl.includes('tjtor8411') ||
-      rawUrl.includes('.ts') ||
-      rawUrl.includes('.mpd') ||
-      rawUrl.includes('.m3u8')
-    );
+    return false; // Force direct streaming for all URLs (Bypass Proxy/CDN)
   }, [type, rawUrl]);
 
   const [forceProxy, setForceProxy] = useState<boolean | null>(null);
@@ -749,7 +736,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   // Botão Reportar Erro: registra o status do canal no log administrativo para verificação rápida da grade
   const handleReportError = async (customReason?: string) => {
     try {
-      const channelName = 'name' in item ? item.name : item.title;
+      const channelName = 'name' in item ? item.name : (item as any).title;
       const defaultReason = isTimedOut
         ? 'Timeout de 10s na inicialização do vídeo (evento canplay não disparou)'
         : isConnectionUnstable
@@ -860,9 +847,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     // 2. Re-buffer em fluxo DASH
     if (dashPlayerRef.current) {
       try {
-        dashPlayerRef.current.refreshManifest();
+        (dashPlayerRef.current as any).refreshManifest();
         if (type === 'channel') {
-          dashPlayerRef.current.seek(dashPlayerRef.current.duration());
+          dashPlayerRef.current.seek((dashPlayerRef.current as any).duration());
         } else {
           dashPlayerRef.current.seek(v.currentTime + 0.2);
         }
@@ -2164,7 +2151,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
         const a = document.createElement('a');
-        const cleanName = ('title' in item ? item.title : item.name).replace(/[^a-zA-Z0-9]/g, '_');
+        const cleanName = ('title' in item ? (item as any).title : item.name).replace(/[^a-zA-Z0-9]/g, '_');
         a.download = `captura_${cleanName}_${Date.now()}.jpg`;
         a.href = dataUrl;
         a.click();
@@ -2574,22 +2561,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         ? "fixed bottom-5 right-5 z-50 pointer-events-auto" 
         : "fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 animate-fadeIn cursor-pointer"}
     >
-      {/* Persistent Global Close Button (visible when not in PiP) */}
-      {!isPiP && (
-        <button
-          id="player-global-close-btn"
-          type="button"
-          tabIndex={0}
-          onClick={handleClose}
-          className="fixed top-3 right-3 sm:top-5 sm:right-5 z-[80] min-w-[44px] min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-slate-900/95 hover:bg-red-600 focus:bg-red-600 text-white border border-white/30 hover:border-red-500 shadow-2xl backdrop-blur-xl transition-all hover:scale-105 focus:ring-4 focus:ring-red-500 focus:outline-none focus:scale-110 active:scale-95 cursor-pointer group"
-          title="Fechar Vídeo (ESC)"
-          aria-label="Fechar Vídeo"
-        >
-          <X className="w-4 h-4 text-white group-hover:rotate-90 transition-transform duration-200" />
-          <span className="text-xs font-bold tracking-wide">Fechar</span>
-        </button>
-      )}
-
       {/* Floating mini dock widget when Picture-in-Picture is active */}
       {isPiP && (
         <div 
@@ -2599,7 +2570,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-slate-950 border border-white/10 p-1 flex items-center justify-center shrink-0">
               {('logo' in item && item.logo) ? (
-                <img src={item.logo} alt={item.name} className="w-full h-full object-contain" />
+                <img src={item.logo} alt={'name' in item ? item.name : (item as any).title} className="w-full h-full object-contain" />
               ) : (
                 <Tv className="w-5 h-5 text-indigo-400" />
               )}
@@ -2609,10 +2580,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span>PiP Ativo</span>
               </div>
-              <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+              <h4 className="text-xs font-bold text-white truncate">{'name' in item ? item.name : (item as any).title}</h4>
             </div>
           </div>
-
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
@@ -2641,7 +2611,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           </div>
         </div>
       )}
-
       {/* Container */}
       <div 
         id="player-container"
@@ -2656,33 +2625,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           ? "w-1 h-1 opacity-0 pointer-events-none absolute overflow-hidden" 
           : "relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none cursor-default"}
       >
-        {/* Dedicated Top-Right Navigation PiP Button inside Container */}
-        <button
-          id="player-container-pip-nav-btn"
-          type="button"
-          tabIndex={0}
-          onClick={togglePiP}
-          className="absolute top-3 right-28 sm:top-4 sm:right-32 z-[75] min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-black/85 hover:bg-indigo-600 focus:bg-indigo-600 text-white border border-white/30 hover:border-indigo-500 shadow-2xl backdrop-blur-xl transition-all focus:ring-4 focus:ring-indigo-500 focus:outline-none cursor-pointer group"
-          title="Picture-in-Picture (Continuar assistindo enquanto navega pelo catálogo)"
-          aria-label="Picture-in-Picture"
-        >
-          <PictureInPicture className="w-4 h-4 text-indigo-300 group-hover:text-white" />
-          <span className="text-xs font-bold tracking-wide hidden sm:inline">Navegar no App (PiP)</span>
-        </button>
-
-        {/* Dedicated Absolute Top-Right Close Button inside Container for small screens & TV navigation */}
-        <button
-          id="player-container-close-btn"
-          type="button"
-          tabIndex={0}
-          onClick={handleClose}
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-[75] min-w-[44px] min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-black/85 hover:bg-red-600 focus:bg-red-600 text-white border border-white/30 hover:border-red-500 shadow-2xl backdrop-blur-xl transition-all focus:ring-4 focus:ring-red-500 focus:outline-none focus:scale-110 active:scale-95 cursor-pointer group"
-          title="Fechar Reprodutor (ESC)"
-          aria-label="Fechar Reprodutor"
-        >
-          <X className="w-5 h-5 text-white group-hover:rotate-90 transition-transform duration-200" />
-          <span className="text-xs font-bold tracking-wide hidden sm:inline">Fechar</span>
-        </button>
         {/* Hidden File Input for Subtitles (.vtt / .srt) */}
         <input
           type="file"
@@ -2784,7 +2726,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 }`}
               >
                 <img 
-                  src={'posterUrl' in item ? item.posterUrl : ('bannerUrl' in item ? item.bannerUrl : item.logo)} 
+                  src={(item as any).posterUrl || (item as any).bannerUrl || (item as any).logo}
                   alt="" 
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer" 
@@ -3257,20 +3199,20 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 {'logo' in item && item.logo ? (
                   <img 
                     src={item.logo} 
-                    alt={item.name} 
+                    alt={'name' in item ? item.name : (item as any).title} 
                     className="w-8 h-8 sm:w-10 sm:h-10 object-contain bg-slate-900/80 p-1 rounded-full border border-white/10 shadow-sm shrink-0" 
                   />
                 ) : 'posterUrl' in item && item.posterUrl ? (
                   <img 
                     src={item.posterUrl} 
-                    alt={item.title} 
+                    alt={(item as any).title} 
                     className="w-7 h-10 sm:w-8 sm:h-11 object-cover rounded-lg border border-white/10 shadow-sm shrink-0" 
                   />
                 ) : null}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 truncate">
                     <span className="font-bold text-sm sm:text-base md:text-lg text-white truncate drop-shadow-sm">
-                      {'name' in item ? item.name : item.title}
+                      {'name' in item ? item.name : (item as any).title}
                     </span>
                     {type === 'channel' ? (
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -3563,7 +3505,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                       Episódios da Série
                     </span>
                     <p className="text-[11px] text-slate-400 truncate max-w-[230px]">
-                      {'title' in item ? item.title : ''}
+                      {'title' in item ? (item as any).title : ''}
                     </p>
                   </div>
                   <button 
@@ -4402,6 +4344,18 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     )}
                   </button>
 
+                  {/* Picture-in-Picture Button */}
+                  <button
+                    type="button"
+                    onClick={togglePiP}
+                    className={`p-2 rounded-full transition-colors cursor-pointer ${
+                      isPiP ? 'text-indigo-400 bg-white/15' : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Picture-in-Picture"
+                  >
+                    <PictureInPicture className="w-4 h-4" />
+                  </button>
+
                   {/* Settings Menu Toggle (Speed, Quality, Aspect Ratio) */}
                   <button
                     type="button"
@@ -4432,7 +4386,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       <ChannelTroubleshootModal
         isOpen={showTroubleshootModal}
         onClose={() => setShowTroubleshootModal(false)}
-        channelName={'name' in item ? item.name : item.title}
+        channelName={'name' in item ? item.name : (item as any).title}
         channelId={item.id}
         streamUrl={streamUrl}
         rawUrl={rawUrl}
@@ -4459,7 +4413,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       <CastModal
         isOpen={isCastModalOpen}
         onClose={() => setIsCastModalOpen(false)}
-        mediaTitle={'name' in item ? item.name : item.title}
+        mediaTitle={'name' in item ? item.name : (item as any).title}
         mediaType={type}
         mediaLogo={'logo' in item ? item.logo : 'posterUrl' in item ? item.posterUrl : undefined}
         streamUrl={streamUrl}

@@ -139,7 +139,7 @@ export const XmltvValidatorManager: React.FC<XmltvValidatorManagerProps> = ({
 
     try {
       const res = await api.validateXmltvUrl(cleanUrl);
-      setValidationResult(res);
+      setValidationResult({ ...res, url: cleanUrl } as any);
       setTestedUrl(cleanUrl);
 
       if (res.valid) {
@@ -193,7 +193,7 @@ export const XmltvValidatorManager: React.FC<XmltvValidatorManagerProps> = ({
       setIsValidating(true);
       try {
         const valRes = await api.validateXmltvUrl(cleanUrl);
-        setValidationResult(valRes);
+        setValidationResult({ ...valRes, url: cleanUrl } as any);
         setTestedUrl(cleanUrl);
         setIsValidating(false);
 

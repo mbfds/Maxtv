@@ -423,7 +423,7 @@ export interface M3uAutoUpdateSource {
   updatedAt?: string;
   dateFormatted?: string;
   updatedDateFormatted?: string;
-  type?: 'channels' | 'vod';
+  type?: 'channels' | 'vod' | 'all';
   author?: string;
   channelsCount?: number;
   lastTestedAt?: string;

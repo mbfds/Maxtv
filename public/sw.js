@@ -10,7 +10,7 @@
  *    -> Never stored in Cache Storage to prevent high latency and storage exhaustion.
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE_NAME = `maxtv-static-${CACHE_VERSION}`;
 const CATALOG_CACHE_NAME = `maxtv-catalog-${CACHE_VERSION}`;
 const IMAGES_CACHE_NAME = `maxtv-images-${CACHE_VERSION}`;
@@ -156,6 +156,18 @@ self.addEventListener('fetch', (event) => {
 
   // Bypass chrome-extension and unsupported schemes
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Bypass Vite development server modules, source files, and HMR
+  if (
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.searchParams.has('v') ||
+    url.searchParams.has('t') ||
+    url.searchParams.has('import')
+  ) {
     return;
   }
 

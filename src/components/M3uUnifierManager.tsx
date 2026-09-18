@@ -49,12 +49,17 @@ interface M3uUnifierManagerProps {
   currentUser?: { name?: string; email?: string };
   onRefreshChannels?: () => Promise<void> | void;
   onPreviewChannel?: (channel: Channel) => void;
+  initialSubTab?: 'fuzzy' | 'file' | 'autoupdate' | 'logs' | 'browse' | 'url';
+  onNavigateToMainAddLink?: () => void;
+  onNavigateToHistory?: () => void;
 }
 
 export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
   currentUser,
   onRefreshChannels,
-  onPreviewChannel
+  onPreviewChannel,
+  initialSubTab = 'fuzzy',
+  onNavigateToMainAddLink
 }) => {
   // Stats
   const [stats, setStats] = useState<UnifyGradeStats | null>(null);
@@ -62,8 +67,8 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Tabs within unifier: 'url' | 'file' | 'fuzzy' | 'autoupdate' | 'logs' | 'browse'
-  const [subTab, setSubTab] = useState<'url' | 'file' | 'fuzzy' | 'autoupdate' | 'logs' | 'browse'>('url');
+  // Tabs within unifier: 'fuzzy' | 'file' | 'autoupdate' | 'logs' | 'browse' | 'url'
+  const [subTab, setSubTab] = useState<'url' | 'file' | 'fuzzy' | 'autoupdate' | 'logs' | 'browse'>(initialSubTab);
 
   // Fuzzy Matching & Similarity Unification State
   const [fuzzyThreshold, setFuzzyThreshold] = useState<number>(0.78);
@@ -691,7 +696,7 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
       const q = searchQuery.toLowerCase();
       const matchName = c.name.toLowerCase().includes(q);
       const matchCat = c.category?.toLowerCase().includes(q);
-      const matchSources = c.sources?.some(s => s.name?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q));
+      const matchSources = c.sources?.some(s => s.quality?.toLowerCase().includes(q) || s.url?.toLowerCase().includes(q));
       return matchName || matchCat || matchSources;
     }
     return true;
@@ -887,29 +892,16 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
 
       {/* Subtabs Selector */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
-        <button
-          onClick={() => setSubTab('url')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            subTab === 'url'
-              ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <Link className="w-4 h-4" />
-          <span>Colar Links M3U8</span>
-        </button>
-
-        <button
-          onClick={() => setSubTab('file')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-            subTab === 'file'
-              ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <Upload className="w-4 h-4" />
-          <span>Arquivo M3U / Texto</span>
-        </button>
+        {onNavigateToMainAddLink && (
+          <button
+            type="button"
+            onClick={onNavigateToMainAddLink}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30 hover:bg-teal-500/25 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-teal-400" />
+            <span>+ Adicionar Link IPTV (Central Única)</span>
+          </button>
+        )}
 
         <button
           onClick={() => {
@@ -935,6 +927,18 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
               {fuzzyCandidates.length}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setSubTab('file')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            subTab === 'file'
+              ? 'bg-teal-600 text-white shadow-lg shadow-teal-600/30'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Upload className="w-4 h-4" />
+          <span>Arquivo M3U / Texto</span>
         </button>
 
         <button
@@ -1712,7 +1716,7 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                             </span>
                             <span>•</span>
                             <span className="text-slate-500 truncate max-w-[200px] sm:max-w-md">
-                              {ch.streamUrl}
+                              {ch.sources[0]?.url}
                             </span>
                           </div>
                         </div>
@@ -1762,7 +1766,7 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                                 }`}>
                                   {sIdx === 0 ? 'Opção 1 (Principal)' : `Opção ${sIdx + 1} (Backup)`}
                                 </span>
-                                <span className="font-semibold text-slate-200">{src.name}</span>
+                                <span className="font-semibold text-slate-200">{src.quality}</span>
                                 {src.quality && (
                                   <span className="text-[10px] text-slate-400 font-mono">[{src.quality}]</span>
                                 )}
@@ -2037,119 +2041,25 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
                 )}
               </div>
 
-              {/* Add New Source Form */}
-              <form onSubmit={handleAddSource} className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Plus className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Cadastrar Nova Fonte M3U8 para Auto-Atualização:</span>
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-1">
-                    <input
-                      type="text"
-                      placeholder="Nome da Lista (ex: Minha Lista IPTV M3U/M3U8)"
-                      value={newSourceName}
-                      onChange={(e) => setNewSourceName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2 flex flex-wrap gap-2">
-                    <input
-                      type="url"
-                      required
-                      placeholder="https://meu-servidor-iptv.com/lista.m3u8 (ou .m3u)"
-                      value={newSourceUrl}
-                      onChange={(e) => {
-                        setNewSourceUrl(e.target.value);
-                        if (sourceValidationResult) setSourceValidationResult(null);
-                      }}
-                      className="flex-1 min-w-[200px] bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleValidateNewSourceUrl}
-                      disabled={isValidatingSourceUrl || isSavingAutoUpdate || !newSourceUrl.trim()}
-                      className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-all disabled:opacity-50 shrink-0 flex items-center gap-1.5"
-                      title="Testar acessibilidade e conteúdo no servidor antes de gravar"
-                    >
-                      {isValidatingSourceUrl ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-400" />
-                      ) : (
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                      )}
-                      <span>{isValidatingSourceUrl ? 'Testando...' : 'Validar'}</span>
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSavingAutoUpdate || isValidatingSourceUrl || !newSourceUrl.trim()}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white transition-all disabled:opacity-50 shrink-0 flex items-center gap-1.5"
-                    >
-                      {isSavingAutoUpdate ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Plus className="w-3.5 h-3.5" />
-                      )}
-                      <span>{isSavingAutoUpdate ? 'Gravando...' : 'Salvar Fonte'}</span>
-                    </button>
-                  </div>
+              {/* Redirecionamento para a Central de Links IPTV (Sem formulários repetitivos) */}
+              <div className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 text-xs text-slate-300">
+                  <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
+                  <span>
+                    Todas as fontes de listas M3U/M3U8 são cadastradas exclusivamente na <strong>Central de Links IPTV</strong>.
+                  </span>
                 </div>
-
-                {/* Real-time Validation Feedback - Interface Limpa no Erro */}
-                {sourceValidationResult && (
-                  <div className={`p-4 rounded-xl border text-xs animate-in fade-in duration-200 ${
-                    sourceValidationResult.valid
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                      : 'bg-rose-950/40 border-rose-500/40 text-rose-100 shadow-lg'
-                  }`}>
-                    {sourceValidationResult.valid ? (
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                        <div className="space-y-0.5">
-                          <span className="font-semibold block text-white">
-                            Link M3U8 Acessível e Válido! ({sourceValidationResult.channelsCount ?? 0} canais identificados em {sourceValidationResult.latencyMs}ms)
-                          </span>
-                          {sourceValidationResult.error && (
-                            <p className="text-[11px] opacity-90">{sourceValidationResult.error}</p>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Layout Limpo de Erro: apenas a mensagem e o botão Tentar Novamente */
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5">
-                          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                          <div>
-                            <span className="font-bold text-white block">Falha na Validação da URL</span>
-                            <p className="text-[11px] text-rose-200/90 mt-0.5">
-                              {sourceValidationResult.error || 'O servidor da URL não respondeu ou retornou formato inválido.'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-                          <button
-                            type="button"
-                            onClick={handleValidateNewSourceUrl}
-                            disabled={isValidatingSourceUrl}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs shadow transition-all cursor-pointer disabled:opacity-50"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isValidatingSourceUrl ? 'animate-spin' : ''}`} />
-                            <span>Tentar Novamente</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSourceValidationResult(null)}
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
-                          >
-                            Fechar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </form>
+                {onNavigateToMainAddLink ? (
+                  <button
+                    type="button"
+                    onClick={onNavigateToMainAddLink}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-md shadow-teal-600/30 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Novo Link na Central</span>
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

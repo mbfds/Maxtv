@@ -262,10 +262,10 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       {watchProgress.length > 0 && !searchQuery && selectedCategory === 'Todos' && onPlayVod && (
         <div className="mb-8">
           <ContinueWatchingRow
-            progressItems={watchProgress}
+            items={watchProgress}
             allVodItems={allVodItems}
-            onPlayVod={onPlayVod}
-            onRemoveProgress={onRemoveProgress}
+            onPlay={onPlayVod}
+            onRemove={onRemoveProgress}
           />
         </div>
       )}

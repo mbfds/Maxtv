@@ -404,8 +404,8 @@ export const AuditLogsViewer: React.FC<AuditLogsViewerProps> = () => {
                     <div className="mt-3 pt-3 border-t border-white/5 bg-slate-950/40 p-3 rounded-xl">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold text-slate-400">Metadados e Payload da Ação:</span>
-                        {log.ipAddress && (
-                          <span className="text-[10px] font-mono text-slate-500">IP: {log.ipAddress}</span>
+                        {(log as any).ipAddress && (
+                          <span className="text-[10px] font-mono text-slate-500">IP: {(log as any).ipAddress}</span>
                         )}
                       </div>
                       <pre className="text-[11px] font-mono text-indigo-300 bg-slate-950 p-2.5 rounded-lg border border-white/5 overflow-x-auto">

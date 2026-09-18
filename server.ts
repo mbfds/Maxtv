@@ -2385,17 +2385,25 @@ app.get('/api/vod', (req, res) => {
 // ============================================================================
 app.use('/api/admin', requireAdminAuth);
 
-// Sincronização de Filmes e Séries via M3U e Catálogo Gabriel Saimo (executável também pelo painel Admin)
+// Sincronização de Filmes e Séries via M3U (executável pela Central de Links IPTV ou agendador)
 app.post('/api/admin/vod/sync-m3u', async (req, res) => {
   try {
     const { m3uUrl, source } = req.body || {};
     const { updateCatalogFromM3U } = await import('./scripts/updateContent');
     const result = await updateCatalogFromM3U({
       targetUrl: m3uUrl,
-      source: (source as 'both' | 'ramys' | 'saimo') || (m3uUrl ? undefined : 'both')
+      source: source
     });
     if (result.success && result.items && Array.isArray(result.items)) {
       parsedRamysVod = result.items;
+      cachedVodResponse = {
+        success: true,
+        count: result.items.length,
+        source: 'Enriched Local M3U (public/data/enriched/vod.json)',
+        updatedAt: new Date().toISOString(),
+        items: result.items
+      };
+      cachedVodFileMtime = Date.now();
       console.log(`[VOD SYNC] Catálogo VOD atualizado em memória com ${parsedRamysVod.length} itens.`);
     }
     res.json(result);
@@ -5453,7 +5461,7 @@ app.post('/api/admin/channels/sources', async (req, res) => {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
-    const itemType = req.body?.type === 'vod' ? 'vod' : 'channels';
+    const itemType = req.body?.type === 'vod' ? 'vod' : (req.body?.type === 'all' ? 'all' : 'channels');
 
     if (existingIndex >= 0) {
       m3uAutoUpdateConfig.sources[existingIndex].name = cleanName;

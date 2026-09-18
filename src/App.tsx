@@ -47,7 +47,7 @@ export default function App() {
 
   const [currentTab, setCurrentTab] = useState<NavigationTab>('live');
 
-  // Estado de persistência de scroll para cada NavigationTab (live, epg, movies, series, favorites, plans, admin)
+  // Estado de persistência de scroll para cada NavigationTab
   const [tabScrollPositions, setTabScrollPositions] = useState<Record<NavigationTab, number>>({
     live: 0,
     epg: 0,
@@ -55,7 +55,8 @@ export default function App() {
     series: 0,
     favorites: 0,
     plans: 0,
-    admin: 0
+    admin: 0,
+    profile: 0
   });
   const tabScrollMapRef = useRef<Record<NavigationTab, number>>({
     live: 0,
@@ -64,7 +65,8 @@ export default function App() {
     series: 0,
     favorites: 0,
     plans: 0,
-    admin: 0
+    admin: 0,
+    profile: 0
   });
 
   // Rastreamento da aba e da posição exata de rolagem antes da abertura do reprodutor
@@ -112,7 +114,7 @@ export default function App() {
     return watchProgressStorage.getProgressList(currentUser?.email);
   });
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthOpen] = useState<boolean>(false);
   const [authModalConfig, setAuthModalConfig] = useState<{
     title?: string;
     subtitle?: string;
@@ -258,11 +260,7 @@ export default function App() {
     };
     const onVodRevalidated = (e: any) => {
       if (e.detail?.items && Array.isArray(e.detail.items) && e.detail.items.length > 0) {
-        setVodItems(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const newItems = e.detail.items.filter((item: any) => !existingIds.has(item.id));
-          return [...prev, ...newItems];
-        });
+        setVodItems(e.detail.items);
       }
     };
 
@@ -679,7 +677,7 @@ export default function App() {
             subtitle: 'Acesse canais ao vivo, filmes e séries liberados',
             mode: 'login'
           });
-          setIsAuthModalOpen(true);
+          setIsAuthOpen(true);
         }}
         onLogout={handleLogout}
         totalChannelsCount={channels.length}
@@ -706,7 +704,7 @@ export default function App() {
                     subtitle: 'Use sua conta cadastrada ou o Acesso Rápido VIP',
                     mode: 'login'
                   });
-                  setIsAuthModalOpen(true);
+                  setIsAuthOpen(true);
                 }}
                 className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-full shadow-sm text-xs cursor-pointer transition-colors"
               >
@@ -837,7 +835,7 @@ export default function App() {
                         title: 'Acessar Conta',
                         subtitle: 'Faça login para agendar lembretes no navegador e salvar preferências'
                       });
-                      setIsAuthModalOpen(true);
+                      setIsAuthOpen(true);
                     }}
                     onSelectChannel={(ch) => handlePlayMedia(ch, 'channel')}
                     onOpenCheckout={() => {
@@ -924,7 +922,13 @@ export default function App() {
                     onPlayChannel={(ch) => handlePlayMedia(ch, 'channel')}
                     onPlayVod={handlePlayVodWithSeek}
                     onRemoveFavorite={handleRemoveFavorite}
-                    onExplore={() => handleTabChange('live')}
+                    onNavigateTab={handleTabChange}
+                    watchProgress={watchProgress}
+                    currentUser={currentUser}
+                    isVip={isVip}
+                    onRemoveProgress={handleRemoveProgress}
+                    onOpenAuth={() => setIsAuthOpen(true)}
+                    onOpenCheckout={() => setIsCheckoutOpen(true)}
                   />
                 )}
 
@@ -1031,7 +1035,7 @@ export default function App() {
                 subtitle: 'Entre para liberar a transmissão deste conteúdo',
                 mode: 'login'
               });
-              setIsAuthModalOpen(true);
+              setIsAuthOpen(true);
             }}
           />
         </Suspense>
@@ -1043,7 +1047,7 @@ export default function App() {
           <AuthModal
             isOpen={isAuthModalOpen}
             onClose={() => {
-              setIsAuthModalOpen(false);
+              setIsAuthOpen(false);
               setPendingMediaAfterAuth(null);
             }}
             onSuccess={handleLoginSuccess}

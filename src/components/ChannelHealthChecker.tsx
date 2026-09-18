@@ -1037,9 +1037,9 @@ export const ChannelHealthChecker: React.FC<ChannelHealthCheckerProps> = ({
                                       type="button"
                                       onClick={() => handleTestChannel(channel, sIdx)}
                                       className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-teal-900/60 text-slate-300 hover:text-teal-200 border border-white/5 cursor-pointer"
-                                      title={`Testar ${src.label || `Opção ${sIdx + 1}`}`}
+                                      title={`Testar ${src.quality || `Opção ${sIdx + 1}`}`}
                                     >
-                                      {src.label || `Opção ${sIdx + 1}`}
+                                      {src.quality || `Opção ${sIdx + 1}`}
                                     </button>
                                   ))}
                                 </div>
