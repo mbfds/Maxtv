@@ -131,6 +131,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
   // Buffer Adaptativo & Failover Automático
   const failedSourcesSetRef = useRef<Set<number>>(new Set());
+  const streamLoadStartTimeRef = useRef<number>(Date.now());
   const recentStallsRef = useRef<number>(0);
   const lastFragSpeedMbpsRef = useRef<number | undefined>(undefined);
   const [activeBufferProfileLabel, setActiveBufferProfileLabel] = useState<string>('Buffer Turbo BR Adaptativo');
@@ -479,6 +480,17 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const triggerAutomaticFailover = useCallback((reason: string): boolean => {
     failedSourcesSetRef.current.add(currentSourceIndex);
 
+    const currentFailedSource = sources[currentSourceIndex];
+    if (currentFailedSource?.url) {
+      api.recordStreamTelemetry({
+        url: currentFailedSource.url,
+        success: false,
+        error: reason,
+        channelId: (item as any)?.id,
+        channelName: (item as any)?.name
+      }).catch(() => {});
+    }
+
     // Identifica se há outra fonte configurada que ainda não falhou
     let nextIndex = -1;
     for (let i = 0; i < sources.length; i++) {
@@ -493,6 +505,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       const nextName = nextSource?.name || `Servidor ${nextIndex + 1}`;
       showToast(`Instabilidade detectada (${reason}). Alternando automaticamente para ${nextName}...`);
       
+      streamLoadStartTimeRef.current = Date.now();
       setIsLoading(true);
       setHasError(false);
       setIsTimedOut(false);
@@ -509,6 +522,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       showToast('Sinal instável em rotas diretas. Ativando Proxy Acelerador Brasil...');
       setForceProxy(true);
       failedSourcesSetRef.current.clear();
+      streamLoadStartTimeRef.current = Date.now();
       setCurrentSourceIndex(0);
       setIsLoading(true);
       setHasError(false);
@@ -520,7 +534,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
 
     return false;
-  }, [sources, currentSourceIndex, usingProxy, showToast]);
+  }, [sources, currentSourceIndex, usingProxy, showToast, item]);
 
   // Interrompe o vídeo, limpa cache/buffers do player e exibe o modal de assinatura ou login
   const terminatePlayerAndClearCache = useCallback(() => {
@@ -2870,6 +2884,18 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 setIsTimedOut(false);
                 setStreamWarning(null);
                 setIsConnectionUnstable(false);
+
+                // Telemetria de sucesso para ranqueamento dos links top funcionando
+                const latency = Math.max(50, Date.now() - streamLoadStartTimeRef.current);
+                if (currentSource?.url) {
+                  api.recordStreamTelemetry({
+                    url: currentSource.url,
+                    success: true,
+                    latencyMs: latency,
+                    channelId: (item as any)?.id,
+                    channelName: (item as any)?.name
+                  }).catch(() => {});
+                }
               }}
               onError={handleVideoError}
             >

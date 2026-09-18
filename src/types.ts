@@ -354,6 +354,45 @@ export interface SimilarityMatchLog {
   similarityScore: number;
   assignedOption: string;
   matchReason?: string;
+  unifiedName?: string;
+  assignedOptionLabel?: string;
+}
+
+export interface FuzzyDuplicateCandidate {
+  id: string;
+  primaryChannel: {
+    id: string;
+    name: string;
+    category: string;
+    logo?: string;
+    sourcesCount: number;
+    streamUrl?: string;
+  };
+  duplicateChannel: {
+    id: string;
+    name: string;
+    category: string;
+    logo?: string;
+    sourcesCount: number;
+    streamUrl?: string;
+  };
+  similarityScore: number; // 0 to 100 percentage
+  matchReason: string;
+  algorithmDetails?: {
+    levenshteinRatio?: number;
+    tokenSortRatio?: number;
+    tokenSetRatio?: number;
+    diceRatio?: number;
+  };
+}
+
+export interface FuzzyScanResult {
+  success: boolean;
+  totalChannelsScanned: number;
+  duplicatesFound: number;
+  threshold: number;
+  candidates: FuzzyDuplicateCandidate[];
+  scanDurationMs: number;
 }
 
 export interface M3uImportLogEntry {

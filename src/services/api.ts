@@ -1,4 +1,4 @@
-import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData, ChannelEpgSchedule, EpgEnrichResponse } from '../types';
+import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData, ChannelEpgSchedule, EpgEnrichResponse, FuzzyDuplicateCandidate, FuzzyScanResult } from '../types';
 import { getPrefetchedChannels, getPrefetchedVod } from './prefetchService';
 
 const ONE_HOUR_MS = 60 * 60 * 1000; // 1 hour TTL
@@ -625,23 +625,130 @@ export const api = {
     return result;
   },
 
-  async unifyChannelsNow(author?: string): Promise<{
+  clearChannelsCache(): void {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(CHANNELS_CACHE_KEY);
+      }
+    } catch {}
+  },
+
+  async unifyChannelsNow(author?: string, fuzzyThreshold?: number): Promise<{
     success: boolean;
     message: string;
     channelsCount: number;
     mergedChannelsCount: number;
     newChannelsCount: number;
     totalSourcesCount: number;
+    channels?: Channel[];
     durationMs?: number;
+    similarityMatches?: any[];
   }> {
     const res = await adminFetch('/api/admin/channels/unify-now', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ author })
+      body: JSON.stringify({ author, fuzzyThreshold })
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Falha ao unificar grade de canais');
+    }
+
+    // Invalida cache local para carregar os novos canais unificados
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(CHANNELS_CACHE_KEY);
+      }
+    } catch {}
+
+    if (data.channels && Array.isArray(data.channels) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', {
+        detail: { channels: data.channels, count: data.channels.length }
+      }));
+    }
+
+    return data;
+  },
+
+  // Escaneia a grade por canais duplicados usando algoritmo de fuzzy matching
+  async scanFuzzyDuplicates(options?: { threshold?: number; category?: string }): Promise<FuzzyScanResult> {
+    const res = await adminFetch('/api/admin/channels/fuzzy-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao escanear canais duplicados');
+    }
+    return data;
+  },
+
+  // Consolida canais duplicados em um único ID de canal, unificando streams
+  async mergeFuzzyDuplicates(
+    merges: Array<{ primaryChannelId: string; duplicateChannelIds: string[] }>,
+    author?: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    totalDuplicatesRemoved: number;
+    totalMergedStreams: number;
+    remainingChannelsCount: number;
+    channels?: Channel[];
+  }> {
+    const res = await adminFetch('/api/admin/channels/fuzzy-merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merges, author })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao consolidar canais duplicados');
+    }
+
+    // Limpa cache
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(CHANNELS_CACHE_KEY);
+      }
+    } catch {}
+
+    if (data.channels && Array.isArray(data.channels) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', {
+        detail: { channels: data.channels, count: data.channels.length }
+      }));
+    }
+
+    return data;
+  },
+
+  // Telemetria de Stream e Ranking de Links
+  async recordStreamTelemetry(payload: {
+    url: string;
+    success: boolean;
+    latencyMs?: number;
+    playSeconds?: number;
+    error?: string;
+    channelId?: string;
+    channelName?: string;
+  }): Promise<{ success: boolean; telemetry?: any }> {
+    try {
+      const res = await fetch('/api/channels/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    } catch {
+      return { success: false };
+    }
+  },
+
+  async getStreamRanking(limit = 100): Promise<{ success: boolean; count: number; streams: any[] }> {
+    const res = await adminFetch(`/api/admin/streams/ranking?limit=${limit}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao carregar ranking de streams');
     }
     return data;
   },

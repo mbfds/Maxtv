@@ -147,7 +147,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
         api.getSubscribers(),
         api.getGrantsHistory(),
         api.getTransactions(),
-        api.getChannels(),
+        api.getChannels({ forceRefresh: true }),
         api.getSettings(),
         api.getChannelReports(),
         api.getChannelUpdateHistory()
@@ -340,7 +340,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
       setIsLoading(true);
       const res = await api.syncLocalM3uChannels();
       showFeedback(res.message);
-      const cRes = await api.getChannels();
+      api.clearChannelsCache();
+      const cRes = await api.getChannels({ forceRefresh: true });
       if (cRes.channels) setChannels(cRes.channels);
       const hRes = await api.getChannelUpdateHistory();
       if (hRes.success && hRes.lastUpdate) setLastChannelUpdate(hRes.lastUpdate);
@@ -1862,8 +1863,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
               onRefreshChannels={async () => {
                 try {
+                  api.clearChannelsCache();
                   const [cRes, hRes] = await Promise.all([
-                    api.getChannels(),
+                    api.getChannels({ forceRefresh: true }),
                     api.getChannelUpdateHistory()
                   ]);
                   if (cRes.channels) setChannels(cRes.channels);
@@ -1884,7 +1886,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               currentUser={{ name: 'Administrador', email: 'cebolao1302@gmail.com' }}
               onRefreshChannels={async () => {
                 try {
-                  const cRes = await api.getChannels();
+                  api.clearChannelsCache();
+                  const cRes = await api.getChannels({ forceRefresh: true });
                   if (cRes.channels) setChannels(cRes.channels);
                 } catch {}
               }}
@@ -2118,8 +2121,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
               onSaveSuccess={async (count, msg) => {
                 showFeedback(msg);
                 try {
+                  api.clearChannelsCache();
                   const [cRes, hRes] = await Promise.all([
-                    api.getChannels(),
+                    api.getChannels({ forceRefresh: true }),
                     api.getChannelUpdateHistory()
                   ]);
                   if (cRes.channels) setChannels(cRes.channels);

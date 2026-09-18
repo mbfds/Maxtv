@@ -357,6 +357,25 @@ export function initSqlite(): { success: boolean; dbPath: string; error?: string
         rating TEXT,
         created_at TEXT
       );
+
+      -- 14. Stream Telemetry & Link Ranking (Top Funcionando)
+      CREATE TABLE IF NOT EXISTS stream_telemetry (
+        url TEXT PRIMARY KEY,
+        channel_id TEXT,
+        channel_name TEXT,
+        success_count INTEGER DEFAULT 0,
+        failure_count INTEGER DEFAULT 0,
+        total_play_seconds REAL DEFAULT 0,
+        avg_latency_ms REAL DEFAULT 0,
+        last_status TEXT DEFAULT 'online',
+        last_error TEXT,
+        last_tested TEXT,
+        score REAL DEFAULT 100.0,
+        created_at TEXT,
+        updated_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_telemetry_score ON stream_telemetry(score DESC);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_status ON stream_telemetry(last_status);
     `);
 
     console.log('[SQLite] Banco de dados SQLite 3 inicializado com sucesso em:', DB_FILE);
@@ -1645,3 +1664,189 @@ export function sqliteGetEpgAiDescription(programTitle: string, channelName?: st
   };
 }
 
+export interface SqliteStreamTelemetryDoc {
+  url: string;
+  channelId?: string;
+  channelName?: string;
+  successCount: number;
+  failureCount: number;
+  totalPlaySeconds: number;
+  avgLatencyMs: number;
+  lastStatus: 'online' | 'unstable' | 'offline';
+  lastError?: string;
+  lastTested: string;
+  score: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Salva ou atualiza telemetria de um link de stream.
+ * Calcula a pontuação (score 0-100) baseada em taxa de sucesso e latência.
+ * Links com score alto sobem para Opção 1 (Principal).
+ */
+export function sqliteRecordStreamTelemetry(data: {
+  url: string;
+  success: boolean;
+  latencyMs?: number;
+  playSeconds?: number;
+  error?: string;
+  channelId?: string;
+  channelName?: string;
+}): SqliteStreamTelemetryDoc {
+  const db = getSqliteDb();
+  const now = new Date().toISOString();
+  const cleanUrl = (data.url || '').trim();
+
+  const getStmt = db.prepare('SELECT * FROM stream_telemetry WHERE url = ? LIMIT 1');
+  const existing = getStmt.get(cleanUrl) as any;
+
+  let successCount = existing ? Number(existing.success_count || 0) : 0;
+  let failureCount = existing ? Number(existing.failure_count || 0) : 0;
+  let totalPlaySec = existing ? Number(existing.total_play_seconds || 0) : 0;
+  let avgLatency = existing ? Number(existing.avg_latency_ms || 0) : 0;
+  let createdAt = existing ? existing.created_at : now;
+
+  if (data.success) {
+    successCount++;
+    if (typeof data.playSeconds === 'number' && data.playSeconds > 0) {
+      totalPlaySec += data.playSeconds;
+    }
+  } else {
+    failureCount++;
+  }
+
+  if (typeof data.latencyMs === 'number' && data.latencyMs > 0) {
+    if (avgLatency === 0) {
+      avgLatency = data.latencyMs;
+    } else {
+      avgLatency = Math.round((avgLatency * 0.7) + (data.latencyMs * 0.3));
+    }
+  }
+
+  const totalAttempts = successCount + failureCount;
+  let successRate = totalAttempts > 0 ? (successCount / totalAttempts) : 1;
+  let latencyPenalty = avgLatency > 3500 ? 15 : (avgLatency > 2000 ? 5 : 0);
+  let computedScore = Math.max(0, Math.min(100, Math.round((successRate * 100) - latencyPenalty)));
+
+  let lastStatus: 'online' | 'unstable' | 'offline' = 'online';
+  if (!data.success) {
+    lastStatus = failureCount >= 3 ? 'offline' : 'unstable';
+  } else if (avgLatency > 4500) {
+    lastStatus = 'unstable';
+  }
+
+  const insertStmt = db.prepare(`
+    INSERT INTO stream_telemetry (
+      url, channel_id, channel_name, success_count, failure_count,
+      total_play_seconds, avg_latency_ms, last_status, last_error,
+      last_tested, score, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(url) DO UPDATE SET
+      channel_id = COALESCE(excluded.channel_id, stream_telemetry.channel_id),
+      channel_name = COALESCE(excluded.channel_name, stream_telemetry.channel_name),
+      success_count = excluded.success_count,
+      failure_count = excluded.failure_count,
+      total_play_seconds = excluded.total_play_seconds,
+      avg_latency_ms = excluded.avg_latency_ms,
+      last_status = excluded.last_status,
+      last_error = excluded.last_error,
+      last_tested = excluded.last_tested,
+      score = excluded.score,
+      updated_at = excluded.updated_at
+  `);
+
+  insertStmt.run(
+    cleanUrl,
+    data.channelId || existing?.channel_id || null,
+    data.channelName || existing?.channel_name || null,
+    successCount,
+    failureCount,
+    totalPlaySec,
+    avgLatency,
+    lastStatus,
+    data.error || null,
+    now,
+    computedScore,
+    createdAt,
+    now
+  );
+
+  return {
+    url: cleanUrl,
+    channelId: data.channelId || existing?.channel_id,
+    channelName: data.channelName || existing?.channel_name,
+    successCount,
+    failureCount,
+    totalPlaySeconds: totalPlaySec,
+    avgLatencyMs: avgLatency,
+    lastStatus,
+    lastError: data.error,
+    lastTested: now,
+    score: computedScore,
+    createdAt,
+    updatedAt: now
+  };
+}
+
+export function sqliteGetStreamRanking(url: string): SqliteStreamTelemetryDoc | null {
+  const db = getSqliteDb();
+  const stmt = db.prepare('SELECT * FROM stream_telemetry WHERE url = ? LIMIT 1');
+  const row = stmt.get(url) as any;
+  if (!row) return null;
+  return {
+    url: row.url,
+    channelId: row.channel_id,
+    channelName: row.channel_name,
+    successCount: row.success_count,
+    failureCount: row.failure_count,
+    totalPlaySeconds: row.total_play_seconds,
+    avgLatencyMs: row.avg_latency_ms,
+    lastStatus: row.last_status,
+    lastError: row.last_error,
+    lastTested: row.last_tested,
+    score: row.score,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export function sqliteGetTopRankedStreams(limit = 100): SqliteStreamTelemetryDoc[] {
+  const db = getSqliteDb();
+  const stmt = db.prepare('SELECT * FROM stream_telemetry ORDER BY score DESC, success_count DESC, avg_latency_ms ASC LIMIT ?');
+  const rows = stmt.all(limit) as any[];
+  return rows.map(row => ({
+    url: row.url,
+    channelId: row.channel_id,
+    channelName: row.channel_name,
+    successCount: row.success_count,
+    failureCount: row.failure_count,
+    totalPlaySeconds: row.total_play_seconds,
+    avgLatencyMs: row.avg_latency_ms,
+    lastStatus: row.last_status,
+    lastError: row.last_error,
+    lastTested: row.last_tested,
+    score: row.score,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+export function sqliteGetAllStreamTelemetryMap(): Map<string, { score: number; lastStatus: 'online' | 'unstable' | 'offline'; avgLatencyMs: number }> {
+  const db = getSqliteDb();
+  const map = new Map<string, { score: number; lastStatus: 'online' | 'unstable' | 'offline'; avgLatencyMs: number }>();
+  try {
+    const stmt = db.prepare('SELECT url, score, last_status, avg_latency_ms FROM stream_telemetry');
+    const rows = stmt.all() as any[];
+    for (const r of rows) {
+      if (r.url) {
+        map.set(r.url.trim().toLowerCase(), {
+          score: typeof r.score === 'number' ? r.score : 100,
+          lastStatus: r.last_status || 'online',
+          avgLatencyMs: r.avg_latency_ms || 0
+        });
+      }
+    }
+  } catch {}
+  return map;
+}

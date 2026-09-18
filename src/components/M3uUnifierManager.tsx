@@ -36,10 +36,14 @@ import {
   Info,
   AlertTriangle,
   Database,
-  ShieldAlert
+  ShieldAlert,
+  ArrowRight,
+  GitMerge,
+  Wand2,
+  SlidersHorizontal
 } from 'lucide-react';
 import { api } from '../services/api';
-import { Channel, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig, M3uAutoUpdateSource, SimilarityMatchLog } from '../types';
+import { Channel, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateConfig, M3uAutoUpdateSource, SimilarityMatchLog, FuzzyDuplicateCandidate, FuzzyScanResult } from '../types';
 
 interface M3uUnifierManagerProps {
   currentUser?: { name?: string; email?: string };
@@ -58,8 +62,19 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Tabs within unifier: 'url' | 'file' | 'browse' | 'autoupdate' | 'logs'
-  const [subTab, setSubTab] = useState<'url' | 'file' | 'browse' | 'autoupdate' | 'logs'>('url');
+  // Tabs within unifier: 'url' | 'file' | 'fuzzy' | 'autoupdate' | 'logs' | 'browse'
+  const [subTab, setSubTab] = useState<'url' | 'file' | 'fuzzy' | 'autoupdate' | 'logs' | 'browse'>('url');
+
+  // Fuzzy Matching & Similarity Unification State
+  const [fuzzyThreshold, setFuzzyThreshold] = useState<number>(0.78);
+  const [fuzzyThresholdInput, setFuzzyThresholdInput] = useState<number>(0.78);
+  const [fuzzyCategoryFilter, setFuzzyCategoryFilter] = useState<string>('Todos');
+  const [fuzzyCandidates, setFuzzyCandidates] = useState<FuzzyDuplicateCandidate[]>([]);
+  const [isScanningFuzzy, setIsScanningFuzzy] = useState<boolean>(false);
+  const [fuzzyScanDone, setFuzzyScanDone] = useState<boolean>(false);
+  const [isMergingFuzzy, setIsMergingFuzzy] = useState<boolean>(false);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const [fuzzyScanStats, setFuzzyScanStats] = useState<{ totalScanned?: number; durationMs?: number } | null>(null);
 
   // URL import form
   const [m3uUrl, setM3uUrl] = useState<string>('');
@@ -383,15 +398,15 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
     }
   };
 
-  // 1-Click Unify All Known Sources Now
+  // 1-Click Unify All Known Sources Now (with configurable Fuzzy Matching)
   const handleUnifyAllNow = async () => {
     setIsProcessing(true);
     setResultMessage(null);
     try {
-      const res = await api.unifyChannelsNow(currentUser?.name || 'Administrador');
+      const res = await api.unifyChannelsNow(currentUser?.name || 'Administrador', fuzzyThreshold);
       setResultMessage({
         type: 'success',
-        title: 'Grade Unificada com Sucesso!',
+        title: `Grade Unificada via Fuzzy Matching (${Math.round(fuzzyThreshold * 100)}%)!`,
         details: res.message,
         stats: {
           channelsCount: res.channelsCount,
@@ -410,6 +425,160 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
       });
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Fuzzy Scan: Analisa a grade em busca de canais com nomes similares
+  const handleRunFuzzyScan = async (thresh?: number) => {
+    const targetThresh = thresh !== undefined ? thresh : fuzzyThresholdInput;
+    setIsScanningFuzzy(true);
+    setFuzzyScanDone(false);
+    try {
+      const res = await api.scanFuzzyDuplicates({
+        threshold: targetThresh,
+        category: fuzzyCategoryFilter !== 'Todos' ? fuzzyCategoryFilter : undefined
+      });
+      setFuzzyCandidates(res.candidates || []);
+      setFuzzyScanDone(true);
+      setFuzzyScanStats({
+        totalScanned: res.totalChannelsScanned,
+        durationMs: res.scanDurationMs
+      });
+      // Seleciona todos por padrão para conveniência
+      setSelectedCandidateIds(new Set((res.candidates || []).map(c => c.id)));
+
+      if (res.candidates.length === 0) {
+        setResultMessage({
+          type: 'info',
+          title: 'Nenhum canal duplicado detectado!',
+          details: `Nenhum par de canais atingiu a similaridade mínima de ${Math.round(targetThresh * 100)}%. Sua grade está limpa e consolidada.`
+        });
+      } else {
+        setResultMessage({
+          type: 'info',
+          title: `${res.candidates.length} pares de duplicatas identificados`,
+          details: `Algoritmo de fuzzy matching identificou ${res.candidates.length} canais com nomes semelhantes. Você pode consolidar individualmente ou todos de uma vez.`
+        });
+      }
+    } catch (err: any) {
+      setResultMessage({
+        type: 'error',
+        title: 'Erro ao Escanear Duplicados',
+        details: err.message || 'Não foi possível executar a comparação por similaridade.'
+      });
+    } finally {
+      setIsScanningFuzzy(false);
+    }
+  };
+
+  // Consolidação individual de um par duplicado
+  const handleMergeSinglePair = async (candidate: FuzzyDuplicateCandidate) => {
+    setIsMergingFuzzy(true);
+    try {
+      const res = await api.mergeFuzzyDuplicates([
+        {
+          primaryChannelId: candidate.primaryChannel.id,
+          duplicateChannelIds: [candidate.duplicateChannel.id]
+        }
+      ], currentUser?.name || 'Administrador');
+
+      setResultMessage({
+        type: 'success',
+        title: 'Canal Consolidado com Sucesso!',
+        details: `O sinal de "${candidate.duplicateChannel.name}" foi integrado como opção de contingência dentro do ID do canal "${candidate.primaryChannel.name}".`
+      });
+
+      // Remove o par da lista de candidatos
+      setFuzzyCandidates(prev => prev.filter(c => c.id !== candidate.id));
+      setSelectedCandidateIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidate.id);
+        return next;
+      });
+
+      await loadData();
+      if (onRefreshChannels) await onRefreshChannels();
+    } catch (err: any) {
+      setResultMessage({
+        type: 'error',
+        title: 'Erro ao Consolidar Canal',
+        details: err.message || 'Não foi possível fundir os links de stream.'
+      });
+    } finally {
+      setIsMergingFuzzy(false);
+    }
+  };
+
+  // Consolidação em lote de todos os pares selecionados
+  const handleMergeAllSelected = async () => {
+    const toMerge = fuzzyCandidates.filter(c => selectedCandidateIds.has(c.id));
+    if (toMerge.length === 0) return;
+
+    setIsMergingFuzzy(true);
+    try {
+      // Agrupa duplicados pelo canal primário caso haja múltiplos apontando para o mesmo
+      const mergeMap = new Map<string, Set<string>>();
+      for (const c of toMerge) {
+        let set = mergeMap.get(c.primaryChannel.id);
+        if (!set) {
+          set = new Set();
+          mergeMap.set(c.primaryChannel.id, set);
+        }
+        set.add(c.duplicateChannel.id);
+      }
+
+      const mergesPayload = Array.from(mergeMap.entries()).map(([primId, dupSet]) => ({
+        primaryChannelId: primId,
+        duplicateChannelIds: Array.from(dupSet)
+      }));
+
+      const res = await api.mergeFuzzyDuplicates(mergesPayload, currentUser?.name || 'Administrador');
+
+      setResultMessage({
+        type: 'success',
+        title: 'Consolidação Concluída!',
+        details: `${res.totalDuplicatesRemoved} canais duplicados foram consolidados. ${res.totalMergedStreams} servidores de stream adicionados como opções alternativas de contingência.`,
+        stats: {
+          channelsCount: res.remainingChannelsCount,
+          mergedChannelsCount: res.totalDuplicatesRemoved,
+          totalSourcesCount: res.totalMergedStreams
+        }
+      });
+
+      const mergedIds = new Set(toMerge.map(c => c.id));
+      setFuzzyCandidates(prev => prev.filter(c => !mergedIds.has(c.id)));
+      setSelectedCandidateIds(new Set());
+
+      await loadData();
+      if (onRefreshChannels) await onRefreshChannels();
+    } catch (err: any) {
+      setResultMessage({
+        type: 'error',
+        title: 'Erro na Consolidação em Lote',
+        details: err.message || 'Falha ao consolidar canais selecionados.'
+      });
+    } finally {
+      setIsMergingFuzzy(false);
+    }
+  };
+
+  const handleToggleCandidateSelection = (id: string) => {
+    setSelectedCandidateIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedCandidateIds.size === fuzzyCandidates.length) {
+      setSelectedCandidateIds(new Set());
+    } else {
+      setSelectedCandidateIds(new Set(fuzzyCandidates.map(c => c.id)));
     }
   };
 
@@ -563,6 +732,37 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-xs shadow-inner">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400" />
+              <span className="text-slate-400 hidden sm:inline">Fuzzy:</span>
+              <select
+                value={fuzzyThreshold}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setFuzzyThreshold(val);
+                  setFuzzyThresholdInput(val);
+                }}
+                className="bg-transparent text-teal-300 font-bold focus:outline-none cursor-pointer"
+                title="Ajuste a sensibilidade do algoritmo de similaridade para unificação"
+              >
+                <option value={0.72} className="bg-slate-900 text-white">72% (Tolerante)</option>
+                <option value={0.78} className="bg-slate-900 text-white">78% (Equilibrado)</option>
+                <option value={0.85} className="bg-slate-900 text-white">85% (Rigoroso)</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => {
+                setSubTab('fuzzy');
+                handleRunFuzzyScan(fuzzyThreshold);
+              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-teal-300 border border-teal-500/30 transition-all hover:border-teal-400/50"
+              title="Abrir painel de detecção de duplicados com Fuzzy Matching"
+            >
+              <GitMerge className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Escanear</span> Duplicados
+            </button>
+
             <button
               onClick={handleUnifyAllNow}
               disabled={isProcessing}
@@ -709,6 +909,32 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
         >
           <Upload className="w-4 h-4" />
           <span>Arquivo M3U / Texto</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setSubTab('fuzzy');
+            if (fuzzyCandidates.length === 0 && !fuzzyScanDone) {
+              handleRunFuzzyScan();
+            }
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all relative ${
+            subTab === 'fuzzy'
+              ? 'bg-gradient-to-r from-teal-500 to-emerald-600 text-slate-950 font-black shadow-lg shadow-teal-500/30'
+              : 'text-teal-300 hover:text-white hover:bg-slate-800 border border-teal-500/20'
+          }`}
+        >
+          <Sparkles className={`w-4 h-4 ${subTab === 'fuzzy' ? 'text-slate-950' : 'text-amber-400'}`} />
+          <span>Fuzzy Matching (Duplicados)</span>
+          {fuzzyCandidates.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              subTab === 'fuzzy'
+                ? 'bg-slate-950 text-amber-300'
+                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+            }`}>
+              {fuzzyCandidates.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -986,6 +1212,412 @@ export const M3uUnifierManager: React.FC<M3uUnifierManagerProps> = ({
               )}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* SUBTAB: FUZZY MATCHING (COMPARACAO E CONSOLIDACAO DE DUPLICADOS) */}
+      {subTab === 'fuzzy' && (
+        <div className="space-y-6">
+          {/* Header Card */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-400" />
+                    <span>Algoritmo de Fuzzy Matching & Consolidação de Nomes</span>
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                    Levenshtein + Token Sort + Bigram Dice
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
+                  Identifica canais duplicados mesmo quando seus nomes possuem variações de grafia, ordem de palavras, sufixos de qualidade ou pontuação diferente (ex: <span className="text-teal-300 font-mono">"ESPN Brasil HD"</span> vs <span className="text-teal-300 font-mono">"ESPN (BR)"</span>). A consolidação agrupa os links de transmissão como servidores de contingência (Opção 2, Opção 3...) sob um único ID oficial, garantindo redundância máxima sem poluir a grade.
+                </p>
+              </div>
+
+              {fuzzyCandidates.length > 0 && (
+                <div className="flex items-center gap-3 self-start lg:self-center">
+                  <button
+                    type="button"
+                    onClick={handleMergeAllSelected}
+                    disabled={isMergingFuzzy || selectedCandidateIds.size === 0}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 hover:from-teal-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-teal-900/30 transition-all active:scale-95 disabled:opacity-40"
+                  >
+                    {isMergingFuzzy ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Consolidando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <GitMerge className="w-4 h-4" />
+                        <span>Consolidar Selecionados ({selectedCandidateIds.size})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Proteção contra Falsos Positivos */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-teal-300 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-teal-400" />
+                  <span>Diferenciação Numérica</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-normal">
+                  Canais com números distintos (ex: SporTV 1 vs SporTV 2, HBO 2 vs HBO 3) são protegidos e nunca unificados por engano.
+                </p>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-amber-300 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                  <span>Sub-Marcas & Catálogos</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-normal">
+                  Variações temáticas (ex: Telecine Action vs Pipoca vs Touch, Premiere Clubes vs Premiere 2) mantêm IDs independentes.
+                </p>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-indigo-300 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span>Afiliadas & Praças Regionais</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-normal">
+                  Emissoras locais (ex: Globo SP, Globo RJ, Record MG, SBT RS) não são misturadas entre estados diferentes.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Scanner Controls Bar */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 flex-1">
+                {/* Sensibilidade Slider & Presets */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400" />
+                      Sensibilidade do Algoritmo:
+                    </span>
+                    <span className="font-mono font-bold text-teal-300 ml-2">
+                      {Math.round(fuzzyThresholdInput * 100)}% Similaridade
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0.65}
+                      max={0.95}
+                      step={0.01}
+                      value={fuzzyThresholdInput}
+                      onChange={(e) => setFuzzyThresholdInput(parseFloat(e.target.value))}
+                      className="w-40 sm:w-56 accent-teal-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                    />
+                    <div className="flex items-center gap-1 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setFuzzyThresholdInput(0.72)}
+                        className={`px-2 py-0.5 rounded ${fuzzyThresholdInput === 0.72 ? 'bg-teal-500/30 text-teal-200 border border-teal-500/50' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                      >
+                        72%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFuzzyThresholdInput(0.78)}
+                        className={`px-2 py-0.5 rounded ${fuzzyThresholdInput === 0.78 ? 'bg-teal-500/30 text-teal-200 border border-teal-500/50' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                      >
+                        78%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFuzzyThresholdInput(0.85)}
+                        className={`px-2 py-0.5 rounded ${fuzzyThresholdInput === 0.85 ? 'bg-teal-500/30 text-teal-200 border border-teal-500/50' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                      >
+                        85%
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filtro por Categoria */}
+                <div className="space-y-1.5">
+                  <span className="block text-xs font-semibold text-slate-300">
+                    Filtrar Categoria:
+                  </span>
+                  <select
+                    value={fuzzyCategoryFilter}
+                    onChange={(e) => setFuzzyCategoryFilter(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="Todos">Todas as Categorias ({channels.length})</option>
+                    {uniqueCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Botão de Escanear */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleRunFuzzyScan(fuzzyThresholdInput)}
+                  disabled={isScanningFuzzy}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-lg shadow-teal-900/30 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isScanningFuzzy ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Analisando Nomes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Escanear Canais Duplicados</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Scan Status Sub-bar */}
+            {fuzzyScanStats && (
+              <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-3">
+                  <span>Varredura: <strong>{fuzzyScanStats.totalScanned}</strong> canais avaliados</span>
+                  <span>•</span>
+                  <span>Tempo de execução: <strong>{fuzzyScanStats.durationMs}ms</strong></span>
+                  <span>•</span>
+                  <span>Duplicados identificados: <strong className="text-amber-300">{fuzzyCandidates.length}</strong></span>
+                </div>
+
+                {fuzzyCandidates.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAll}
+                    className="text-teal-400 hover:text-teal-300 font-semibold"
+                  >
+                    {selectedCandidateIds.size === fuzzyCandidates.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Duplicates Candidate List */}
+          {fuzzyCandidates.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-bold text-slate-300">
+                  Pares com alta probabilidade de duplicação ({fuzzyCandidates.length}):
+                </span>
+                <span className="text-xs text-slate-400">
+                  {selectedCandidateIds.size} selecionado(s) para consolidação em lote
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {fuzzyCandidates.map((candidate) => {
+                  const isSelected = selectedCandidateIds.has(candidate.id);
+                  return (
+                    <div
+                      key={candidate.id}
+                      className={`bg-slate-900 border rounded-2xl p-5 shadow-lg transition-all ${
+                        isSelected ? 'border-teal-500/40 bg-slate-900/95' : 'border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Top Pair Metadata */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-800/80">
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleCandidateSelection(candidate.id)}
+                            className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                          />
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            {candidate.similarityScore}% Similar
+                          </span>
+                          <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+                            {candidate.matchReason}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleMergeSinglePair(candidate)}
+                          disabled={isMergingFuzzy}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-teal-600/20 hover:bg-teal-600 text-teal-300 hover:text-white border border-teal-500/30 transition-all active:scale-95 disabled:opacity-40"
+                        >
+                          <GitMerge className="w-3.5 h-3.5" />
+                          <span>Consolidar Neste Canal</span>
+                        </button>
+                      </div>
+
+                      {/* Visual Comparison Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-11 gap-4 items-center">
+                        {/* Canal Primário (Oficial / Mantido) */}
+                        <div className="md:col-span-5 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Canal Primário (Mantido na Grade)
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300">
+                              {candidate.primaryChannel.sourcesCount} fonte(s)
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {candidate.primaryChannel.logo ? (
+                              <img
+                                src={candidate.primaryChannel.logo}
+                                alt={candidate.primaryChannel.name}
+                                className="w-10 h-10 rounded-lg object-contain bg-slate-900 border border-slate-800 p-0.5 shrink-0"
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 shrink-0">
+                                <Tv className="w-5 h-5" />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-white text-sm truncate">
+                                {candidate.primaryChannel.name}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                                <span>{candidate.primaryChannel.category}</span>
+                                <span>•</span>
+                                <span className="font-mono text-slate-500 text-[10px] truncate max-w-[120px]">
+                                  ID: {candidate.primaryChannel.id}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {candidate.primaryChannel.streamUrl && (
+                            <div className="text-[10px] font-mono text-slate-500 truncate bg-black/40 px-2 py-1 rounded">
+                              {candidate.primaryChannel.streamUrl}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Indicador de Junção Central */}
+                        <div className="md:col-span-1 flex flex-col items-center justify-center py-2 text-slate-500">
+                          <ArrowRight className="w-5 h-5 text-teal-400 hidden md:block" />
+                          <GitMerge className="w-5 h-5 text-teal-400 md:hidden" />
+                          <span className="text-[9px] font-bold text-slate-400 mt-0.5 text-center">
+                            Unir em 1 ID
+                          </span>
+                        </div>
+
+                        {/* Canal Duplicado (Consolidado em Opção 2+) */}
+                        <div className="md:col-span-5 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                              <Layers className="w-3 h-3" />
+                              Canal Duplicado (Vira Servidor de Backup)
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                              +1 Servidor
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {candidate.duplicateChannel.logo ? (
+                              <img
+                                src={candidate.duplicateChannel.logo}
+                                alt={candidate.duplicateChannel.name}
+                                className="w-10 h-10 rounded-lg object-contain bg-slate-900 border border-slate-800 p-0.5 shrink-0"
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-500 shrink-0">
+                                <Tv className="w-5 h-5" />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-slate-200 text-sm truncate">
+                                {candidate.duplicateChannel.name}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                                <span>{candidate.duplicateChannel.category}</span>
+                                <span>•</span>
+                                <span className="font-mono text-slate-500 text-[10px] truncate max-w-[120px]">
+                                  ID: {candidate.duplicateChannel.id}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {candidate.duplicateChannel.streamUrl && (
+                            <div className="text-[10px] font-mono text-slate-500 truncate bg-black/40 px-2 py-1 rounded">
+                              {candidate.duplicateChannel.streamUrl}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Explicação de Resultado */}
+                      <div className="mt-3 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>
+                          Ao consolidar, o stream de <strong className="text-slate-300">{candidate.duplicateChannel.name}</strong> será salvo como <strong className="text-teal-300">Opção {candidate.primaryChannel.sourcesCount + 1}</strong> no canal principal e o canal repetido será removido da grade.
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
+              {fuzzyScanDone ? (
+                <>
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-white text-base">Grade 100% Otimizada!</h4>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      Nenhum canal duplicado foi encontrado com similaridade ≥ {Math.round(fuzzyThresholdInput * 100)}%. Todos os canais da grade possuem nomes únicos.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFuzzyThresholdInput(0.70);
+                      handleRunFuzzyScan(0.70);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 transition-all"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span>Tentar Varredura com Sensibilidade mais Tolerante (70%)</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mx-auto">
+                    <Sparkles className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-white text-base">Varredura de Duplicados</h4>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                      Clique no botão acima para escanear a grade atual com o algoritmo de Fuzzy Matching e identificar canais repetidos para consolidação de links.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

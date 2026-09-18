@@ -53,7 +53,11 @@ import {
   sqliteUpdateEpgSource,
   sqliteGetEpgSourceById,
   sqliteSaveEpgAiDescription,
-  sqliteGetEpgAiDescription
+  sqliteGetEpgAiDescription,
+  sqliteRecordStreamTelemetry,
+  sqliteGetStreamRanking,
+  sqliteGetTopRankedStreams,
+  sqliteGetAllStreamTelemetryMap
 } from './serverSqlite';
 import { GoogleGenAI } from '@google/genai';
 import {
@@ -137,12 +141,14 @@ interface ServerChannel {
   logo: string;
   streamUrl?: string;
   backupStreamUrl?: string;
-  sources: { name?: string; url: string; referer?: string; userAgent?: string; quality?: string; isWorking?: boolean }[];
+  sources: { name?: string; url: string; referer?: string; userAgent?: string; quality?: string; isWorking?: boolean; score?: number; latencyMs?: number }[];
   isCustom?: boolean;
   isActive: boolean;
   isVipOnly?: boolean;
   epgNow?: string;
   epgNext?: string;
+  epgId?: string;
+  tvgId?: string;
 }
 
 interface ServerSubscriber {
@@ -516,6 +522,8 @@ interface ServerSimilarityMatchLog {
   similarityScore: number;
   assignedOption: string;
   matchReason?: string;
+  unifiedName?: string;
+  assignedOptionLabel?: string;
 }
 
 interface ServerM3uImportLogEntry {
@@ -906,26 +914,143 @@ function qualityWeight(quality?: string): number {
   return 2;
 }
 
-// Intelligent Fuzzy & Linguistic Similarity Calculator
-function calculateChannelSimilarity(keyA: string, keyB: string): { score: number; reason: string } {
+// --- ALGORITMOS DE FUZZY MATCHING (SIMILARIDADE DE NOMES) ---
+
+// 1. Distância de Levenshtein (operações de inserção, remoção e substituição de caracteres)
+function levenshteinDistance(s1: string, s2: string): number {
+  if (s1 === s2) return 0;
+  if (s1.length === 0) return s2.length;
+  if (s2.length === 0) return s1.length;
+
+  let v0 = new Int32Array(s2.length + 1);
+  let v1 = new Int32Array(s2.length + 1);
+
+  for (let i = 0; i <= s2.length; i++) v0[i] = i;
+
+  for (let i = 0; i < s1.length; i++) {
+    v1[0] = i + 1;
+    for (let j = 0; j < s2.length; j++) {
+      const cost = s1[i] === s2[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+    for (let j = 0; j <= s2.length; j++) v0[j] = v1[j];
+  }
+  return v1[s2.length];
+}
+
+// 2. Razão normalizada de Levenshtein (0.0 a 1.0)
+function levenshteinRatio(s1: string, s2: string): number {
+  const maxLen = Math.max(s1.length, s2.length);
+  if (maxLen === 0) return 1.0;
+  const dist = levenshteinDistance(s1, s2);
+  return Math.max(0, 1 - dist / maxLen);
+}
+
+// 3. Token Sort Ratio (ordena palavras alfabeticamente para comparar 'Globo SP' com 'SP Globo')
+function tokenSortRatio(s1: string, s2: string): number {
+  const words1 = s1.split(/\s+/).filter(Boolean).sort().join(' ');
+  const words2 = s2.split(/\s+/).filter(Boolean).sort().join(' ');
+  return levenshteinRatio(words1, words2);
+}
+
+// 4. Token Set Ratio (compara interseção de termos essenciais com os termos excedentes)
+function tokenSetRatio(s1: string, s2: string): number {
+  const set1 = new Set(s1.split(/\s+/).filter(Boolean));
+  const set2 = new Set(s2.split(/\s+/).filter(Boolean));
+
+  const intersection = [...set1].filter(x => set2.has(x)).sort().join(' ');
+  const remainder1 = [...set1].filter(x => !set2.has(x)).sort().join(' ');
+  const remainder2 = [...set2].filter(x => !set1.has(x)).sort().join(' ');
+
+  if (!intersection) {
+    return tokenSortRatio(s1, s2);
+  }
+
+  const t0 = intersection;
+  const t1 = [intersection, remainder1].filter(Boolean).join(' ');
+  const t2 = [intersection, remainder2].filter(Boolean).join(' ');
+
+  const r01 = levenshteinRatio(t0, t1);
+  const r02 = levenshteinRatio(t0, t2);
+  const r12 = levenshteinRatio(t1, t2);
+
+  return Math.max(r01, r02, r12);
+}
+
+// 5. Bigram Dice Coefficient (sobreposição de pares de caracteres adjacentes)
+function bigramDiceRatio(s1: string, s2: string): number {
+  const clean1 = s1.replace(/\s+/g, '');
+  const clean2 = s2.replace(/\s+/g, '');
+  if (clean1 === clean2) return 1.0;
+  if (clean1.length < 2 || clean2.length < 2) return 0;
+
+  const bg1 = new Map<string, number>();
+  for (let i = 0; i < clean1.length - 1; i++) {
+    const pair = clean1.slice(i, i + 2);
+    bg1.set(pair, (bg1.get(pair) || 0) + 1);
+  }
+
+  let matches = 0;
+  for (let i = 0; i < clean2.length - 1; i++) {
+    const pair = clean2.slice(i, i + 2);
+    const count = bg1.get(pair) || 0;
+    if (count > 0) {
+      matches++;
+      bg1.set(pair, count - 1);
+    }
+  }
+
+  return (2 * matches) / ((clean1.length - 1) + (clean2.length - 1));
+}
+
+// Extrai afiliadas ou estados regionais (SP, RJ, MG, etc.)
+function extractAffiliateRegion(key: string): string | null {
+  const regions = ['sp', 'rj', 'mg', 'df', 'rs', 'pr', 'ba', 'pe', 'ce', 'sc', 'go', 'es', 'am', 'pa', 'rn', 'pb', 'al', 'se', 'pi', 'ma', 'mt', 'ms', 'to', 'ro', 'ac', 'ap', 'rr'];
+  for (const reg of regions) {
+    const regex = new RegExp(`\\b${reg}\\b`);
+    if (regex.test(key)) return reg;
+  }
+  return null;
+}
+
+// Motor Híbrido de Fuzzy Matching com salvaguardas rigorosas contra falsos positivos
+function calculateChannelSimilarity(
+  keyA: string,
+  keyB: string,
+  options?: { threshold?: number }
+): {
+  score: number;
+  reason: string;
+  details?: {
+    levenshteinRatio: number;
+    tokenSortRatio: number;
+    tokenSetRatio: number;
+    diceRatio: number;
+  };
+} {
+  const threshold = options?.threshold ?? 0.78;
+
   if (keyA === keyB) {
-    return { score: 1.0, reason: 'Chave canônica idêntica' };
+    return {
+      score: 1.0,
+      reason: 'Correspondência canônica exata (100%)',
+      details: { levenshteinRatio: 1, tokenSortRatio: 1, tokenSetRatio: 1, diceRatio: 1 }
+    };
   }
 
-  // Quick bailouts for high performance
-  if (!keyA || !keyB || keyA[0] !== keyB[0] || Math.abs(keyA.length - keyB.length) > 12) {
-    return { score: 0, reason: 'Incompatibilidade básica' };
+  if (!keyA || !keyB) {
+    return { score: 0, reason: 'Chave nula ou vazia' };
   }
 
-  // If both have numbers and they differ (e.g. SporTV 1 vs SporTV 2, Premiere 2 vs Premiere 3)
+  // Salvaguarda 1: Se ambos têm número e são diferentes (ex: SporTV 1 vs SporTV 2, Premiere 2 vs Premiere 3)
   const numA = extractChannelNumber(keyA);
   const numB = extractChannelNumber(keyB);
   if (numA && numB && numA !== numB) {
     return { score: 0, reason: `Canais com numeração distinta (${numA} vs ${numB})` };
   }
 
-  // Disallow merging distinct sub-brands (e.g. Telecine Action vs Telecine Pipoca)
-  const subBrands = ['pipoca', 'action', 'premium', 'touch', 'fun', 'cult', 'prime', 'novelas', 'series', 'family', 'signature', 'plus', 'kids', 'junior', 'news', 'rural'];
+  // Salvaguarda 2: Submarcas distintas de catálogo (ex: Telecine Action vs Telecine Pipoca)
+  const subBrands = ['pipoca', 'action', 'premium', 'touch', 'fun', 'cult', 'prime', 'novelas', 'series', 'family', 'signature', 'plus', 'kids', 'junior', 'news', 'rural', 'wild', 'mundo', 'retro', 'comedy'];
   for (const sb of subBrands) {
     const hasA = keyA.includes(sb);
     const hasB = keyB.includes(sb);
@@ -934,46 +1059,63 @@ function calculateChannelSimilarity(keyA: string, keyB: string): { score: number
     }
   }
 
+  // Salvaguarda 3: Praças regionais distintas (ex: Globo SP vs Globo RJ)
+  const regA = extractAffiliateRegion(keyA);
+  const regB = extractAffiliateRegion(keyB);
+  if (regA && regB && regA !== regB) {
+    return { score: 0, reason: `Afiliadas regionais distintas (${regA.toUpperCase()} vs ${regB.toUpperCase()})` };
+  }
+
+  // Executa métricas de fuzzy matching
+  const levRatio = levenshteinRatio(keyA, keyB);
+  const sortRatio = tokenSortRatio(keyA, keyB);
+  const setRatio = tokenSetRatio(keyA, keyB);
+  const diceRatio = bigramDiceRatio(keyA, keyB);
+
+  // Palavras em comum
   const wordsA = keyA.split(' ').filter(Boolean);
   const wordsB = keyB.split(' ').filter(Boolean);
-
   const setA = new Set(wordsA);
   const setB = new Set(wordsB);
-
   const intersection = new Set([...setA].filter(x => setB.has(x)));
-  const union = new Set([...setA, ...setB]);
-
-  const jaccard = union.size > 0 ? intersection.size / union.size : 0;
-
-  // If one title is entirely contained in the other and has at least 2 common meaningful words
   const minWords = Math.min(wordsA.length, wordsB.length);
+
+  let finalScore = Math.max(
+    sortRatio,
+    setRatio * 0.96,
+    levRatio,
+    (diceRatio * 0.4) + (sortRatio * 0.4) + (levRatio * 0.2)
+  );
+
+  // Se todos os termos essenciais de um título estão contidos no outro e há 2+ termos
   if (minWords >= 2 && intersection.size === minWords) {
-    return { score: 0.95, reason: 'Todos os termos essenciais coincidem' };
+    finalScore = Math.max(finalScore, 0.94);
   }
 
-  // Bigram Dice for slight misspellings
-  const getBigrams = (s: string) => {
-    const clean = s.replace(/\s+/g, '');
-    const bg = new Set<string>();
-    for (let i = 0; i < clean.length - 1; i++) {
-      bg.add(clean.slice(i, i + 2));
-    }
-    return bg;
+  finalScore = Math.round(finalScore * 100) / 100;
+
+  const details = {
+    levenshteinRatio: Math.round(levRatio * 100) / 100,
+    tokenSortRatio: Math.round(sortRatio * 100) / 100,
+    tokenSetRatio: Math.round(setRatio * 100) / 100,
+    diceRatio: Math.round(diceRatio * 100) / 100
   };
 
-  const bgA = getBigrams(keyA);
-  const bgB = getBigrams(keyB);
-  const bgIntersection = new Set([...bgA].filter(x => bgB.has(x)));
-  const bgUnion = new Set([...bgA, ...bgB]);
-  const bigramScore = bgUnion.size > 0 ? (2 * bgIntersection.size) / (bgA.size + bgB.size) : 0;
+  if (finalScore >= threshold) {
+    let reasonType = 'Fuzzy Match';
+    if (sortRatio >= 0.92) reasonType = 'Mesmos termos em ordem variante (Token Sort)';
+    else if (setRatio >= 0.92) reasonType = 'Termos principais coincidentes (Token Set)';
+    else if (levRatio >= 0.88) reasonType = 'Variação leve de grafia (Levenshtein)';
+    else if (diceRatio >= 0.85) reasonType = 'Similaridade fonética/n-grams (Dice)';
 
-  const finalScore = (jaccard * 0.6) + (bigramScore * 0.4);
-
-  if (finalScore >= 0.82) {
-    return { score: finalScore, reason: `Similaridade de termos e grafia (${Math.round(finalScore * 100)}%)` };
+    return {
+      score: finalScore,
+      reason: `${reasonType} (${Math.round(finalScore * 100)}%)`,
+      details
+    };
   }
 
-  return { score: finalScore, reason: 'Similaridade insuficiente' };
+  return { score: finalScore, reason: `Similaridade insuficiente (${Math.round(finalScore * 100)}% < ${Math.round(threshold * 100)}%)`, details };
 }
 
 // Helper to extract canonical channel key for intelligent deduplication and source merging
@@ -1155,7 +1297,8 @@ function parseM3UToChannels(content: string, originTag: string = 'm3u', maxChann
 // preserving the highest quality source as Primary and appending alternatives as Opção 2, Opção 3, etc.
 function unifyChannelCollections(
   baseList: ServerChannel[],
-  incomingList: ServerChannel[]
+  incomingList: ServerChannel[],
+  options?: { fuzzyThreshold?: number }
 ): {
   unified: ServerChannel[];
   mergedChannelsCount: number;
@@ -1163,61 +1306,49 @@ function unifyChannelCollections(
   totalSourcesCount: number;
   similarityMatches: ServerSimilarityMatchLog[];
 } {
+  const effectiveThreshold = typeof options?.fuzzyThreshold === 'number'
+    ? Math.min(0.98, Math.max(0.60, options.fuzzyThreshold))
+    : 0.78;
+
   const map = new Map<string, ServerChannel>();
   const tokenIndex = new Map<string, Set<string>>();
+  const prefixIndex = new Map<string, Set<string>>();
   const similarityMatches: ServerSimilarityMatchLog[] = [];
   let mergedChannelsCount = 0;
   let newChannelsCount = 0;
 
-  const stopWords = new Set(['brasil', 'bra', 'canais', 'canal', 'telecine', 'filmes', 'series', 'online', 'vivo', 'aovivo', 'play', 'plus', 'oficial', 'hd', 'fhd', '4k', 'sd']);
+  // Retrieve current link telemetry ranking map from SQLite
+  const telemetryMap = sqliteGetAllStreamTelemetryMap();
+
+  const stopWords = new Set(['brasil', 'bra', 'canais', 'canal', 'online', 'vivo', 'aovivo', 'play', 'oficial', 'hd', 'fhd', '4k', 'sd']);
   const indexTokens = (key: string) => {
-    const words = key.split(' ').filter(w => w.length >= 4 && !stopWords.has(w));
+    const words = key.split(/\s+/).filter(w => w.length >= 3 && !stopWords.has(w));
     for (const w of words) {
       let set = tokenIndex.get(w);
       if (!set) {
         set = new Set();
         tokenIndex.set(w, set);
       }
-      if (set.size < 40) {
+      if (set.size < 60) {
         set.add(key);
+      }
+    }
+    // Index prefix 3 chars
+    const pfx = key.slice(0, 3).trim();
+    if (pfx.length >= 2) {
+      let pSet = prefixIndex.get(pfx);
+      if (!pSet) {
+        pSet = new Set();
+        prefixIndex.set(pfx, pSet);
+      }
+      if (pSet.size < 60) {
+        pSet.add(key);
       }
     }
   };
 
-  // 1. Seed map with base list
-  for (const item of baseList) {
-    if (!item || !item.name) continue;
-    const { canonicalKey, cleanDisplayName, detectedQuality } = extractCanonicalChannelKey(item.name);
-    const key = canonicalKey || item.id;
-
-    // Standardize existing sources
-    const normalizedSources = (item.sources && item.sources.length > 0)
-      ? item.sources.map((s, idx) => ({
-          ...s,
-          name: s.name && !s.name.startsWith('Opção') ? s.name : `Opção ${idx + 1} (${s.quality || 'HD'})`
-        }))
-      : [
-          {
-            name: 'Opção 1 (Principal)',
-            url: item.streamUrl || '',
-            quality: detectedQuality || '1080p',
-            isWorking: true
-          }
-        ];
-
-    map.set(key, {
-      ...item,
-      name: item.name || cleanDisplayName,
-      sources: normalizedSources,
-      streamUrl: normalizedSources[0]?.url || item.streamUrl || '',
-      backupStreamUrl: normalizedSources[1]?.url || item.backupStreamUrl || normalizedSources[0]?.url || ''
-    });
-    indexTokens(key);
-  }
-
-  // 2. Merge incoming channels with Preprocessing & Similarity Matching
-  for (const item of incomingList) {
-    if (!item || !item.name) continue;
+  const processChannelItem = (item: ServerChannel) => {
+    if (!item || !item.name) return;
     const { canonicalKey, cleanDisplayName, detectedQuality } = extractCanonicalChannelKey(item.name);
     const key = canonicalKey || item.id;
 
@@ -1229,20 +1360,32 @@ function unifyChannelCollections(
     if (map.has(key)) {
       matchedKey = key;
       matchScore = 1.0;
-      matchReason = 'Correspondência exata de chave canônica';
+      matchReason = 'Correspondência exata de chave canônica (100%)';
     } else {
-      // Find candidate keys sharing significant word tokens (avoids quadratic comparisons)
-      const words = key.split(' ').filter(w => w.length >= 4 && !stopWords.has(w));
+      // Find candidate keys sharing significant word tokens or common prefixes
+      const words = key.split(/\s+/).filter(w => w.length >= 3 && !stopWords.has(w));
       const candidates = new Set<string>();
+
       for (const w of words) {
         const matching = tokenIndex.get(w);
         if (matching) {
           for (const k of matching) {
             candidates.add(k);
-            if (candidates.size >= 20) break;
+            if (candidates.size >= 40) break;
           }
         }
-        if (candidates.size >= 20) break;
+        if (candidates.size >= 40) break;
+      }
+
+      const pfx = key.slice(0, 3).trim();
+      if (pfx.length >= 2 && candidates.size < 40) {
+        const pMatching = prefixIndex.get(pfx);
+        if (pMatching) {
+          for (const k of pMatching) {
+            candidates.add(k);
+            if (candidates.size >= 40) break;
+          }
+        }
       }
 
       let bestCandidateKey: string | null = null;
@@ -1250,15 +1393,15 @@ function unifyChannelCollections(
       let highestReason = '';
 
       for (const candidateKey of candidates) {
-        const { score, reason } = calculateChannelSimilarity(key, candidateKey);
-        if (score >= 0.82 && score > highestSimilarity) {
+        const { score, reason } = calculateChannelSimilarity(key, candidateKey, { threshold: effectiveThreshold });
+        if (score >= effectiveThreshold && score > highestSimilarity) {
           highestSimilarity = score;
           highestReason = reason;
           bestCandidateKey = candidateKey;
         }
       }
 
-      if (bestCandidateKey && highestSimilarity >= 0.82) {
+      if (bestCandidateKey && highestSimilarity >= effectiveThreshold) {
         matchedKey = bestCandidateKey;
         matchScore = highestSimilarity;
         matchReason = highestReason;
@@ -1287,29 +1430,23 @@ function unifyChannelCollections(
           const optName = `Opção ${currentOptNum} (${optQuality})`;
           assignedOptionLabel = optName;
 
+          // Lookup telemetry score (real working links top priority)
+          const telem = telemetryMap.get(normalizedUrl);
+          const streamScore = telem ? telem.score : 100;
+          const isWorking = telem ? telem.lastStatus !== 'offline' : true;
+
           const newSourceObj = {
             name: optName,
             url: src.url,
             quality: optQuality,
             referer: src.referer,
             userAgent: src.userAgent,
-            isWorking: true
+            isWorking,
+            score: streamScore,
+            latencyMs: telem?.avgLatencyMs
           };
 
-          // If incoming source has strictly higher quality than existing primary source, promote to Opção 1!
-          const existingPrimaryQuality = existing.sources[0]?.quality;
-          if (qualityWeight(optQuality) > qualityWeight(existingPrimaryQuality)) {
-            existing.sources.unshift(newSourceObj);
-            // Re-index names
-            existing.sources.forEach((s, idx) => {
-              s.name = idx === 0 ? `Opção 1 (Principal ${s.quality || 'HD'})` : `Opção ${idx + 1} (${s.quality || 'HD'})`;
-            });
-            existing.streamUrl = existing.sources[0].url;
-            existing.backupStreamUrl = existing.sources[1]?.url || existing.sources[0].url;
-          } else {
-            existing.sources.push(newSourceObj);
-          }
-
+          existing.sources.push(newSourceObj);
           addedAnySource = true;
         }
       }
@@ -1321,8 +1458,8 @@ function unifyChannelCollections(
       if (existing.category === 'Variedades & Música' && item.category && item.category !== 'Variedades & Música') {
         existing.category = item.category;
       }
-      if (existing.sources.length > 1) {
-        existing.backupStreamUrl = existing.sources[1].url;
+      if (!existing.epgId && item.epgId) {
+        existing.epgId = item.epgId;
       }
 
       if (addedAnySource) {
@@ -1330,18 +1467,17 @@ function unifyChannelCollections(
         similarityMatches.push({
           incomingName: item.name,
           matchedChannelName: existing.name,
+          unifiedName: existing.name,
           similarityScore: Math.round(matchScore * 100),
           assignedOption: assignedOptionLabel || `Opção ${existing.sources.length}`,
+          assignedOptionLabel: assignedOptionLabel || `Opção ${existing.sources.length}`,
           matchReason
         });
       }
     } else {
       // NEW CHANNEL -> ADD TO UNIFIED MAP
-      const itemSources = (item.sources && item.sources.length > 0)
-        ? item.sources.map((s, idx) => ({
-            ...s,
-            name: `Opção ${idx + 1} (${s.quality || detectedQuality || 'HD'})`
-          }))
+      const rawSources = (item.sources && item.sources.length > 0)
+        ? item.sources
         : [
             {
               name: `Opção 1 (${detectedQuality || '1080p'})`,
@@ -1351,17 +1487,75 @@ function unifyChannelCollections(
             }
           ];
 
+      const itemSources = rawSources
+        .filter(s => s && s.url && !isBannedStreamUrl(s.url))
+        .map((s, idx) => {
+          const telem = telemetryMap.get(s.url.toLowerCase().trim());
+          return {
+            ...s,
+            name: `Opção ${idx + 1} (${s.quality || detectedQuality || 'HD'})`,
+            score: telem ? telem.score : 100,
+            isWorking: telem ? telem.lastStatus !== 'offline' : true,
+            latencyMs: telem?.avgLatencyMs
+          };
+        });
+
       map.set(key, {
         ...item,
         id: item.id || `ch-unified-${map.size + 1}-${key.replace(/\s+/g, '-').slice(0, 30)}`,
         name: cleanDisplayName || item.name,
-        sources: itemSources,
+        sources: itemSources.length > 0 ? itemSources : [
+          {
+            name: `Opção 1 (${detectedQuality || '1080p'})`,
+            url: item.streamUrl || '',
+            quality: detectedQuality || '1080p',
+            isWorking: true
+          }
+        ],
         streamUrl: itemSources[0]?.url || item.streamUrl || '',
         backupStreamUrl: itemSources[1]?.url || itemSources[0]?.url || '',
         isActive: item.isActive !== false
       });
       indexTokens(key);
       newChannelsCount++;
+    }
+  };
+
+  // 1. Process all channels in baseList (deduplicating within baseList itself)
+  for (const item of baseList) {
+    processChannelItem(item);
+  }
+
+  // 2. Process all incoming channels (merging against baseList or expanding options)
+  for (const item of incomingList) {
+    processChannelItem(item);
+  }
+
+  // 3. For EVERY channel, sort sources by Telemetry Ranking (Top functioning links first) and quality
+  for (const ch of map.values()) {
+    if (ch.sources && ch.sources.length > 1) {
+      ch.sources.sort((a, b) => {
+        const scoreA = typeof (a as any).score === 'number' ? (a as any).score : 100;
+        const scoreB = typeof (b as any).score === 'number' ? (b as any).score : 100;
+        if (scoreB !== scoreA) return scoreB - scoreA; // Highest functioning score first
+
+        const qA = qualityWeight(a.quality);
+        const qB = qualityWeight(b.quality);
+        if (qB !== qA) return qB - qA; // Higher resolution/quality second
+
+        const latA = typeof (a as any).latencyMs === 'number' ? (a as any).latencyMs : 9999;
+        const latB = typeof (b as any).latencyMs === 'number' ? (b as any).latencyMs : 9999;
+        return latA - latB; // Lower latency third
+      });
+
+      // Renumber options cleanly
+      ch.sources.forEach((s, idx) => {
+        const q = s.quality || 'HD';
+        s.name = idx === 0 ? `Opção 1 (Principal ${q})` : `Opção ${idx + 1} (${q})`;
+      });
+
+      ch.streamUrl = ch.sources[0]?.url || ch.streamUrl;
+      ch.backupStreamUrl = ch.sources[1]?.url || ch.streamUrl;
     }
   }
 
@@ -3973,41 +4167,88 @@ app.get('/api/admin/channels/unify-stats', (req, res) => {
 
 // POST /api/admin/channels/unify-now (Unificar Grade Oficial com 1 Clique)
 app.post('/api/admin/channels/unify-now', async (req, res) => {
-  const { author } = req.body || {};
+  const { author, fuzzyThreshold } = req.body || {};
   const currentAuthor = author || 'Administrador';
   const startTime = Date.now();
+  const threshold = typeof fuzzyThreshold === 'number'
+    ? Math.min(0.98, Math.max(0.60, fuzzyThreshold))
+    : 0.78;
 
   try {
-    // 1. Base list: usa a grade configurada existente (channels-config.json/SQLite)
+    // 1. Coleta a base atual da grade
     let baseList = customConfigChannels.length > 0 
-      ? customConfigChannels 
-      : (parsedRamysChannels.length > 0 ? parsedRamysChannels : (parsedSaimoChannels.length > 0 ? parsedSaimoChannels : []));
+      ? [...customConfigChannels] 
+      : (parsedRamysChannels.length > 0 ? [...parsedRamysChannels] : (parsedSaimoChannels.length > 0 ? [...parsedSaimoChannels] : []));
 
-    // 2. Unificar coleções existentes e fontes customizadas
-    let mergedResult = {
-      unified: [...baseList],
-      mergedChannelsCount: 0,
-      newChannelsCount: 0,
-      totalSourcesCount: baseList.reduce((acc, c) => acc + (c.sources?.length || 1), 0),
-      similarityMatches: [] as any[]
-    };
+    // 2. Coleta todas as fontes M3U cadastradas no SQLite e no m3uAutoUpdateConfig
+    const sqliteSources = sqliteGetAllM3uSources().filter(s => s.enabled);
+    const autoSources = (m3uAutoUpdateConfig.sources || []).filter(s => s.enabled);
 
-    if (customAdminChannels.length > 0) {
-      mergedResult = unifyChannelCollections(mergedResult.unified, customAdminChannels);
+    const uniqueSourcesMap = new Map<string, string>();
+    for (const s of sqliteSources) {
+      if (s.url) uniqueSourcesMap.set(s.url.trim(), s.name || 'Lista M3U Local');
+    }
+    for (const s of autoSources) {
+      if (s.url) uniqueSourcesMap.set(s.url.trim(), s.name || 'Fonte M3U Automática');
     }
 
-    // 3. Save to disk
+    // Se houver fontes cadastradas, baixar e extrair os canais
+    let extraChannelsFromSources: ServerChannel[] = [];
+    const downloadedSourcesInfo: string[] = [];
+
+    for (const [sourceUrl, sourceName] of uniqueSourcesMap.entries()) {
+      try {
+        console.log(`[UNIFY-NOW] Baixando e sincronizando lista M3U: ${sourceName} (${sourceUrl})`);
+        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(sourceUrl, 90000);
+        const parsed = parseM3UToChannels(content, sourceName);
+        if (parsed.length > 0) {
+          extraChannelsFromSources = extraChannelsFromSources.concat(parsed);
+          downloadedSourcesInfo.push(`${sourceName} (${parsed.length} canais, ${sizeFormatted})`);
+        }
+      } catch (errSrc: any) {
+        console.warn(`[UNIFY-NOW] Aviso ao sincronizar fonte ${sourceName}:`, errSrc.message);
+      }
+    }
+
+    // Combina todos os canais para passar pelo filtro e unificador
+    const allChannelsToConsolidate = [
+      ...baseList,
+      ...extraChannelsFromSources,
+      ...customAdminChannels
+    ];
+
+    if (allChannelsToConsolidate.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nenhum canal encontrado para unificar. Adicione uma lista M3U ou canais primeiro.'
+      });
+    }
+
+    // 3. Unifica TODAS as coleções através do motor canônico + fuzzy similarity + telemetria de links
+    const mergedResult = unifyChannelCollections([], allChannelsToConsolidate, { fuzzyThreshold: threshold });
+
+    // 4. Salva a grade unificada no disco e no SQLite
     saveUnifiedGradeToDisk(
       mergedResult.unified,
       currentAuthor,
-      'Unificação Geral da Grade de Canais',
-      `Grade unificada com sucesso! Total de ${mergedResult.unified.length} canais consolidados, ${mergedResult.mergedChannelsCount} opções de contingência (Opção 2+) mapeadas, ${mergedResult.totalSourcesCount} servidores totais.`
+      'Unificação Geral da Grade de Canais (1-Clique)',
+      `Grade unificada com sucesso via Fuzzy Matching (sensibilidade ${Math.round(threshold * 100)}%)! Total de ${mergedResult.unified.length} canais consolidados, ${mergedResult.mergedChannelsCount} opções de contingência (Opção 2+) agrupadas, ${mergedResult.totalSourcesCount} servidores totais ranqueados.`
     );
 
-    // Register in transparent M3U import logs
+    // Atualiza tabela channels do SQLite
+    try {
+      sqliteSaveAllChannels(mergedResult.unified);
+    } catch (dbErr: any) {
+      console.warn('[UNIFY-NOW] Aviso ao salvar canais no SQLite:', dbErr.message);
+    }
+
+    // Invalida cache de resposta para que o frontend receba os dados novos imediatamente
+    invalidateChannelsCache();
+
+    // Registra log transparente
     logM3uImportEntry({
-      sourceName: 'Unificação Geral da Grade (1-Clique)',
-      totalFound: baseList.length,
+      sourceName: `Unificação Geral da Grade (${downloadedSourcesInfo.length} fontes M3U)`,
+      totalFound: allChannelsToConsolidate.length,
       duplicatesConsolidated: mergedResult.mergedChannelsCount,
       newChannelsAdded: mergedResult.newChannelsCount,
       totalStreamOptions: mergedResult.totalSourcesCount,
@@ -4015,21 +4256,392 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
       status: 'success',
       durationMs: Date.now() - startTime,
       author: currentAuthor,
-      details: `Unificação executada com sucesso. Grade M3U/M3U8 atualizada com ${mergedResult.unified.length} canais e ${mergedResult.totalSourcesCount} servidores/opções mapeadas.`,
-      similarityMatches: mergedResult.similarityMatches.slice(0, 30)
+      details: `Unificação executada com sucesso via algoritmo de Fuzzy Matching (${Math.round(threshold * 100)}% de similaridade). ${allChannelsToConsolidate.length} canais processados a partir de ${downloadedSourcesInfo.length} fontes M3U ativas. ${mergedResult.mergedChannelsCount} canais duplicados foram consolidados em servidores de contingência (Opção 2/Opção 3), mantendo a grade com ${mergedResult.unified.length} canais limpos e ${mergedResult.totalSourcesCount} servidores ativos.`,
+      similarityMatches: mergedResult.similarityMatches.slice(0, 50)
     });
 
     res.json({
       success: true,
-      message: `Grade unificada com sucesso! ${mergedResult.unified.length} canais consolidados e ${mergedResult.totalSourcesCount} fontes/opções ativas para todos.`,
+      message: `Grade unificada com sucesso! ${mergedResult.unified.length} canais consolidados e ${mergedResult.totalSourcesCount} servidores/opções mapeadas.`,
       channelsCount: mergedResult.unified.length,
       mergedChannelsCount: mergedResult.mergedChannelsCount,
       newChannelsCount: mergedResult.newChannelsCount,
       totalSourcesCount: mergedResult.totalSourcesCount,
+      channels: mergedResult.unified,
+      sourcesProcessed: downloadedSourcesInfo,
+      similarityMatches: mergedResult.similarityMatches,
       durationMs: Date.now() - startTime
     });
   } catch (err: any) {
+    console.error('[UNIFY-NOW] Erro na unificação:', err);
     res.status(500).json({ success: false, error: err.message || 'Falha ao unificar grade de canais' });
+  }
+});
+
+// POST /api/admin/channels/fuzzy-scan (Escaneia duplicados por similaridade de nomes na grade atual)
+app.post('/api/admin/channels/fuzzy-scan', (req, res) => {
+  const startTime = Date.now();
+  const { threshold: rawThreshold, category } = req.body || {};
+  const threshold = typeof rawThreshold === 'number'
+    ? Math.min(0.98, Math.max(0.60, rawThreshold))
+    : 0.78;
+
+  const currentChannels = customConfigChannels.length > 0 
+    ? customConfigChannels 
+    : (parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels);
+
+  const filterCategory = category && category !== 'Todos' ? category : null;
+  const targetChannels = filterCategory
+    ? currentChannels.filter(c => c.category === filterCategory)
+    : currentChannels;
+
+  // Prepara canais com chave canônica e nomes limpos
+  const prepared = targetChannels.map(ch => {
+    const { canonicalKey, cleanDisplayName, detectedQuality } = extractCanonicalChannelKey(ch.name);
+    return {
+      channel: ch,
+      canonicalKey: canonicalKey || ch.name.toLowerCase(),
+      cleanDisplayName,
+      detectedQuality
+    };
+  });
+
+  const candidates: Array<{
+    id: string;
+    primaryChannel: {
+      id: string;
+      name: string;
+      category: string;
+      logo?: string;
+      sourcesCount: number;
+      streamUrl?: string;
+    };
+    duplicateChannel: {
+      id: string;
+      name: string;
+      category: string;
+      logo?: string;
+      sourcesCount: number;
+      streamUrl?: string;
+    };
+    similarityScore: number;
+    matchReason: string;
+    algorithmDetails?: any;
+  }> = [];
+
+  const matchedPairs = new Set<string>();
+
+  // Inverted token index para detecção rápida e escalável
+  const tokenIndex = new Map<string, number[]>();
+  const stopWords = new Set(['brasil', 'bra', 'canais', 'canal', 'online', 'vivo', 'aovivo', 'play', 'oficial', 'hd', 'fhd', '4k', 'sd']);
+
+  prepared.forEach((item, idx) => {
+    const words = item.canonicalKey.split(/\s+/).filter(w => w.length >= 3 && !stopWords.has(w));
+    for (const w of words) {
+      let list = tokenIndex.get(w);
+      if (!list) {
+        list = [];
+        tokenIndex.set(w, list);
+      }
+      if (list.length < 80) {
+        list.push(idx);
+      }
+    }
+    const pfx = item.canonicalKey.slice(0, 3).trim();
+    if (pfx.length >= 2) {
+      let list = tokenIndex.get('__pfx_' + pfx);
+      if (!list) {
+        list = [];
+        tokenIndex.set('__pfx_' + pfx, list);
+      }
+      if (list.length < 80) {
+        list.push(idx);
+      }
+    }
+  });
+
+  for (let i = 0; i < prepared.length; i++) {
+    const itemA = prepared[i];
+    const candidateIndices = new Set<number>();
+    const words = itemA.canonicalKey.split(/\s+/).filter(w => w.length >= 3 && !stopWords.has(w));
+
+    for (const w of words) {
+      const idxList = tokenIndex.get(w);
+      if (idxList) {
+        for (const idx of idxList) {
+          if (idx > i) candidateIndices.add(idx);
+        }
+      }
+    }
+
+    const pfx = itemA.canonicalKey.slice(0, 3).trim();
+    if (pfx.length >= 2) {
+      const idxList = tokenIndex.get('__pfx_' + pfx);
+      if (idxList) {
+        for (const idx of idxList) {
+          if (idx > i) candidateIndices.add(idx);
+        }
+      }
+    }
+
+    for (const j of candidateIndices) {
+      const itemB = prepared[j];
+      const chA = itemA.channel;
+      const chB = itemB.channel;
+
+      if (chA.id === chB.id) continue;
+      const pairKey = [chA.id, chB.id].sort().join(':::');
+      if (matchedPairs.has(pairKey)) continue;
+
+      const sim = calculateChannelSimilarity(itemA.canonicalKey, itemB.canonicalKey, { threshold });
+      if (sim.score >= threshold) {
+        matchedPairs.add(pairKey);
+
+        // Define canal primário (o que tiver mais fontes ou logo definido)
+        const aScore = (chA.sources?.length || 1) * 10 + (chA.logo && !chA.logo.includes('unsplash') ? 5 : 0);
+        const bScore = (chB.sources?.length || 1) * 10 + (chB.logo && !chB.logo.includes('unsplash') ? 5 : 0);
+        const [prim, dup] = aScore >= bScore ? [chA, chB] : [chB, chA];
+
+        candidates.push({
+          id: `pair-${prim.id}-${dup.id}`,
+          primaryChannel: {
+            id: prim.id,
+            name: prim.name,
+            category: prim.category,
+            logo: prim.logo,
+            sourcesCount: prim.sources?.length || 1,
+            streamUrl: prim.streamUrl || prim.sources?.[0]?.url
+          },
+          duplicateChannel: {
+            id: dup.id,
+            name: dup.name,
+            category: dup.category,
+            logo: dup.logo,
+            sourcesCount: dup.sources?.length || 1,
+            streamUrl: dup.streamUrl || dup.sources?.[0]?.url
+          },
+          similarityScore: Math.round(sim.score * 100),
+          matchReason: sim.reason,
+          algorithmDetails: sim.details
+        });
+      }
+    }
+  }
+
+  // Ordena por maior similaridade primeiro
+  candidates.sort((a, b) => b.similarityScore - a.similarityScore);
+
+  res.json({
+    success: true,
+    totalChannelsScanned: targetChannels.length,
+    duplicatesFound: candidates.length,
+    threshold,
+    candidates,
+    scanDurationMs: Date.now() - startTime
+  });
+});
+
+// POST /api/admin/channels/fuzzy-merge (Consolida links de canais duplicados em um único ID de canal)
+app.post('/api/admin/channels/fuzzy-merge', (req, res) => {
+  const { author, merges } = req.body || {};
+  const currentAuthor = author || 'Administrador';
+
+  if (!merges || !Array.isArray(merges) || merges.length === 0) {
+    return res.status(400).json({ success: false, error: 'Lista de consolidação "merges" é obrigatória.' });
+  }
+
+  const channelsList = customConfigChannels.length > 0 
+    ? [...customConfigChannels] 
+    : (parsedRamysChannels.length > 0 ? [...parsedRamysChannels] : [...parsedSaimoChannels]);
+
+  const channelMap = new Map<string, ServerChannel>();
+  channelsList.forEach(c => channelMap.set(c.id, { ...c, sources: c.sources ? [...c.sources] : [] }));
+
+  let totalMergedStreams = 0;
+  let totalDuplicatesRemoved = 0;
+  const removedIds = new Set<string>();
+  const telemetryMap = sqliteGetAllStreamTelemetryMap();
+
+  for (const mergeOp of merges) {
+    const primary = channelMap.get(mergeOp.primaryChannelId);
+    if (!primary) continue;
+
+    const dupIds: string[] = Array.isArray(mergeOp.duplicateChannelIds) 
+      ? mergeOp.duplicateChannelIds 
+      : [mergeOp.duplicateChannelId].filter(Boolean);
+
+    // Garante que o canal primário possui array de fontes
+    if (!primary.sources || primary.sources.length === 0) {
+      primary.sources = [{
+        name: 'Opção 1 (Original)',
+        url: primary.streamUrl || '',
+        quality: '1080p',
+        isWorking: true
+      }];
+    }
+
+    const existingUrls = new Set(primary.sources.map(s => s.url.toLowerCase().trim()));
+
+    for (const dupId of dupIds) {
+      if (dupId === primary.id || removedIds.has(dupId)) continue;
+      const dupChannel = channelMap.get(dupId);
+      if (!dupChannel) continue;
+
+      const dupSources = (dupChannel.sources && dupChannel.sources.length > 0)
+        ? dupChannel.sources
+        : [{ url: dupChannel.streamUrl || '', quality: '1080p', name: dupChannel.name }];
+
+      for (const dSrc of dupSources) {
+        if (!dSrc.url || isBannedStreamUrl(dSrc.url)) continue;
+        const normUrl = dSrc.url.toLowerCase().trim();
+        if (!existingUrls.has(normUrl)) {
+          existingUrls.add(normUrl);
+          const optIndex = primary.sources.length + 1;
+          const optQuality = dSrc.quality || '1080p';
+          const telem = telemetryMap.get(normUrl);
+
+          primary.sources.push({
+            name: `Opção ${optIndex} (Backup ${dupChannel.name})`,
+            url: dSrc.url,
+            quality: optQuality,
+            referer: dSrc.referer,
+            userAgent: dSrc.userAgent,
+            isWorking: telem ? telem.lastStatus !== 'offline' : true,
+            score: telem ? telem.score : 100,
+            latencyMs: telem?.avgLatencyMs
+          });
+          totalMergedStreams++;
+        }
+      }
+
+      // Se o canal duplicado tiver logo de melhor qualidade
+      if ((!primary.logo || primary.logo.includes('unsplash.com')) && dupChannel.logo && !dupChannel.logo.includes('unsplash.com')) {
+        primary.logo = dupChannel.logo;
+      }
+
+      removedIds.add(dupId);
+      channelMap.delete(dupId);
+      totalDuplicatesRemoved++;
+    }
+  }
+
+  if (totalDuplicatesRemoved === 0) {
+    return res.json({
+      success: true,
+      message: 'Nenhum canal duplicado precisou ser alterado.',
+      totalDuplicatesRemoved: 0,
+      totalMergedStreams: 0,
+      remainingChannelsCount: channelMap.size
+    });
+  }
+
+  const updatedChannelList = Array.from(channelMap.values());
+
+  // Salva no disco e no SQLite
+  saveUnifiedGradeToDisk(
+    updatedChannelList,
+    currentAuthor,
+    'Consolidação Fuzzy de Canais Duplicados',
+    `Consolidados ${totalDuplicatesRemoved} canais duplicados em um único ID oficial. Adicionados ${totalMergedStreams} servidores alternativos de contingência.`
+  );
+
+  try {
+    sqliteSaveAllChannels(updatedChannelList);
+  } catch (err: any) {
+    console.warn('[FUZZY-MERGE] Erro ao salvar SQLite:', err.message);
+  }
+
+  invalidateChannelsCache();
+
+  logM3uImportEntry({
+    sourceName: 'Consolidação via Fuzzy Matching',
+    totalFound: channelsList.length,
+    duplicatesConsolidated: totalDuplicatesRemoved,
+    newChannelsAdded: 0,
+    totalStreamOptions: totalMergedStreams,
+    finalGradeCount: updatedChannelList.length,
+    status: 'success',
+    durationMs: 50,
+    author: currentAuthor,
+    details: `${totalDuplicatesRemoved} canais com nomes semelhantes foram consolidados em canais primários com links de contingência únicos.`
+  });
+
+  res.json({
+    success: true,
+    message: `${totalDuplicatesRemoved} canais duplicados foram consolidados com sucesso! ${totalMergedStreams} opções de stream foram integradas ao canal principal em um único ID.`,
+    totalDuplicatesRemoved,
+    totalMergedStreams,
+    remainingChannelsCount: updatedChannelList.length,
+    channels: updatedChannelList
+  });
+});
+
+// POST /api/admin/channels/sync-and-unify (Alias para sincronizar e unificar tudo)
+app.post('/api/admin/channels/sync-and-unify', async (req, res) => {
+  // Redireciona internamente para o unify-now inteligente
+  const fakeReq = { ...req, body: req.body };
+  return (app as any)._router.handle({ ...fakeReq, url: '/api/admin/channels/unify-now', method: 'POST' }, res);
+});
+
+// POST /api/channels/telemetry (Registra métrica de funcionamento/falha de link em tempo real)
+app.post('/api/channels/telemetry', (req, res) => {
+  try {
+    const { url, success, latencyMs, playSeconds, error, channelId, channelName } = req.body || {};
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ success: false, error: 'URL do stream é obrigatória' });
+    }
+
+    const cleanUrl = url.trim();
+    // Resolve URL direta se for rota de proxy
+    let targetUrl = cleanUrl;
+    if (cleanUrl.includes('/api/proxy?url=')) {
+      try {
+        const decoded = decodeURIComponent(cleanUrl.split('/api/proxy?url=')[1].split('&')[0]);
+        if (decoded.startsWith('http')) targetUrl = decoded;
+      } catch {}
+    }
+
+    const doc = sqliteRecordStreamTelemetry({
+      url: targetUrl,
+      success: Boolean(success),
+      latencyMs: typeof latencyMs === 'number' ? latencyMs : undefined,
+      playSeconds: typeof playSeconds === 'number' ? playSeconds : undefined,
+      error: error ? String(error).slice(0, 300) : undefined,
+      channelId,
+      channelName
+    });
+
+    // Se o canal estiver na grade de memória, atualiza status da opção correspondente
+    if (channelId) {
+      const channel = customConfigChannels.find(c => c.id === channelId);
+      if (channel && Array.isArray(channel.sources)) {
+        const src = channel.sources.find(s => s.url.includes(targetUrl) || targetUrl.includes(s.url));
+        if (src) {
+          src.isWorking = doc.lastStatus !== 'offline';
+          (src as any).score = doc.score;
+          (src as any).latencyMs = doc.avgLatencyMs;
+        }
+      }
+    }
+
+    res.json({ success: true, telemetry: doc });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/admin/streams/ranking (Top links funcionando ranqueados por taxa de sucesso)
+app.get('/api/admin/streams/ranking', (req, res) => {
+  try {
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+    const topStreams = sqliteGetTopRankedStreams(limit);
+    res.json({
+      success: true,
+      count: topStreams.length,
+      streams: topStreams
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
