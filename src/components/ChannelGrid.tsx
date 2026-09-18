@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tv, Play, Crown, Radio, Sparkles, Filter, Heart } from 'lucide-react';
+import { Tv, Play, Crown, Radio, Sparkles, Filter, Heart, PlusCircle } from 'lucide-react';
 import { Channel, ChannelCategory, FavoriteItem, WatchProgress, VodItem } from '../types';
 import { ContinueWatchingRow } from './ContinueWatchingRow';
 import { CachedImage } from './CachedImage';
@@ -10,6 +10,7 @@ interface ChannelGridProps {
   isVip: boolean;
   onSelectChannel: (channel: Channel) => void;
   onOpenCheckout: () => void;
+  onOpenImportChannels?: () => void;
   favorites?: FavoriteItem[];
   onToggleFavorite?: (channel: Channel) => void;
   watchProgress?: WatchProgress[];
@@ -204,6 +205,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   isVip,
   onSelectChannel,
   onOpenCheckout,
+  onOpenImportChannels,
   favorites = [],
   onToggleFavorite,
   watchProgress = [],
@@ -289,7 +291,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
       </div>
 
       {/* Counter and Status */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-2.5">
           <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           <h2 className="text-xl font-bold text-white tracking-tight">
@@ -300,16 +302,30 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           </span>
         </div>
 
-        {!isVip && (
-          <button
-            type="button"
-            onClick={onOpenCheckout}
-            className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
-          >
-            <Crown className="w-3.5 h-3.5" />
-            <span>Liberar todos os canais VIP</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          {onOpenImportChannels && (
+            <button
+              type="button"
+              onClick={onOpenImportChannels}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer shadow-sm hover:scale-[1.02] active:scale-95"
+              title="Importar canais via link M3U/M3U8 ou arquivo"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Adicionar Lista / Link M3U</span>
+            </button>
+          )}
+
+          {!isVip && (
+            <button
+              type="button"
+              onClick={onOpenCheckout}
+              className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span>Liberar todos os canais VIP</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Channels Grid with Virtualized Visibility */}

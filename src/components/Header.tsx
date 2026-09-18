@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound, Heart, X, Play, ChevronRight, Calendar } from 'lucide-react';
+import { Tv, Film, PlayCircle, Shield, Crown, Search, Sparkles, User as UserIcon, LogOut, KeyRound, Heart, X, Play, ChevronRight, Calendar, ListPlus } from 'lucide-react';
 import { Subscriber, User, NavigationTab, Channel, VodItem } from '../types';
 
 interface HeaderProps {
@@ -11,6 +11,7 @@ interface HeaderProps {
   currentUser: User | null;
   onOpenCheckout: () => void;
   onOpenAuth: () => void;
+  onOpenImportChannels?: () => void;
   onLogout: () => void;
   totalChannelsCount: number;
   favoritesCount?: number;
@@ -31,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onOpenCheckout,
   onOpenAuth,
+  onOpenImportChannels,
   onLogout,
   totalChannelsCount,
   favoritesCount = 0,
@@ -513,6 +515,18 @@ export const Header: React.FC<HeaderProps> = ({
                     <UserIcon className="w-4 h-4 text-indigo-400" />
                     <span>Minha Conta & Assinatura</span>
                   </button>
+
+                  {onOpenImportChannels && (
+                    <button
+                      id="btn-header-import-m3u"
+                      type="button"
+                      onClick={() => { setShowUserMenu(false); onOpenImportChannels(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-950/40 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <ListPlus className="w-4 h-4 text-indigo-400" />
+                      <span>Adicionar Lista / Link M3U</span>
+                    </button>
+                  )}
 
                   {!isVip && (
                     <button

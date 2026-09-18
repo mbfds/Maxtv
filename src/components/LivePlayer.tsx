@@ -112,7 +112,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [aspectRatio, setAspectRatio] = useState<AspectRatioMode>('contain');
   const [qualities, setQualities] = useState<QualityOption[]>([]);
   const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 = Auto
-  const [activeMenu, setActiveMenu] = useState<'settings' | 'sources' | 'help' | 'subtitles' | 'episodes' | null>(null);
+  const [activeMenu, setActiveMenu] = useState<'settings' | 'sources' | 'help' | 'subtitles' | 'episodes' | 'controls' | null>(null);
 
   // Subtitles (.vtt / .srt) State
   const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<SubtitleTrackOption[]>([]);
@@ -148,12 +148,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   const [isCastSupported, setIsCastSupported] = useState<boolean>(false);
   const [isAirPlaySupported, setIsAirPlaySupported] = useState<boolean>(false);
 
-  // Status de Rede (Online/Offline) e Lógica de Reconexão Automática & Re-buffer
+  // Status de Rede (Online/Offline)
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
-  const [reconnectAttempt, setReconnectAttempt] = useState<number>(0);
-  const [rebufferCount, setRebufferCount] = useState<number>(0);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const webPlayerUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -815,139 +811,16 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }, 1000);
   }, []);
 
-  // Tentativa inteligente de re-buffer para transmissões HLS/DASH/TS quando houver micro-travamento ou queda momentânea
-  const attemptRebuffer = useCallback((reason: string) => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    recentStallsRef.current += 1;
-    setRebufferCount(prev => prev + 1);
-
-    // 1. Re-buffer em fluxo HLS
-    if (hlsRef.current) {
-      try {
-        hlsRef.current.startLoad();
-        if (type === 'channel') {
-          if (hlsRef.current.liveSyncPosition) {
-            v.currentTime = hlsRef.current.liveSyncPosition;
-          } else if (v.buffered && v.buffered.length > 0) {
-            const bufEnd = v.buffered.end(v.buffered.length - 1);
-            if (bufEnd - v.currentTime > 0.4 || v.currentTime > bufEnd) {
-              v.currentTime = Math.max(0, bufEnd - 0.2);
-            }
-          }
-        } else {
-          v.currentTime += 0.2;
-        }
-      } catch (e) {
-        console.warn('[HLS] Falha ao tentar re-buffer:', e);
-      }
-    }
-
-    // 2. Re-buffer em fluxo DASH
-    if (dashPlayerRef.current) {
-      try {
-        (dashPlayerRef.current as any).refreshManifest();
-        if (type === 'channel') {
-          dashPlayerRef.current.seek((dashPlayerRef.current as any).duration());
-        } else {
-          dashPlayerRef.current.seek(v.currentTime + 0.2);
-        }
-      } catch (e) {
-        console.warn('[DASH] Falha ao tentar re-buffer:', e);
-      }
-    }
-
-    // 3. Re-buffer para streams HTML5 nativas / MPEG-TS
-    if (!hlsRef.current && !dashPlayerRef.current) {
-      try {
-        if (v.buffered && v.buffered.length > 0) {
-          const bufEnd = v.buffered.end(v.buffered.length - 1);
-          v.currentTime = Math.max(0, bufEnd - 0.1);
-        } else {
-          v.currentTime += 0.15;
-        }
-      } catch (e) {}
-    }
-
-    // Tenta retomar reprodução ativa
-    const playPromise = v.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch(() => {});
-    }
-  }, [type]);
-
-  const attemptRebufferRef = useRef(attemptRebuffer);
-  attemptRebufferRef.current = attemptRebuffer;
-
-  // Lógica de reconexão automática e tentativa de re-buffer caso a conexão com a stream caia
-  const triggerStreamReconnection = useCallback((reason: string) => {
-    if (isReconnecting) return;
-    setIsReconnecting(true);
-    setIsLoading(true);
-    setIsConnectionUnstable(true);
-
-    const nextAttempt = reconnectAttempt + 1;
-    setReconnectAttempt(nextAttempt);
-
-    showToast(`Instabilidade detectada (${reason}). Reconectando transmissão (${nextAttempt}/5)...`);
-
-    // Dispara tentativa imediata de re-buffer
-    attemptRebuffer(reason);
-
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      const v = videoRef.current;
-      // Se a reprodução recuperou e o vídeo já está rodando normalmente
-      if (v && !v.paused && v.readyState >= 3) {
-        setIsReconnecting(false);
-        setReconnectAttempt(0);
-        setRebufferCount(0);
-        setIsLoading(false);
-        setIsConnectionUnstable(false);
-        showToast('Transmissão restabelecida com sucesso!');
-        return;
-      }
-
-      // Se após 3 tentativas ainda falhar, tenta failover para outro servidor se disponível
-      if (nextAttempt >= 3 && sources.length > 1) {
-        const switched = triggerAutomaticFailover(`Falha de conexão contínua (${reason})`);
-        if (switched) {
-          setIsReconnecting(false);
-          return;
-        }
-      }
-
-      if (nextAttempt < 5) {
-        setReloadCounter(c => c + 1);
-      } else {
-        // Excedeu o limite de reconexão: inicia backoff exponencial estruturado
-        setIsReconnecting(false);
-        setHasError(true);
-        setErrorMessage('A transmissão ao vivo perdeu o sinal e não pôde reconectar automaticamente. Verifique sua conexão.');
-        setIsLoading(false);
-        startExponentialBackoff();
-      }
-    }, 2500);
-  }, [isReconnecting, reconnectAttempt, showToast, attemptRebuffer, sources.length, triggerAutomaticFailover, startExponentialBackoff]);
-
-  const triggerStreamReconnectionRef = useRef(triggerStreamReconnection);
-  triggerStreamReconnectionRef.current = triggerStreamReconnection;
-
   // Monitoramento de conectividade de rede do navegador (Online / Offline)
   useEffect(() => {
     const handleOnline = () => {
       setIsNetworkOnline(true);
-      showToast('Conexão de rede restabelecida! Reconectando transmissão...');
-      triggerStreamReconnectionRef.current('Internet restabelecida');
+      showToast('Conexão de rede restabelecida!');
     };
 
     const handleOffline = () => {
       setIsNetworkOnline(false);
-      showToast('Conexão de internet perdida (Offline). Aguardando sinal...');
+      showToast('Conexão de internet perdida (Offline).');
     };
 
     window.addEventListener('online', handleOnline);
@@ -959,48 +832,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     };
   }, [showToast]);
 
-  // Watchdog de fluxo ao vivo: detecta congelamento silencioso ou queda do fluxo e re-bufferiza
-  useEffect(() => {
-    if (type !== 'channel' || !isPlaying || hasError || isReconnecting) return;
-
-    let previousTime = -1;
-    let freezeTimeCount = 0;
-
-    const interval = setInterval(() => {
-      const v = videoRef.current;
-      if (!v || v.paused || v.ended || hasError) {
-        freezeTimeCount = 0;
-        return;
-      }
-
-      // Se a posição não avançou e está aguardando buffer
-      if (v.currentTime === previousTime && v.readyState < 3) {
-        freezeTimeCount += 2;
-        if (freezeTimeCount >= 4 && freezeTimeCount < 8) {
-          attemptRebufferRef.current('Watchdog: travamento de buffer ao vivo');
-        } else if (freezeTimeCount >= 8) {
-          freezeTimeCount = 0;
-          triggerStreamReconnectionRef.current('Watchdog: transmissão congelada');
-        }
-      } else {
-        previousTime = v.currentTime;
-        freezeTimeCount = 0;
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [type, isPlaying, hasError, isReconnecting]);
-
   const handleForceReload = () => {
     autoRetryCountRef.current = 0;
     setAutoRetryCount(0);
-    setIsReconnecting(false);
-    setReconnectAttempt(0);
-    setRebufferCount(0);
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
     if (backoffTimerRef.current) {
       clearInterval(backoffTimerRef.current);
       backoffTimerRef.current = null;
@@ -1310,12 +1144,11 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           });
 
           dashPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_STALLED, () => {
-            attemptRebufferRef.current('Stall de reprodução DASH');
+            // Reprodução aguardando buffer
           });
 
           dashPlayer.on(dashjs.MediaPlayer.events.BUFFER_EMPTY, () => {
             setIsLoading(true);
-            attemptRebufferRef.current('Buffer vazio DASH');
           });
 
           dashPlayer.on(dashjs.MediaPlayer.events.BUFFER_LOADED, () => {
@@ -1323,7 +1156,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           });
 
           dashPlayer.on(dashjs.MediaPlayer.events.ERROR, () => {
-            triggerStreamReconnectionRef.current('Erro protocolo DASH');
+            if (triggerAutomaticFailover('Erro protocolo DASH')) {
+              return;
+            }
+            setHasError(true);
+            setErrorMessage('Não foi possível carregar a transmissão.');
+            setIsLoading(false);
           });
         } catch (err) {
           video.src = streamUrl;
@@ -1454,14 +1292,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         });
 
         hls.on(Hls.Events.ERROR, (event, data) => {
-          // Recuperação inteligente de micro-travamentos de buffer com re-buffer automático
           if (!data.fatal && (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || data.details === Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE || data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL)) {
             recentStallsRef.current += 1;
             if (hls.config) {
               hls.config.maxBufferLength = Math.min(130, (hls.config.maxBufferLength || 60) + 20);
               hls.config.liveSyncDurationCount = Math.min(10, (hls.config.liveSyncDurationCount || 5) + 1);
             }
-            attemptRebufferRef.current('Micro-travamento de buffer HLS');
             return;
           }
 
@@ -1471,21 +1307,29 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                 try {
                   hls.startLoad();
                 } catch (e) {}
-                triggerStreamReconnectionRef.current('Instabilidade de rede HLS');
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 try {
                   hls.recoverMediaError();
-                  attemptRebufferRef.current('Recuperação de mídia HLS');
                 } catch {
-                  triggerStreamReconnectionRef.current('Erro de decodificação HLS');
+                  if (triggerAutomaticFailover('Erro de decodificação HLS')) {
+                    return;
+                  }
+                  setHasError(true);
+                  setErrorMessage('Erro de decodificação no sinal.');
+                  setIsLoading(false);
                 }
                 break;
               default:
+                if (triggerAutomaticFailover('Falha geral no stream HLS')) {
+                  return;
+                }
                 try {
                   hls.destroy();
                 } catch (e) {}
-                triggerStreamReconnectionRef.current('Falha geral no stream HLS');
+                setHasError(true);
+                setErrorMessage('Não foi possível carregar a transmissão ao vivo.');
+                setIsLoading(false);
                 break;
             }
           }
@@ -2765,12 +2609,10 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   applyDynamicBufferToHls(hlsRef.current, dyn);
                   setActiveBufferProfileLabel(dyn.profileLabel);
                 }
-                attemptRebufferRef.current('Buffer em espera');
               }}
               onStalled={() => {
                 setIsLoading(true);
                 setIsConnectionUnstable(true);
-                attemptRebufferRef.current('Fluxo de dados interrompido (stalled)');
               }}
               onPlaying={() => { 
                 hasCanPlayFiredRef.current = true;
@@ -2782,13 +2624,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   clearInterval(backoffTimerRef.current);
                   backoffTimerRef.current = null;
                 }
-                if (reconnectTimeoutRef.current) {
-                  clearTimeout(reconnectTimeoutRef.current);
-                  reconnectTimeoutRef.current = null;
-                }
-                setIsReconnecting(false);
-                setReconnectAttempt(0);
-                setRebufferCount(0);
                 setIsBackoffActive(false);
                 setBackoffSecondsLeft(null);
                 autoRetryCountRef.current = 0;
@@ -2810,13 +2645,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   clearInterval(backoffTimerRef.current);
                   backoffTimerRef.current = null;
                 }
-                if (reconnectTimeoutRef.current) {
-                  clearTimeout(reconnectTimeoutRef.current);
-                  reconnectTimeoutRef.current = null;
-                }
-                setIsReconnecting(false);
-                setReconnectAttempt(0);
-                setRebufferCount(0);
                 setIsBackoffActive(false);
                 setBackoffSecondsLeft(null);
                 autoRetryCountRef.current = 0;
@@ -2914,35 +2742,6 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </button>
             )}
 
-            {/* Overlay de Reconexão Automática e Re-buffer */}
-            {isReconnecting && (
-              <div 
-                id="player-auto-reconnect-overlay"
-                className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-slate-950/95 text-white text-xs font-semibold px-4 sm:px-5 py-2.5 rounded-2xl border border-amber-500/50 shadow-2xl backdrop-blur-xl transition-all animate-fadeIn flex items-center gap-3"
-              >
-                <RefreshCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
-                <div className="text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-bold">Reconectando transmissão</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
-                      {reconnectAttempt}/5
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Restabelecendo conexão e sincronizando buffers HLS/DASH...
-                  </p>
-                </div>
-                <button
-                  id="btn-force-reconnect"
-                  type="button"
-                  onClick={handleForceReload}
-                  className="ml-2 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-all cursor-pointer active:scale-95 shrink-0"
-                >
-                  Forçar
-                </button>
-              </div>
-            )}
-
             {/* Indicador de Status de Rede (Online/Offline) no canto do player para transmissões ao vivo */}
             {type === 'channel' && (
               <div 
@@ -2952,36 +2751,25 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                     ? 'top-16 right-4 sm:top-16 sm:right-6' 
                     : 'top-3.5 right-3.5 sm:top-4 sm:right-4'
                 } ${
-                  isNetworkOnline && !isReconnecting && !hasError
+                  isNetworkOnline && !hasError
                     ? 'bg-slate-950/80 text-emerald-300 border-emerald-500/40 shadow-black/40'
-                    : isReconnecting
-                    ? 'bg-amber-950/90 text-amber-300 border-amber-500/50 shadow-black/50 animate-pulse'
                     : 'bg-red-950/90 text-red-300 border-red-500/50 shadow-black/50 animate-pulse'
                 }`}
                 title={
-                  isNetworkOnline && !isReconnecting && !hasError
+                  isNetworkOnline && !hasError
                     ? 'Status da Rede: Online (Transmissão Ao Vivo Ativa)'
-                    : isReconnecting
-                    ? `Reconectando transmissão... (Tentativa ${reconnectAttempt}/5)`
                     : 'Status da Rede: Sem Conexão (Offline)'
                 }
               >
                 <span className={`w-2 h-2 rounded-full ${
-                  isNetworkOnline && !isReconnecting && !hasError
+                  isNetworkOnline && !hasError
                     ? 'bg-emerald-400 animate-pulse'
-                    : isReconnecting
-                    ? 'bg-amber-400 animate-spin'
                     : 'bg-red-400'
                 }`} />
-                {isNetworkOnline && !isReconnecting && !hasError ? (
+                {isNetworkOnline && !hasError ? (
                   <>
                     <Wifi className="w-3 h-3 text-emerald-400" />
                     <span>Online</span>
-                  </>
-                ) : isReconnecting ? (
-                  <>
-                    <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />
-                    <span>Reconectando...</span>
                   </>
                 ) : (
                   <>
@@ -3175,1213 +2963,316 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
               </div>
             )}
 
-            {/* Top Bar (Title info, Quality indicator, Close button) */}
+            
+            {/* Minimalist Top & Bottom Overlay */}
             <div 
-              className={`absolute top-0 left-0 right-0 p-3 sm:p-5 bg-gradient-to-b from-black/90 via-black/50 to-transparent flex items-center justify-between gap-3 z-35 transition-opacity duration-300 ${
-                showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+              className={`absolute inset-0 pointer-events-none transition-opacity duration-300 z-35 flex flex-col justify-between ${
+                showControls ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              {/* Left Side: Dedicated Back Button & Media Title and Info */}
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden pr-2">
-                {/* Dedicated 'Voltar' Back Button */}
-                <button
-                  id="player-back-nav-btn"
-                  type="button"
-                  onClick={handleClose}
-                  className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white border border-white/20 hover:border-indigo-400/50 text-xs font-semibold backdrop-blur-md shadow-md transition-all cursor-pointer shrink-0 active:scale-95 group"
-                  title="Voltar para a navegação anterior"
-                  aria-label="Voltar para a tela anterior"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 text-indigo-400 group-hover:-translate-x-0.5 transition-transform" />
-                  <span className="font-semibold">Voltar</span>
-                </button>
+              {/* Top Layer - Discrete Corners */}
+              <div className="flex items-start justify-between p-4 sm:p-6 w-full">
+                 <div className="flex items-center gap-3 bg-slate-900/40 hover:bg-slate-900/70 backdrop-blur-md rounded-2xl px-3 py-2 pointer-events-auto transition-colors border border-white/5">
+                   {('logo' in item && item.logo) ? (
+                      <img src={item.logo} alt={'name' in item ? item.name : (item as any).title} className="w-8 h-8 object-contain shrink-0" />
+                   ) : ('posterUrl' in item && item.posterUrl) ? (
+                      <img src={item.posterUrl} alt={(item as any).title} className="w-6 h-8 object-cover rounded shrink-0" />
+                   ) : null}
+                   <div className="flex flex-col">
+                     <span className="font-bold text-sm text-white drop-shadow-sm max-w-[200px] sm:max-w-xs truncate">
+                       {'name' in item ? item.name : (item as any).title}
+                     </span>
+                     {type === 'channel' ? (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                           <span className="flex items-center gap-1 text-[9px] font-bold text-red-400 uppercase tracking-tighter shrink-0">
+                             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> AO VIVO
+                           </span>
+                        </div>
+                     ) : (
+                        <span className="text-[10px] text-slate-300">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                     )}
+                   </div>
+                 </div>
 
-                {'logo' in item && item.logo ? (
-                  <img 
-                    src={item.logo} 
-                    alt={'name' in item ? item.name : (item as any).title} 
-                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain bg-slate-900/80 p-1 rounded-full border border-white/10 shadow-sm shrink-0" 
-                  />
-                ) : 'posterUrl' in item && item.posterUrl ? (
-                  <img 
-                    src={item.posterUrl} 
-                    alt={(item as any).title} 
-                    className="w-7 h-10 sm:w-8 sm:h-11 object-cover rounded-lg border border-white/10 shadow-sm shrink-0" 
-                  />
-                ) : null}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="font-bold text-sm sm:text-base md:text-lg text-white truncate drop-shadow-sm">
-                      {'name' in item ? item.name : (item as any).title}
-                    </span>
-                    {type === 'channel' ? (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-[10px] font-bold rounded uppercase tracking-tighter text-white shadow-sm shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          AO VIVO
-                        </span>
-
-                        {/* Status de Rede Online/Offline no Header */}
-                        <span
-                          id="header-network-status-badge"
-                          className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-tight border backdrop-blur-md transition-colors shrink-0 ${
-                            isNetworkOnline && !isReconnecting && !hasError
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                              : isReconnecting
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
-                              : 'bg-red-600/30 text-red-200 border-red-500/50 animate-pulse'
-                          }`}
-                          title={`Status da Conexão: ${isNetworkOnline ? (isReconnecting ? 'Reconectando...' : 'Online') : 'Offline'}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            isNetworkOnline && !isReconnecting && !hasError
-                              ? 'bg-emerald-400 animate-pulse'
-                              : isReconnecting
-                              ? 'bg-amber-400 animate-spin'
-                              : 'bg-red-400'
-                          }`} />
-                          {isNetworkOnline && !isReconnecting && !hasError ? (
-                            <>
-                              <Wifi className="w-2.5 h-2.5" />
-                              <span>Online</span>
-                            </>
-                          ) : isReconnecting ? (
-                            <>
-                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                              <span>Reconectando...</span>
-                            </>
-                          ) : (
-                            <>
-                              <WifiOff className="w-2.5 h-2.5" />
-                              <span>Offline</span>
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600/80 text-[10px] font-bold rounded uppercase tracking-tighter text-white border border-indigo-400/30 shrink-0">
-                        <Film className="w-3 h-3" />
-                        {(item as VodItem).type === 'series' ? 'Série' : 'Filme 1080p'}
-                      </span>
-                    )}
-                  </div>
-                  {'epgNow' in item && item.epgNow ? (
-                    <p className="text-xs text-slate-300 truncate">No Ar: {item.epgNow}</p>
-                  ) : isSeries && currentEpisode ? (
-                    <div className="flex items-center gap-2 mt-0.5 truncate">
-                      <p className="text-xs text-indigo-300 font-medium truncate max-w-[180px] sm:max-w-xs">
-                        T{currentEpisode.seasonNumber}:E{currentEpisode.episodeNumber} • {currentEpisode.title}
-                      </p>
-                      {isAutopilotEnabled && (
-                        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-semibold border border-indigo-400/30 shrink-0">
-                          <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                          Piloto Automático
-                        </span>
-                      )}
-                    </div>
-                  ) : 'duration' in item && item.duration ? (
-                    <p className="text-xs text-slate-400 truncate">Duração: {item.duration} • {item.rating || 'Livre'}</p>
-                  ) : null}
-                </div>
+                 {/* Close Button Top Right */}
+                 <button
+                    onClick={handleClose}
+                    className="p-3 rounded-full bg-slate-900/40 hover:bg-red-600/80 text-white backdrop-blur-md transition-all pointer-events-auto shadow-lg border border-white/5 group"
+                 >
+                    <X className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                 </button>
               </div>
 
-              {/* Top Right Controls (Sources Popover, Help, Close) */}
-              <div className="shrink-0 flex items-center gap-1.5 sm:gap-2 ml-auto z-40">
-                {/* 1 Item Único: Botão 'Selecionar Servidor' com Dropdown Popover para Troca Rápida de Stream */}
-                {sources.length > 0 && (
-                  <div className="relative shrink-0" ref={serverDropdownRef}>
-                    <button
-                      id="player-server-selector-btn"
-                      type="button"
-                      onClick={() => sources.length > 1 && setActiveMenu(activeMenu === 'sources' ? null : 'sources')}
-                      className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-full border text-xs font-semibold backdrop-blur-md transition-all select-none shadow-md active:scale-95 ${
-                        sources.length > 1 ? 'cursor-pointer' : 'cursor-default'
-                      } ${
-                        activeMenu === 'sources'
-                          ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-600/40 ring-2 ring-indigo-400/30'
-                          : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-white/15 hover:border-indigo-400/50'
-                      }`}
-                      title={sources.length > 1 ? "Clique para abrir menu de seleção rápida de servidor" : "Servidor ativo"}
-                      aria-expanded={activeMenu === 'sources'}
-                    >
-                      <Server className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="font-semibold text-white truncate max-w-[120px] sm:max-w-[160px]">
-                        Selecionar Servidor
-                      </span>
-                      {sources.length > 1 && (
-                        <span className="text-[10px] text-indigo-200 bg-indigo-500/25 border border-indigo-400/30 px-1.5 py-0.5 rounded-full font-mono font-bold shrink-0">
-                          {currentSourceIndex + 1}/{sources.length}
-                        </span>
-                      )}
-                      {sources.length > 1 && (
-                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${activeMenu === 'sources' ? 'rotate-180 text-white' : ''}`} />
-                      )}
-                    </button>
+              {/* Bottom Layer - Progress Bar & Quick Menu */}
+              <div className="w-full flex flex-col justify-end p-4 sm:p-6 pointer-events-auto">
+                <div className="flex justify-end w-full mb-3">
+                   {/* Quick Actions Button */}
+                   <button
+                     onClick={() => setActiveMenu(activeMenu === 'controls' ? null : 'controls')}
+                     className={`p-3 rounded-full backdrop-blur-md shadow-lg border transition-all cursor-pointer ${
+                       activeMenu === 'controls' ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900/50 hover:bg-slate-900/80 border-white/10 text-white'
+                     }`}
+                   >
+                     <Settings className="w-5 h-5" />
+                   </button>
+                </div>
 
-                    {/* Popover Dropdown Menu para Troca Rápida de Stream */}
-                    {activeMenu === 'sources' && sources.length > 1 && (
-                      <div 
-                        id="player-server-dropdown-menu"
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute top-full mt-2 right-0 z-50 w-72 sm:w-84 bg-slate-900/98 border border-indigo-500/40 rounded-2xl p-3 shadow-2xl backdrop-blur-2xl animate-fadeIn"
-                      >
-                        <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-2.5">
-                          <div className="flex items-center gap-2">
-                            <Server className="w-4 h-4 text-indigo-400" />
-                            <div>
-                              <p className="text-xs font-bold text-white">Selecionar Servidor</p>
-                              <p className="text-[10px] text-slate-400">Troca rápida de stream ({sources.length} disponíveis)</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setActiveMenu(null)}
-                            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                            title="Fechar menu"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                          {sources.map((s, idx) => {
-                            const isSelected = currentSourceIndex === idx;
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  if (!isSelected) {
-                                    setCurrentSourceIndex(idx);
-                                    setHasError(false);
-                                    setIsLoading(true);
-                                    setStreamWarning(null);
-                                    setReloadCounter(c => c + 1);
-                                    showToast(`Alternado para Servidor ${idx + 1}`);
-                                  }
-                                  setActiveMenu(null);
-                                }}
-                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left cursor-pointer border ${
-                                  isSelected
-                                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30 border-indigo-400/50'
-                                    : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/5'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                  <span className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-emerald-400 animate-pulse ring-2 ring-emerald-400/40' : 'bg-slate-500'}`} />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 truncate">
-                                      <span className="font-semibold truncate">
-                                        Servidor {idx + 1}
-                                      </span>
-                                      {s.isBrazilCdn && (
-                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                                          CDN BR
-                                        </span>
-                                      )}
-                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300 shrink-0 uppercase">
-                                        {s.protocol || 'HLS'}
-                                      </span>
-                                    </div>
-                                    {s.name && s.name !== `Servidor ${idx + 1}` && (
-                                      <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                                        {s.name}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                {isSelected && (
-                                  <Check className="w-4 h-4 text-emerald-300 shrink-0 ml-2" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                {/* Progress Scrubber for VOD */}
+                {type === 'vod' && duration > 0 && (
+                   <div className="w-full h-1.5 bg-white/20 hover:bg-white/30 rounded-full relative cursor-pointer group transition-colors" onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                      handleSeek({ target: { value: pos * duration } } as any);
+                   }}>
+                     {/* Buffered progress track */}
+                     <div 
+                        className="absolute left-0 h-full bg-white/40 rounded-full pointer-events-none transition-all duration-300"
+                        style={{ width: `${Math.min(100, bufferedEnd)}%` }}
+                      />
+                     <div className="absolute left-0 h-full bg-indigo-500 rounded-full pointer-events-none" style={{ width: `${Math.min(100, (currentTime / duration) * 100)}%` }} />
+                   </div>
                 )}
-
-                {/* Favorite Toggle Button */}
-                <button
-                  type="button"
-                  onClick={toggleFavorite}
-                  className={`p-2 sm:p-2.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shrink-0 ${
-                    isFav 
-                      ? 'bg-red-600/30 text-red-400 border-red-500/50 hover:bg-red-600/40' 
-                      : 'bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border-white/10'
-                  }`}
-                  title={isFav ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos'}
-                >
-                  <Heart className={`w-4 h-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} />
-                </button>
-
-                {/* Transmitir para TV / Outra Tela (Cast) Button */}
-                <button
-                  id="player-top-cast-btn"
-                  type="button"
-                  onClick={() => setIsCastModalOpen(true)}
-                  className={`p-2 sm:p-2.5 rounded-full border transition-all cursor-pointer backdrop-blur-md shrink-0 ${
-                    castState === 'connected'
-                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                      : castState === 'connecting'
-                      ? 'bg-amber-600/40 text-amber-300 border-amber-500/50 animate-pulse'
-                      : 'bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border-white/10'
-                  }`}
-                  title="Transmitir para TV / Outra Tela (T)"
-                  aria-label="Transmitir para TV ou outra tela"
-                >
-                  <Cast className="w-4 h-4" />
-                </button>
-
-                {/* Keyboard Shortcuts Help Button */}
-                <button
-                  type="button"
-                  onClick={() => setActiveMenu(activeMenu === 'help' ? null : 'help')}
-                  className="p-2 sm:p-2.5 rounded-full bg-slate-900/80 hover:bg-white/15 text-slate-300 hover:text-white border border-white/10 transition-all cursor-pointer backdrop-blur-md shrink-0"
-                  title="Atalhos do Teclado"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                </button>
-
-                {/* Close Button - ALWAYS VISIBLE, PRIORITIZED, SHRINK-0 WITH HIGH CONTRAST */}
-                <button
-                  id="player-top-close-btn"
-                  type="button"
-                  onClick={handleClose}
-                  className="p-2 sm:p-2.5 rounded-full bg-slate-900/90 hover:bg-red-600 text-white border border-white/20 hover:border-red-500 shadow-xl transition-all cursor-pointer backdrop-blur-md shrink-0 flex items-center justify-center hover:scale-105 active:scale-95"
-                  title="Fechar Vídeo (ESC)"
-                  aria-label="Fechar Vídeo"
-                >
-                  <X className="w-5 h-5 text-white" />
-                </button>
               </div>
             </div>
 
-            {/* Keyboard Shortcuts Overlay Modal */}
-            {activeMenu === 'help' && (
-              <div className="absolute top-18 right-6 z-45 w-72 bg-slate-900/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-3">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
-                    Atalhos de Teclado
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={() => setActiveMenu(null)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
+            {/* Combined Quick Access Controls Menu Popup */}
+            {activeMenu === 'controls' && (
+              <div className="absolute bottom-20 right-6 sm:right-10 z-45 w-72 bg-slate-900/95 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn space-y-4">
+                
+                {/* 1. Playback & Volume Row */}
+                <div className="flex items-center gap-3 bg-black/40 p-2 rounded-xl border border-white/5">
+                  <button onClick={togglePlay} className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer shrink-0">
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                   </button>
-                </div>
-                <div className="space-y-2 text-xs text-slate-300">
-                  <div className="flex justify-between items-center"><span className="text-slate-400">Espaço / K</span><span className="font-semibold text-white">Play / Pausar</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">M</span><span className="font-semibold text-white">Silenciar / Mudo</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">F</span><span className="font-semibold text-white">Tela Cheia</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">P</span><span className="font-semibold text-white">Picture-in-Picture</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">T</span><span className="font-semibold text-indigo-300">Transmitir para TV (Cast)</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">C</span><span className="font-semibold text-white">Capturar Imagem</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">↑ / ↓</span><span className="font-semibold text-white">Volume ±10%</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">← / →</span><span className="font-semibold text-white">Avançar / Voltar 10s</span></div>
-                  <div className="flex justify-between items-center"><span className="text-slate-400">L</span><span className="font-semibold text-white">Legendas (.vtt)</span></div>
-                  {isSeries && (
-                    <div className="flex justify-between items-center"><span className="text-slate-400">N</span><span className="font-semibold text-indigo-300">Próximo Episódio</span></div>
-                  )}
-                  <div className="flex justify-between items-center"><span className="text-slate-400">Duplo Clique</span><span className="font-semibold text-white">Alternar Tela Cheia</span></div>
-                </div>
-              </div>
-            )}
-
-            {/* Episodes Menu Drawer (Series Only) */}
-            {activeMenu === 'episodes' && isSeries && (
-              <div 
-                id="series-episodes-panel"
-                className="absolute bottom-20 left-4 sm:left-10 z-45 w-80 sm:w-96 max-h-[440px] bg-slate-900/95 border border-indigo-500/30 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn flex flex-col pointer-events-auto select-none"
-              >
-                <div className="flex items-center justify-between pb-2.5 border-b border-white/10 mb-3 shrink-0">
-                  <div>
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <ListOrdered className="w-3.5 h-3.5 text-indigo-400" />
-                      Episódios da Série
-                    </span>
-                    <p className="text-[11px] text-slate-400 truncate max-w-[230px]">
-                      {'title' in item ? (item as any).title : ''}
-                    </p>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={() => setActiveMenu(null)}
-                    className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Piloto Automático Toggle inside Episodes drawer */}
-                <div className="flex items-center justify-between p-2.5 mb-3 rounded-xl bg-indigo-950/50 border border-indigo-500/20 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className={`w-4 h-4 ${isAutopilotEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
-                    <div>
-                      <p className="text-xs font-semibold text-white">Piloto Automático</p>
-                      <p className="text-[10px] text-slate-300">Pula e inicia o próximo episódio sozinho</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleAutopilot}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                      isAutopilotEnabled 
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                        : 'bg-slate-800 text-slate-400 border border-white/10 hover:text-white'
-                    }`}
-                  >
-                    {isAutopilotEnabled ? 'LIGADO' : 'DESLIGADO'}
-                  </button>
-                </div>
-
-                {/* Episode List */}
-                <div className="overflow-y-auto space-y-1.5 pr-1 max-h-60 scrollbar-thin scrollbar-thumb-white/10">
-                  {seriesEpisodes.map((ep, idx) => {
-                    const isCurrent = idx === currentEpisodeIndex;
-                    return (
-                      <button
-                        key={`${ep.seasonNumber}-${ep.episodeNumber}`}
-                        type="button"
-                        onClick={() => {
-                          playEpisodeByIndex(idx);
-                          setActiveMenu(null);
-                        }}
-                        className={`w-full text-left p-2.5 rounded-xl flex items-center justify-between gap-3 transition-all cursor-pointer ${
-                          isCurrent
-                            ? 'bg-indigo-600/25 border border-indigo-500/50 text-white shadow-sm'
-                            : 'hover:bg-white/5 border border-transparent text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                            isCurrent 
-                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40' 
-                              : 'bg-slate-800 text-slate-400'
-                          }`}>
-                            {isCurrent ? <Play className="w-3 h-3 fill-white ml-0.5" /> : ep.episodeNumber}
-                          </div>
-                          <div className="min-w-0">
-                            <p className={`text-xs font-medium truncate ${isCurrent ? 'text-indigo-300 font-bold' : 'text-slate-200'}`}>
-                              {ep.title}
-                            </p>
-                            <p className="text-[10px] text-slate-400">
-                              Temporada {ep.seasonNumber} • {ep.duration}
-                            </p>
-                          </div>
-                        </div>
-
-                        {isCurrent && (
-                          <span className="text-[10px] uppercase font-bold text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-950/60 border border-indigo-500/30 shrink-0">
-                            No Ar
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Settings Menu Popup (Speed, Quality, Aspect Ratio) */}
-            {activeMenu === 'settings' && (
-              <div className="absolute bottom-20 right-6 z-45 w-64 bg-slate-900/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10 mb-3">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Settings className="w-3.5 h-3.5 text-indigo-400" />
-                    Opções do Reprodutor
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={() => setActiveMenu(null)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Otimização de Transmissão para Usuários Brasileiros */}
-                <div className="mb-3 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/20">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-emerald-300 mb-1">
-                    <span className="flex items-center gap-1.5">
-                      <span>🇧🇷</span>
-                      <span>Buffer Turbo BR</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
-                      Ativo
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-emerald-200/70 leading-snug">
-                    {activeBufferProfileLabel} com failover automático entre fontes.
-                  </p>
-                </div>
-
-                {/* Seleção e Alternância de Servidores */}
-                {sources.length > 1 && (
-                  <div className="mb-3">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-                      Fontes do Canal ({sources.length})
-                    </span>
-                    <div className="max-h-28 overflow-y-auto space-y-1">
-                      {sources.map((s, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setCurrentSourceIndex(idx);
-                            setHasError(false);
-                            setIsLoading(true);
-                            setStreamWarning(null);
-                            setReloadCounter(c => c + 1);
-                          }}
-                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
-                            currentSourceIndex === idx
-                              ? 'bg-emerald-600/30 text-emerald-300 font-semibold border border-emerald-500/30'
-                              : 'text-slate-300 hover:bg-white/5'
-                          }`}
-                        >
-                          <span className="truncate pr-1">{s.name}</span>
-                          {currentSourceIndex === idx && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Subtitles shortcut */}
-                <div className="mb-3">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    Legendas & Faixas
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMenu('subtitles')}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/30 text-xs font-semibold text-purple-300 transition-colors cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Subtitles className="w-4 h-4 text-purple-400" />
-                      <span>Legendas (.vtt)</span>
-                    </span>
-                    <span className="text-[10px] text-purple-300/90 font-mono bg-purple-500/25 px-2 py-0.5 rounded-md">
-                      {selectedSubtitleTrackId ? 'Ativada' : 'Desativada'}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Aspect Ratio */}
-                <div className="mb-3">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    Enquadramento de Vídeo
-                  </span>
-                  <div className="grid grid-cols-3 gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-                    {(['contain', 'cover', 'fill'] as AspectRatioMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => { setAspectRatio(mode); setActiveMenu(null); }}
-                        className={`text-[10px] font-semibold py-1 rounded-lg transition-all cursor-pointer ${
-                          aspectRatio === mode 
-                            ? 'bg-indigo-600 text-white' 
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {mode === 'contain' ? 'Ajustar' : mode === 'cover' ? 'Zoom' : 'Esticar'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Playback Speed */}
-                <div className="mb-3">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    Velocidade de Reprodução
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
-                      <button
-                        key={rate}
-                        type="button"
-                        onClick={() => changeSpeed(rate)}
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all cursor-pointer ${
-                          playbackRate === rate
-                            ? 'bg-indigo-600 border-indigo-500 text-white'
-                            : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {rate === 1 ? 'Normal' : `${rate}x`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Quality / Resolution selection */}
-                {qualities.length > 0 && (
-                  <div>
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-                      Resolução / Qualidade (HLS)
-                    </span>
-                    <div className="max-h-28 overflow-y-auto space-y-1">
-                      {qualities.map((q) => (
-                        <button
-                          key={q.index}
-                          type="button"
-                          onClick={() => changeQuality(q.index)}
-                          className={`w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                            currentQuality === q.index
-                              ? 'bg-indigo-600/30 text-indigo-300 font-semibold border border-indigo-500/30'
-                              : 'text-slate-300 hover:bg-white/5'
-                          }`}
-                        >
-                          <span>{q.label}</span>
-                          {currentQuality === q.index && <Check className="w-3.5 h-3.5 text-indigo-400" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Subtitles Menu Popup */}
-            {activeMenu === 'subtitles' && (
-              <div className="absolute bottom-20 right-6 sm:right-16 z-45 w-80 sm:w-96 max-h-[82vh] overflow-y-auto bg-slate-900/95 border border-white/15 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Subtitles className="w-4 h-4 text-purple-400" />
-                    Legendas (.vtt / .srt)
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={() => setActiveMenu(null)}
-                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Section 1: Faixas de Legendas Disponíveis */}
-                <div>
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    Faixas Disponíveis
-                  </span>
-                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                    {/* Desativada */}
-                    <button
-                      type="button"
-                      onClick={() => handleSelectSubtitleTrack(null)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-                        selectedSubtitleTrackId === null
-                          ? 'bg-purple-950/60 border border-purple-500/40 text-purple-300 font-semibold'
-                          : 'text-slate-300 hover:bg-white/5'
-                      }`}
-                    >
-                      <span>Desativada (Sem legenda)</span>
-                      {selectedSubtitleTrackId === null && <Check className="w-3.5 h-3.5 text-purple-400" />}
+                  <div className="flex items-center gap-2 flex-1">
+                    <button onClick={toggleMute} className="text-slate-300 hover:text-white cursor-pointer shrink-0">
+                      {isMuted || volume === 0 ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
                     </button>
-
-                    {/* Lista de faixas */}
-                    {availableSubtitleTracks.map((track) => (
-                      <div
-                        key={track.id}
-                        onClick={() => handleSelectSubtitleTrack(track.id)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer group ${
-                          selectedSubtitleTrackId === track.id
-                            ? 'bg-purple-950/60 border border-purple-500/40 text-purple-300 font-semibold'
-                            : 'text-slate-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate pr-2">
-                          <span className="truncate">{track.label}</span>
-                          {track.isCustom && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
-                              Personalizada
-                            </span>
-                          )}
-                          {track.isHls && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
-                              Embarcada
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {selectedSubtitleTrackId === track.id && (
-                            <Check className="w-3.5 h-3.5 text-purple-400" />
-                          )}
-                          {track.isCustom && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleRemoveCustomTrack(track.id, e)}
-                              className="p-1 rounded text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                              title="Remover faixa personalizada"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Section 2: Carregar Nova Legenda */}
-                <div className="pt-2 border-t border-white/10">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2">
-                    Carregar Nova Legenda
-                  </span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => subtitleFileInputRef.current?.click()}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Arquivo .vtt</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowUrlInput(!showUrlInput)}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-white/10 transition-all cursor-pointer"
-                    >
-                      <Link className="w-3.5 h-3.5" />
-                      <span>Inserir Link</span>
-                    </button>
-                  </div>
-
-                  {showUrlInput && (
-                    <div className="mt-2.5 space-y-2 animate-fadeIn bg-slate-950/70 p-2.5 rounded-xl border border-white/10">
-                      <input
-                        type="url"
-                        placeholder="https://exemplo.com/legenda.vtt"
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleLoadSubtitleUrl(); }}
-                        className="w-full bg-slate-900 text-xs text-white rounded-lg px-3 py-2 border border-purple-500/40 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleLoadSubtitleUrl}
-                        disabled={isLoadingUrl || !urlInput.trim()}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all cursor-pointer"
-                      >
-                        {isLoadingUrl ? 'Baixando...' : 'Carregar da URL'}
-                      </button>
-                    </div>
-                  )}
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    Dica: Arraste e solte um arquivo .vtt ou .srt diretamente sobre o vídeo!
-                  </p>
-                </div>
-
-                {/* Section 3: Sincronização / Delay (Offset) */}
-                {selectedSubtitleTrackId && (
-                  <div className="pt-2 border-t border-white/10">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                        Ajuste de Sincronia
-                      </span>
-                      <span className="text-xs font-mono font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-md">
-                        {subtitleStyle.offsetSeconds > 0 ? `+${subtitleStyle.offsetSeconds.toFixed(1)}s` : `${subtitleStyle.offsetSeconds.toFixed(1)}s`}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => adjustSubtitleOffset(-1)}
-                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
-                        title="Adiantar 1 segundo"
-                      >
-                        -1.0s
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustSubtitleOffset(-0.5)}
-                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
-                        title="Adiantar 0.5 segundo"
-                      >
-                        -0.5s
-                      </button>
-                      <button
-                        type="button"
-                        onClick={resetSubtitleOffset}
-                        className="px-2 py-1 rounded bg-black/60 hover:bg-white/10 text-[10px] font-mono text-slate-400 border border-white/10 transition-colors cursor-pointer"
-                        title="Zerar sincronização"
-                      >
-                        0.0s
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustSubtitleOffset(0.5)}
-                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
-                        title="Atrasar 0.5 segundo"
-                      >
-                        +0.5s
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustSubtitleOffset(1)}
-                        className="px-2 py-1 rounded bg-black/40 hover:bg-white/10 text-[10px] font-mono text-slate-300 border border-white/10 transition-colors cursor-pointer"
-                        title="Atrasar 1 segundo"
-                      >
-                        +1.0s
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 4: Aparência das Legendas */}
-                {selectedSubtitleTrackId && (
-                  <div className="pt-2 border-t border-white/10 space-y-2.5">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                      Aparência Visual
-                    </span>
-
-                    {/* Tamanho da Fonte */}
-                    <div className="flex items-center justify-between text-xs text-slate-300">
-                      <span className="text-slate-400 text-[11px]">Tamanho:</span>
-                      <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-                        {(['small', 'medium', 'large', 'extralarge'] as const).map(size => (
-                          <button
-                            key={size}
-                            type="button"
-                            onClick={() => updateSubtitleConfig({ fontSize: size })}
-                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-lg transition-all cursor-pointer ${
-                              subtitleStyle.fontSize === size
-                                ? 'bg-purple-600 text-white'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {size === 'small' ? 'P' : size === 'medium' ? 'M' : size === 'large' ? 'G' : 'GG'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Fundo */}
-                    <div className="flex items-center justify-between text-xs text-slate-300">
-                      <span className="text-slate-400 text-[11px]">Estilo:</span>
-                      <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-                        {[
-                          { id: 'translucent', label: 'Translúcido' },
-                          { id: 'solid', label: 'Sólido' },
-                          { id: 'outline', label: 'Contorno' }
-                        ].map(m => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => updateSubtitleConfig({ backgroundMode: m.id as any })}
-                            className={`px-2 py-0.5 text-[10px] font-semibold rounded-lg transition-all cursor-pointer ${
-                              subtitleStyle.backgroundMode === m.id
-                                ? 'bg-purple-600 text-white'
-                                : 'text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {m.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Cor da Fonte */}
-                    <div className="flex items-center justify-between text-xs text-slate-300">
-                      <span className="text-slate-400 text-[11px]">Cor do Texto:</span>
-                      <div className="flex gap-2">
-                        {[
-                          { id: 'white', bg: 'bg-white', label: 'Branco' },
-                          { id: 'yellow', bg: 'bg-yellow-300', label: 'Amarelo' },
-                          { id: 'cyan', bg: 'bg-cyan-300', label: 'Ciano' }
-                        ].map(c => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => updateSubtitleConfig({ fontColor: c.id as any })}
-                            className={`w-6 h-6 rounded-full ${c.bg} transition-all border-2 cursor-pointer ${
-                              subtitleStyle.fontColor === c.id ? 'border-purple-500 scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100'
-                            }`}
-                            title={c.label}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Resume Playback Prompt Banner */}
-            {resumePrompt && (
-              <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 max-w-md w-[90%] sm:w-auto bg-slate-900/95 border border-indigo-500/50 backdrop-blur-md px-4 py-3 rounded-2xl shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-fadeIn">
-                <div className="flex items-center gap-2 text-xs text-white">
-                  <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span>Você parou em <strong>{resumePrompt.formatted}</strong>. Retomar?</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (videoRef.current) {
-                        videoRef.current.currentTime = resumePrompt.time;
-                        setCurrentTime(resumePrompt.time);
-                        showToast(`Retomado de ${resumePrompt.formatted}`);
-                      }
-                      setResumePrompt(null);
-                    }}
-                    className="px-3.5 py-1 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition-all cursor-pointer"
-                  >
-                    Retomar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResumePrompt(null)}
-                    className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-all cursor-pointer"
-                  >
-                    Do Início
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Bottom Controls Bar */}
-            <div 
-              className={`absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-black/95 via-black/75 to-transparent flex flex-col gap-2 z-30 transition-opacity duration-300 ${
-                showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-              }`}
-            >
-              {/* Progress Scrubber for VOD or on-demand content */}
-              {type === 'vod' && duration > 0 && (
-                <div className="w-full flex items-center gap-3 relative">
-                  <span className="text-[11px] font-mono text-slate-300 w-12 text-right">
-                    {formatTime(currentTime)}
-                  </span>
-                  
-                  {/* Custom interactive progress bar with buffered range and hover tooltip */}
-                  <div 
-                    className="relative w-full h-3 flex items-center cursor-pointer group/bar"
-                    onMouseMove={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                      setHoverPosition(pos * 100);
-                      setHoverTime(pos * duration);
-                    }}
-                    onMouseLeave={() => setHoverTime(null)}
-                  >
-                    {/* Background track */}
-                    <div className="absolute inset-x-0 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                      {/* Buffered progress track */}
-                      <div 
-                        className="h-full bg-white/25 transition-all duration-300"
-                        style={{ width: `${Math.min(100, bufferedEnd)}%` }}
-                      />
-                    </div>
-
-                    {/* Active played progress */}
-                    <div 
-                      className="absolute left-0 h-1.5 bg-indigo-500 rounded-full"
-                      style={{ width: `${Math.min(100, (currentTime / duration) * 100)}%` }}
-                    />
-
-                    {/* Native slider input overlay */}
                     <input
                       type="range"
                       min="0"
-                      max={duration || 100}
-                      step="0.5"
-                      value={currentTime}
-                      onChange={handleSeek}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      max="1"
+                      step="0.05"
+                      value={isMuted ? 0 : volume}
+                      onChange={handleVolumeChange}
+                      className="w-full accent-indigo-500 h-1.5 bg-white/20 hover:bg-white/30 rounded-lg cursor-pointer transition-colors"
                     />
-
-                    {/* Hover time preview tooltip */}
-                    {hoverTime !== null && (
-                      <div 
-                        className="absolute bottom-5 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] font-mono font-semibold px-2 py-0.5 rounded border border-white/20 pointer-events-none shadow-lg backdrop-blur-sm"
-                        style={{ left: `${hoverPosition}%` }}
-                      >
-                        {formatTime(hoverTime)}
-                      </div>
-                    )}
                   </div>
-
-                  <span className="text-[11px] font-mono text-slate-400 w-12">
-                    {formatTime(duration)}
-                  </span>
                 </div>
-              )}
 
-              {/* Controls Main Bar */}
-              <div className="flex items-center justify-between gap-3">
-                {/* Left side: Play, Skip, Volume */}
-                <div className="flex items-center gap-1.5 sm:gap-2.5">
-                  {/* Play / Pause Toggle Button */}
-                  <button
-                    type="button"
-                    onClick={togglePlay}
-                    className="p-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-md transition-all cursor-pointer shadow-sm active:scale-95"
-                    title={isPlaying ? 'Pausar (Espaço)' : 'Reproduzir (Espaço)'}
-                  >
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-white" />}
-                  </button>
-
-                  {/* Skip buttons (Rewind 10s & Forward 10s) */}
-                  {type === 'vod' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => skipSeconds(-10)}
-                        className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-                        title="Voltar 10 segundos (←)"
-                      >
-                        <Rewind className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => skipSeconds(10)}
-                        className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-                        title="Avançar 10 segundos (→)"
-                      >
-                        <FastForward className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-
-                  {/* Series Navigation & Piloto Automático */}
-                  {isSeries && (
-                    <div className="flex items-center gap-1 sm:gap-2">
-                      <button
-                        type="button"
-                        id="liveplayer-next-episode-btn"
-                        onClick={playNextEpisode}
-                        disabled={!nextEpisode}
-                        className={`p-2 rounded-full transition-colors cursor-pointer ${
-                          nextEpisode 
-                            ? 'text-slate-300 hover:text-white hover:bg-white/10' 
-                            : 'text-slate-600 cursor-not-allowed'
-                        }`}
-                        title={nextEpisode ? `Próximo Episódio: T${nextEpisode.seasonNumber}:E${nextEpisode.episodeNumber} - ${nextEpisode.title} (N)` : 'Último episódio da série'}
-                      >
-                        <SkipForward className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        id="liveplayer-autopilot-btn"
-                        onClick={toggleAutopilot}
-                        className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                          isAutopilotEnabled
-                            ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm shadow-indigo-600/20'
-                            : 'bg-slate-900/60 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
-                        }`}
-                        title={isAutopilotEnabled ? 'Piloto Automático ativado. Ao terminar, o próximo episódio inicia sozinho.' : 'Piloto Automático desligado. Clique para ativar.'}
-                      >
-                        <Sparkles className={`w-3.5 h-3.5 ${isAutopilotEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
-                        <span className="hidden sm:inline">Piloto Automático:</span>
-                        <span className={isAutopilotEnabled ? 'text-indigo-200 font-bold' : 'text-slate-400'}>
-                          {isAutopilotEnabled ? 'ON' : 'OFF'}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        id="liveplayer-episodes-drawer-btn"
-                        onClick={() => setActiveMenu(activeMenu === 'episodes' ? null : 'episodes')}
-                        className={`hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                          activeMenu === 'episodes'
-                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
-                            : 'bg-slate-900/80 text-slate-300 hover:text-white border-white/10 hover:bg-slate-800'
-                        }`}
-                        title="Ver episódios da série"
-                      >
-                        <ListOrdered className="w-3.5 h-3.5" />
-                        <span>Episódios</span>
-                        {currentEpisode && (
-                          <span className="text-[10px] font-mono text-indigo-300">
-                            (E{currentEpisode.episodeNumber}/{seriesEpisodes.length})
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Volume Controls & Slider */}
-                  <div 
-                    id="player-volume-control-group"
-                    className="flex items-center gap-1.5 sm:gap-2 group/vol"
-                    onWheel={(e) => {
-                      e.stopPropagation();
-                      adjustVolumeBy(e.deltaY < 0 ? 0.05 : -0.05);
-                    }}
-                  >
-                    <button
-                      id="player-mute-btn"
-                      type="button"
-                      onClick={toggleMute}
-                      className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer active:scale-95"
-                      title={isMuted || volume === 0 ? 'Reativar Áudio (Tecla M)' : 'Silenciar Áudio (Tecla M)'}
-                      aria-label={isMuted || volume === 0 ? 'Reativar Áudio' : 'Silenciar Áudio'}
+                {/* 2. Grid Toggles (Fullscreen, PiP, Cast, Servers) */}
+                
+                {isSeries && (
+                  <div className="flex items-center justify-between bg-white/5 p-2 rounded-xl border border-white/10">
+                    <button 
+                      onClick={playNextEpisode} 
+                      disabled={!nextEpisode}
+                      className={`flex flex-col items-center justify-center p-2 rounded-xl transition-colors w-14 ${nextEpisode ? 'bg-white/10 hover:bg-white/20 text-white cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                      title="Próximo Episódio"
                     >
-                      {isMuted || volume === 0 ? (
-                        <VolumeX className="w-5 h-5 text-red-400" />
-                      ) : volume < 0.25 ? (
-                        <Volume className="w-5 h-5 text-indigo-300" />
-                      ) : volume < 0.65 ? (
-                        <Volume1 className="w-5 h-5 text-indigo-300" />
-                      ) : (
-                        <Volume2 className="w-5 h-5 text-indigo-300" />
-                      )}
+                      <SkipForward className="w-4 h-4 mb-1" />
+                      <span className="text-[9px] font-semibold text-center">Próximo</span>
                     </button>
+                    
+                    <button
+                      onClick={toggleAutopilot}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex-1 justify-center mx-2 ${
+                        isAutopilotEnabled
+                          ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50 shadow-sm shadow-indigo-600/20'
+                          : 'bg-slate-900/60 text-slate-400 border-white/10 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${isAutopilotEnabled ? 'text-amber-300 animate-pulse' : 'text-slate-400'}`} />
+                      Piloto Auto: {isAutopilotEnabled ? 'ON' : 'OFF'}
+                    </button>
+                    
+                    <button
+                      onClick={() => setActiveMenu('episodes')}
+                      className={`flex flex-col items-center justify-center p-2 rounded-xl transition-colors w-14 cursor-pointer ${'bg-white/10 hover:bg-white/20 text-white border border-transparent'}`}
+                      title="Episódios"
+                    >
+                      <ListOrdered className="w-4 h-4 mb-1" />
+                      <span className="text-[9px] font-semibold text-center">Lista</span>
+                    </button>
+                  </div>
+                )}
+                
+                {/* 2. Grid Toggles (Fullscreen, PiP, Cast, Servers) */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  <button onClick={toggleFullscreen} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white cursor-pointer transition-colors text-[9px] font-semibold text-center h-14">
+                    {isFullscreen ? <Minimize2 className="w-4 h-4 mb-1" /> : <Maximize2 className="w-4 h-4 mb-1" />}
+                    <span>Tela Cheia</span>
+                  </button>
+                  <button onClick={togglePiP} className={`flex flex-col items-center justify-center p-2 rounded-xl cursor-pointer transition-colors text-[9px] font-semibold text-center h-14 ${isPiP ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white'}`}>
+                    <PictureInPicture className="w-4 h-4 mb-1" />
+                    <span>Mini PiP</span>
+                  </button>
+                  <button onClick={() => { setActiveMenu(null); setIsCastModalOpen(true); }} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white cursor-pointer transition-colors text-[9px] font-semibold text-center h-14">
+                    <Cast className="w-4 h-4 mb-1" />
+                    <span>Transmitir</span>
+                  </button>
+                  {sources.length > 1 && (
+                    <button onClick={tryNextSource} className="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white cursor-pointer transition-colors text-[9px] font-semibold text-center h-14">
+                      <Server className="w-4 h-4 mb-1 text-indigo-400" />
+                      <span>Svr {currentSourceIndex + 1}/{sources.length}</span>
+                    </button>
+                  )}
+                  {type === 'vod' && (
+                    <button onClick={() => { setActiveMenu('subtitles'); }} className={`flex flex-col items-center justify-center p-2 rounded-xl cursor-pointer transition-colors text-[9px] font-semibold text-center h-14 ${selectedSubtitleTrackId ? 'bg-purple-900/40 text-purple-300 border border-purple-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white'}`}>
+                      <Subtitles className="w-4 h-4 mb-1" />
+                      <span>Legendas</span>
+                    </button>
+                  )}
+                </div>
 
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <input
-                        id="player-volume-slider"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.02"
-                        value={isMuted ? 0 : volume}
-                        onChange={handleVolumeChange}
-                        className="w-18 sm:w-24 md:w-28 group-hover/vol:w-28 sm:group-hover/vol:w-36 accent-indigo-500 h-2 bg-white/20 hover:bg-white/30 rounded-lg cursor-pointer transition-all duration-200"
-                        title={`Ajustar Volume: ${isMuted ? '0%' : `${Math.round(volume * 100)}%`}`}
-                        aria-label="Controle deslizante de volume"
-                      />
-                      <button
-                        id="player-volume-percentage"
-                        type="button"
-                        onClick={toggleMute}
-                        className="text-[11px] font-mono font-semibold text-slate-300 hover:text-white w-9 text-right select-none cursor-pointer transition-colors"
-                        title="Clique para alternar mudo (M)"
-                      >
-                        {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
-                      </button>
+                {/* 3. Settings Lists (Quality, Speed, Aspect) */}
+                <div className="space-y-3 pt-2 border-t border-white/5">
+                  {qualities.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Resolução</span>
+                      <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-1">
+                        {qualities.map((q) => (
+                          <button
+                            key={q.index}
+                            type="button"
+                            onClick={() => changeQuality(q.index)}
+                            className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer ${currentQuality === q.index ? 'bg-indigo-600 text-white' : 'bg-black/30 text-slate-400 hover:text-white border border-white/10'}`}
+                          >
+                            {q.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {type === 'vod' && (
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Velocidade</span>
+                      <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-1">
+                        {[0.5, 1, 1.25, 1.5, 2].map((rate) => (
+                          <button
+                            key={rate}
+                            type="button"
+                            onClick={() => changeSpeed(rate)}
+                            className={`shrink-0 px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer ${playbackRate === rate ? 'bg-indigo-600 text-white' : 'bg-black/30 text-slate-400 hover:text-white border border-white/10'}`}
+                          >
+                            {rate === 1 ? 'Normal' : `${rate}x`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Enquadramento</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['contain', 'cover', 'fill'] as AspectRatioMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => { setAspectRatio(mode); setActiveMenu(null); }}
+                          className={`text-[10px] font-semibold py-1.5 rounded-lg transition-all cursor-pointer ${aspectRatio === mode ? 'bg-indigo-600 text-white' : 'bg-black/30 text-slate-400 hover:text-white border border-white/10'}`}
+                        >
+                          {mode === 'contain' ? 'Ajustar' : mode === 'cover' ? 'Zoom' : 'Esticar'}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
-
-                {/* Right side: Tools, Quality, Speed, PiP, Fullscreen */}
-                <div className="flex items-center gap-1 sm:gap-2">
-                  {/* Current Active Server */}
-                  <button
-                    type="button"
-                    onClick={tryNextSource}
-                    className="flex items-center gap-1 text-xs text-slate-300 hover:text-white px-2.5 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-white/10 transition-colors cursor-pointer"
-                    title="Alternar servidor de transmissão"
+              </div>
+            )}
+            
+            
+            {/* Episodes Drawer Popup */}
+            {activeMenu === 'episodes' && isSeries && (
+              <div className="absolute bottom-20 right-6 sm:right-10 z-45 w-80 max-h-[70vh] overflow-y-auto bg-slate-900/95 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <ListOrdered className="w-4 h-4 text-indigo-400" />
+                    Episódios
+                  </span>
+                  <button 
+                     onClick={() => setActiveMenu('controls')}
+                     className="text-xs font-semibold text-slate-400 hover:text-white cursor-pointer p-1"
                   >
-                    <Server className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="hidden md:inline">Servidor {currentSourceIndex + 1}/{sources.length}</span>
+                    <X className="w-4 h-4" />
                   </button>
-
-                  {/* Brazil Acceleration & Anti-Stutter Buffer Badge */}
-                  <div
-                    className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 shadow-sm"
-                    title="Aceleração de rota e buffer anti-travamento ativo para provedores brasileiros"
+                </div>
+                <div className="space-y-1.5">
+                  {seriesEpisodes.map((ep, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        handleSeek({ target: { value: 0 } } as any);
+                        playEpisodeByIndex(idx);
+                      }}
+                      className={`w-full text-left p-2 rounded-xl transition-colors cursor-pointer ${currentEpisodeIndex === idx ? 'bg-indigo-600/20 border border-indigo-500/30' : 'hover:bg-white/5 border border-transparent'}`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`text-xs font-bold ${currentEpisodeIndex === idx ? 'text-indigo-400' : 'text-slate-200'}`}>T{ep.seasonNumber}:E{ep.episodeNumber}</span>
+                        {currentEpisodeIndex === idx && <span className="text-[10px] font-semibold text-indigo-300 bg-indigo-900/50 px-1.5 py-0.5 rounded">Reproduzindo</span>}
+                      </div>
+                      <span className={`text-xs block line-clamp-1 ${currentEpisodeIndex === idx ? 'text-indigo-200' : 'text-slate-400'}`}>{ep.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Subtitles Menu Popup (keep it independent but adjust position if needed) */}
+            {activeMenu === 'subtitles' && (
+              <div className="absolute bottom-20 right-6 sm:right-10 z-45 w-72 sm:w-80 max-h-[70vh] overflow-y-auto bg-slate-900/95 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-xl text-left animate-fadeIn space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Subtitles className="w-4 h-4 text-purple-400" />
+                    Legendas
+                  </span>
+                  <button 
+                     onClick={() => setActiveMenu('controls')}
+                     className="text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
                   >
-                    <span className="text-xs">🇧🇷</span>
-                    <span className="hidden md:inline font-semibold">Turbo BR</span>
-                    <span className="md:hidden">BR</span>
-                  </div>
-
-                  {/* Screenshot / Frame Capture */}
-                  <button
-                    type="button"
-                    onClick={captureScreenshot}
-                    className="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-                    title="Capturar Foto da Tela (C)"
-                  >
-                    <Camera className="w-4 h-4" />
+                    Voltar
                   </button>
-
-                  {/* Picture in Picture */}
+                </div>
+                {/* Subtitles selection mapping... */}
+                <div className="space-y-1">
                   <button
-                    type="button"
-                    onClick={togglePiP}
-                    className={`p-2 rounded-full transition-colors cursor-pointer ${
-                      isPiP ? 'text-indigo-400 bg-white/10' : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    onClick={() => handleSelectSubtitleTrack(null)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                      selectedSubtitleTrackId === null
+                        ? 'bg-purple-950/60 border border-purple-500/40 text-purple-300'
+                        : 'text-slate-300 hover:bg-white/5'
                     }`}
-                    title="Modo Picture-in-Picture (P)"
                   >
-                    <PictureInPicture className="w-4 h-4" />
+                    <span>Desativada</span>
+                    {selectedSubtitleTrackId === null && <Check className="w-3.5 h-3.5 text-purple-400" />}
                   </button>
-
-                  {/* Transmitir para TV / Cast / AirPlay */}
+                  {availableSubtitleTracks.map((track) => (
+                    <button
+                      key={track.id}
+                      onClick={() => handleSelectSubtitleTrack(track.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                        selectedSubtitleTrackId === track.id
+                          ? 'bg-purple-950/60 border border-purple-500/40 text-purple-300'
+                          : 'text-slate-300 hover:bg-white/5'
+                      }`}
+                    >
+                      <span className="truncate pr-2">{track.label}</span>
+                      {selectedSubtitleTrackId === track.id && <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                    </button>
+                  ))}
+                  {/* Upload Legenda button */}
                   <button
-                    id="player-bottom-cast-btn"
-                    type="button"
-                    onClick={() => setIsCastModalOpen(true)}
-                    className={`p-2 rounded-full transition-colors cursor-pointer relative ${
-                      castState === 'connected'
-                        ? 'text-indigo-400 bg-white/15 ring-1 ring-indigo-400/50'
-                        : castState === 'connecting'
-                        ? 'text-amber-400 bg-white/10 animate-pulse'
-                        : 'text-slate-300 hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Transmitir para TV ou Outra Tela (T)"
-                    aria-label="Transmitir para TV ou outra tela"
+                    onClick={() => subtitleFileInputRef.current?.click()}
+                    className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/10 transition-colors cursor-pointer"
                   >
-                    <Cast className="w-4 h-4" />
-                    {castState === 'connected' && (
-                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1 ring-black animate-pulse" />
-                    )}
-                  </button>
-
-                  {/* Subtitles Menu Toggle (WebVTT / Closed Captions) */}
-                  <button
-                    type="button"
-                    onClick={() => setActiveMenu(activeMenu === 'subtitles' ? null : 'subtitles')}
-                    className={`p-2 rounded-full transition-colors cursor-pointer relative ${
-                      activeMenu === 'subtitles' || selectedSubtitleTrackId
-                        ? 'text-purple-400 bg-white/15'
-                        : 'text-slate-300 hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Legendas (.vtt) (L)"
-                  >
-                    <Subtitles className="w-4 h-4" />
-                    {selectedSubtitleTrackId && (
-                      <span className="absolute -top-0.5 -right-0.5 px-1 py-0.2 bg-purple-600 text-[8px] font-bold text-white rounded-full ring-1 ring-black">
-                        CC
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Picture-in-Picture Button */}
-                  <button
-                    type="button"
-                    onClick={togglePiP}
-                    className={`p-2 rounded-full transition-colors cursor-pointer ${
-                      isPiP ? 'text-indigo-400 bg-white/15' : 'text-slate-300 hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Picture-in-Picture"
-                  >
-                    <PictureInPicture className="w-4 h-4" />
-                  </button>
-
-                  {/* Settings Menu Toggle (Speed, Quality, Aspect Ratio) */}
-                  <button
-                    type="button"
-                    onClick={() => setActiveMenu(activeMenu === 'settings' ? null : 'settings')}
-                    className={`p-2 rounded-full transition-colors cursor-pointer ${
-                      activeMenu === 'settings' ? 'text-indigo-400 bg-white/15' : 'text-slate-300 hover:text-white hover:bg-white/10'
-                    }`}
-                    title="Configurações de Reprodução"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-
-                  {/* Fullscreen Button */}
-                  <button
-                    type="button"
-                    onClick={toggleFullscreen}
-                    className="p-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-md transition-all cursor-pointer active:scale-95 shadow-sm"
-                    title={isFullscreen ? 'Sair da Tela Cheia (F)' : 'Tela Cheia (F)'}
-                  >
-                    {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                    <Upload className="w-3.5 h-3.5" /> Enviar Legenda (.vtt)
                   </button>
                 </div>
               </div>
-            </div>
-      </div>
+            )}
 
+            </div>
       {/* Channel Trouble & Signal Recovery Assistant Modal */}
       <ChannelTroubleshootModal
         isOpen={showTroubleshootModal}

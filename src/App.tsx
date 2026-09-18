@@ -15,6 +15,7 @@ const CheckoutModal = lazy(() => import('./components/CheckoutModal').then(m => 
 const AdminPanel = lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const AdminAuthGate = lazy(() => import('./components/AdminAuthGate').then(m => ({ default: m.AdminAuthGate })));
 const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const ImportChannelsModal = lazy(() => import('./components/ImportChannelsModal').then(m => ({ default: m.ImportChannelsModal })));
 
 import { Channel, VodItem, Subscriber, SubscriptionPlan, User, NavigationTab, FavoriteItem, WatchProgress } from './types';
 import { INITIAL_CHANNELS } from './data/channelsData';
@@ -115,6 +116,7 @@ export default function App() {
   });
 
   const [isAuthModalOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isImportChannelsOpen, setIsImportChannelsOpen] = useState<boolean>(false);
   const [authModalConfig, setAuthModalConfig] = useState<{
     title?: string;
     subtitle?: string;
@@ -667,6 +669,7 @@ export default function App() {
         currentSubscriber={currentSubscriber}
         currentUser={currentUser}
         favoritesCount={favorites.length}
+        onOpenImportChannels={() => setIsImportChannelsOpen(true)}
         onOpenCheckout={() => {
           setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
           setIsCheckoutOpen(true);
@@ -814,6 +817,7 @@ export default function App() {
                       setSelectedPlanForCheckout(SUBSCRIPTION_PLANS[0]);
                       setIsCheckoutOpen(true);
                     }}
+                    onOpenImportChannels={() => setIsImportChannelsOpen(true)}
                     favorites={favorites}
                     onToggleFavorite={handleToggleFavoriteChannel}
                     watchProgress={watchProgress}
@@ -1066,6 +1070,20 @@ export default function App() {
             onClose={() => setIsCheckoutOpen(false)}
             selectedPlanInitial={selectedPlanForCheckout}
             onSubscriptionSuccess={handleSubscriptionSuccess}
+          />
+        </Suspense>
+      )}
+
+      {/* Automated Channel Import via Link (M3U / IPTV) Modal */}
+      {isImportChannelsOpen && (
+        <Suspense fallback={null}>
+          <ImportChannelsModal
+            isOpen={isImportChannelsOpen}
+            onClose={() => setIsImportChannelsOpen(false)}
+            onChannelsUpdated={(freshChannels) => {
+              setChannels(freshChannels);
+            }}
+            currentUser={currentUser || undefined}
           />
         </Suspense>
       )}
