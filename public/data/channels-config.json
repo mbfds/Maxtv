@@ -14,11 +14,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.16.50/AeE/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-adult-swim",
@@ -30,11 +37,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://168.197.104.22/ADULT_SWIM/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://168.197.104.22/ADULT_SWIM/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-amc",
@@ -45,6 +59,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amc/__index.m3u8?sv=12&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788473027-1p5ON3MLfzAs8siCd4PYlYy%2FbYd54KR6B6BZBJq8I%2Bo%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -61,11 +81,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-band",
@@ -77,11 +104,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-cartoon-network",
@@ -93,11 +127,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-caz-tv",
@@ -109,6 +150,12 @@
           "url": "https://dfr80qz435crc.cloudfront.net/MNOP/Amagi/Caze/Caze_TV_BR/Caze_TV.m3u8",
           "quality": "HD",
           "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -141,6 +188,12 @@
           "url": "https://amg01391-amg01391c57-amgplt0026.playout.now3.amagi.tv/playlist/amg01391-amg01391c57-amgplt0026/playlist.m3u8",
           "quality": "HD",
           "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -158,6 +211,12 @@
           "quality": "HD",
           "referer": "https://painel.play.uol.com.br/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -190,11 +249,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-globonews",
@@ -207,6 +273,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -224,6 +296,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -241,6 +319,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -257,11 +341,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.16.50/AeE/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-history-2",
@@ -273,11 +364,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.16.50/AeE/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-jovem-pan-news",
@@ -306,6 +404,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -323,6 +427,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -340,6 +450,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -357,6 +473,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -374,6 +496,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -391,6 +519,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -408,6 +542,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -425,6 +565,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -442,6 +588,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -459,6 +611,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -475,11 +633,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-sbt-news",
@@ -492,6 +657,12 @@
           "quality": "HD",
           "referer": "https://mais.sbt.com.br/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -508,11 +679,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-sportv",
@@ -523,6 +701,12 @@
         {
           "url": "https://p17-common-sign.dynamic.pages.cloudflareusercontent.com/tos-alisg-avt-0068/proxy?container=images&refresh=10&url=https://neosoro.gq/docs/sportv1/__index.m3u8?sv=159&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1786408554-MK0K7%2F0RIabb2i7ktFkDI1P2aEeyuwRUwvOxauQ5e1c%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -540,6 +724,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -557,6 +747,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -572,6 +768,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecineaction/__index.m3u8?sv=181&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472482-ZnuPAKOOcUnNJSwlKHAUzpC2nD0jQys4%2B%2B4TDFuEZss%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -587,6 +789,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepipoca/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472639-q0t4kfoYFwuz0fd9JMSAa%2B%2B62MGZTiRr2rqnMJx96lU%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -602,6 +810,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepremium/__index.m3u8?sv=96&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472691-FnJa9ar3%2BK%2B9Fsm2Hh%2Bec16N3WQUmrIk78qNE9Mwzic%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -618,11 +832,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-universal-premiere",
@@ -635,6 +856,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -652,6 +879,12 @@
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -668,11 +901,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/WARNER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/WARNER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/WARNER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-impd",
@@ -683,6 +923,12 @@
         {
           "url": "https://68882bdaf156a.streamlock.net/impd/ngrp:impd_all/chunklist_w1464410885_b2691072.m3u8",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -699,11 +945,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-cartoonito",
@@ -714,6 +967,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/cartoonito/__index.m3u8?sv=7&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788473248-7Yzu%2FtAxzRQJhmQMxTVyaqyf5vslWwRo1yq49kLi7ms%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -730,11 +989,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/CINEMAX/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/CINEMAX/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CINEMAX/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-discovery-channel",
@@ -746,11 +1012,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-discovery-kids",
@@ -762,11 +1035,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-discovery-theater",
@@ -778,11 +1058,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-discovery-world",
@@ -794,11 +1081,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-espn",
@@ -810,11 +1104,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-espn-2",
@@ -826,11 +1127,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-espn-4",
@@ -842,11 +1150,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo",
@@ -858,11 +1173,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo2",
@@ -874,11 +1196,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO2/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO2/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO2/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo-family",
@@ -890,11 +1219,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_FAMILY/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_FAMILY/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_FAMILY/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo-mundi",
@@ -906,11 +1242,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_MUNDI_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_MUNDI_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_MUNDI_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo-plus",
@@ -922,11 +1265,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_PLUS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_PLUS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_PLUS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo-pop",
@@ -938,11 +1288,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_POP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_POP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_POP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo-signature",
@@ -954,11 +1311,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_SIGNATURE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_SIGNATURE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_SIGNATURE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hbo-xtreme",
@@ -970,11 +1334,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_EXTREME_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_EXTREME_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_EXTREME_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-hgtv",
@@ -986,11 +1357,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-record",
@@ -1002,11 +1380,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/RECORD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/RECORD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/RECORD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-space",
@@ -1018,11 +1403,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tnt",
@@ -1034,11 +1426,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tnt-s-ries",
@@ -1050,11 +1449,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TNT_SERIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_SERIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_SERIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-universal-tv",
@@ -1071,6 +1477,12 @@
           "quality": "HD",
           "referer": "https://www.clarotvmais.com.br/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -1086,6 +1498,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amcseries/__index.m3u8?sv=104&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472213-9X3RxgrzGBnYkKf9TDcG8To6ntcgw1Ltd1LupkS57Fg%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -1102,11 +1520,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-usa-network",
@@ -1117,6 +1542,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/usa/__index.m3u8?sv=152&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472952-usk1Sd862HUsEeFJpIgF1mgp%2BipLQSEzd%2BnacW%2BsYEs%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -1132,6 +1563,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinefun/__index.m3u8?sv=45&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472591-MQu9Zm%2F3aV46qgPi%2FGK8lQPITC7rFBu89BYJX9HQhl4%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -1147,6 +1584,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinecult/__index.m3u8?sv=147&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472536-p1uhXCPAv%2BhiNspGPwSLrgfu%2Bk%2F3lPr0weu%2FwQ0t7Xo%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -1162,6 +1605,12 @@
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinetouch/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472733-mezOvP3QyByaaJYUwIpFQYMT3SQbdg5UhkhHmws96XE%3D",
           "quality": "HD"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
@@ -1178,11 +1627,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-globo",
@@ -1194,11 +1650,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tooncast",
@@ -1210,11 +1673,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tlc",
@@ -1226,11 +1696,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-arte-1",
@@ -1242,11 +1719,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tnt-novelas",
@@ -1258,11 +1742,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-discovery-science",
@@ -1274,11 +1765,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-boomerang",
@@ -1290,11 +1788,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-axn",
@@ -1306,11 +1811,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tcm",
@@ -1322,11 +1834,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-band-news",
@@ -1338,11 +1857,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-band-sports-hd",
@@ -1354,11 +1880,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-redetv-",
@@ -1370,11 +1903,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tv-cultura",
@@ -1386,11 +1926,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TV_CULTURA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_CULTURA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_CULTURA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-terra-viva",
@@ -1402,11 +1949,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-woohoo",
@@ -1418,11 +1972,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-prime-box-brazil",
@@ -1434,11 +1995,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/PRIME_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/PRIME_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/PRIME_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-espn-3",
@@ -1450,11 +2018,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN3_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN3_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN3_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-espn-extra",
@@ -1466,11 +2041,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tv-gazeta",
@@ -1482,11 +2064,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-record-news",
@@ -1498,11 +2087,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/RECORD_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": false,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/RECORD_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/RECORD_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-can--o-nova",
@@ -1514,11 +2110,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/CANCAO_NOVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/CANCAO_NOVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CANCAO_NOVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-tv-aparecida",
@@ -1530,11 +2133,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-rede-vida",
@@ -1546,11 +2156,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-discovery-id",
@@ -1562,11 +2179,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-fish-tv",
@@ -1578,11 +2202,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-box-kids-tv",
@@ -1594,11 +2225,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-sabor---arte",
@@ -1610,11 +2248,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/SABOR_E_ARTE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/SABOR_E_ARTE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SABOR_E_ARTE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-x-sports",
@@ -1626,11 +2271,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-n-sports",
@@ -1642,11 +2294,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/NSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/NSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/NSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     },
     {
       "id": "saimo-music-box-brazil",
@@ -1658,11 +2317,18 @@
           "url": "https://cdn-sp2.satlabscloud.com.br/MUSIC_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
+        },
+        {
+          "name": "Servidor Alternativo (Ao Vivo)",
+          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
       "isActive": true,
       "isVipOnly": true,
-      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/MUSIC_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/MUSIC_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
     }
   ]
 }

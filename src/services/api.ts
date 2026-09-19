@@ -1,5 +1,9 @@
 import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData, ChannelEpgSchedule, EpgEnrichResponse, FuzzyDuplicateCandidate, FuzzyScanResult } from '../types';
 import { getPrefetchedChannels, getPrefetchedVod } from './prefetchService';
+import { DEFAULT_CHANNELS_GRID, verifyAndParseChannelsGridResponse, ChannelsGridResult } from './gridIntegrity';
+
+export { DEFAULT_CHANNELS_GRID, verifyAndParseChannelsGridResponse };
+export type { ChannelsGridResult };
 
 const ONE_HOUR_MS = 60 * 60 * 1000; // 1 hour TTL
 const CHANNELS_CACHE_KEY = 'maxtv_cache_channels';
@@ -8,11 +12,17 @@ const VOD_CACHE_KEY = 'maxtv_cache_vod_catalog';
 export const getCachedChannels = (): Channel[] | null => {
   try {
     if (typeof localStorage === 'undefined') return null;
-    const raw = localStorage.getItem(CHANNELS_CACHE_KEY);
+    const raw = localStorage.getItem(CHANNELS_CACHE_KEY) || localStorage.getItem('maxtv_channels_cache');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.data?.channels) && parsed.data.channels.length > 0) {
       return parsed.data.channels;
+    }
+    if (parsed && Array.isArray(parsed.channels) && parsed.channels.length > 0) {
+      return parsed.channels;
+    }
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
     }
   } catch {}
   return null;
@@ -97,6 +107,45 @@ export async function adminFetch(url: string, init?: RequestInit): Promise<Respo
   return res;
 }
 
+/**
+ * Universal safe JSON parser for fetch Responses.
+ * Prevents "Failed to execute 'json' on 'Response': Unexpected end of JSON input"
+ * by safely inspecting body text, checking status codes, and handling empty/HTML/truncated responses.
+ */
+export async function safeJsonResponse<T = any>(res: Response, fallbackErrorMsg?: string): Promise<T> {
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    if (res.ok) {
+      return { success: true } as unknown as T;
+    }
+    throw new Error(fallbackErrorMsg || `Erro de conexão HTTP ${res.status}`);
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) {
+    if (res.ok) {
+      return { success: true } as unknown as T;
+    }
+    throw new Error(fallbackErrorMsg || `Servidor retornou status ${res.status} sem conteúdo. A operação pode estar sendo processada em segundo plano.`);
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    if (trimmed.startsWith('<') || trimmed.includes('<html') || trimmed.includes('<body')) {
+      const match = trimmed.match(/<title>(.*?)<\/title>/i) || trimmed.match(/<h1>(.*?)<\/h1>/i);
+      const title = match ? match[1].replace(/<[^>]+>/g, '').trim() : '';
+      if (title) {
+        throw new Error(fallbackErrorMsg ? `${fallbackErrorMsg} (${title})` : `Erro do servidor (${res.status}): ${title}`);
+      }
+    }
+    const cleanSnippet = trimmed.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+    throw new Error(fallbackErrorMsg || (cleanSnippet ? `Erro do servidor (${res.status}): ${cleanSnippet}` : 'Falha ao processar resposta do servidor.'));
+  }
+}
+
 export const api = {
   // Channels with localStorage cache & 1-hour background revalidation
   async getChannels(options: { forceRefresh?: boolean } = {}): Promise<{ channels: Channel[]; count: number }> {
@@ -123,9 +172,8 @@ export const api = {
     // Background revalidator helper
     const revalidateInBackground = () => {
       fetch('/api/channels')
-        .then(res => {
-          if (!res.ok) throw new Error('Status ' + res.status);
-          return res.json();
+        .then(async res => {
+          return await verifyAndParseChannelsGridResponse(res);
         })
         .then(freshData => {
           if (freshData?.channels && Array.isArray(freshData.channels) && freshData.channels.length > 0) {
@@ -162,11 +210,10 @@ export const api = {
       }
     }
 
-    // No cache or forceRefresh requested: fetch synchronously
+    // No cache or forceRefresh requested: fetch synchronously with integrity verification before .json()
     try {
       const res = await fetch('/api/channels');
-      if (!res.ok) throw new Error('Falha ao carregar canais');
-      const freshData = await res.json();
+      const freshData = await verifyAndParseChannelsGridResponse(res);
       if (freshData?.channels && Array.isArray(freshData.channels) && freshData.channels.length > 0) {
         try {
           localStorage.setItem(CHANNELS_CACHE_KEY, JSON.stringify({
@@ -178,7 +225,7 @@ export const api = {
       return freshData;
     } catch {
       if (isCacheValid) return cachedEntry!.data;
-      return { channels: [], count: 0 };
+      return DEFAULT_CHANNELS_GRID;
     }
   },
 
@@ -388,7 +435,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author })
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao sincronizar listas M3U locais');
     if (!res.ok || !data.success) {
       throw new Error(data.message || data.error || 'Falha ao sincronizar listas M3U locais');
     }
@@ -410,7 +457,7 @@ export const api = {
     try {
       const res = await adminFetch('/api/admin/channels/config');
       if (!res.ok) throw new Error('Falha ao carregar arquivo de configuração de canais');
-      return await res.json();
+      return await safeJsonResponse(res, 'Falha ao carregar arquivo de configuração de canais');
     } catch (err: any) {
       return { success: false, error: err.message || 'Falha ao conectar com o servidor' };
     }
@@ -429,7 +476,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao validar arquivo de configuração de canais');
   },
 
   async saveChannelsConfig(payload: { rawJson?: string; config?: any; author?: string }): Promise<{
@@ -446,7 +493,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao salvar arquivo de configuração de canais');
     if (!res.ok || !data.success) {
       throw new Error(data.error || 'Falha ao salvar arquivo de configuração de canais');
     }
@@ -498,12 +545,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    let data: any;
-    try {
-      data = await res.json();
-    } catch {
-      throw new Error('Falha na resposta do servidor durante sincronização do catálogo VOD.');
-    }
+    const data = await safeJsonResponse(res, 'Falha ao sincronizar catálogo VOD M3U/M3U8');
     if (!res.ok || !data?.success) {
       throw new Error(data?.error || data?.message || 'Falha ao sincronizar catálogo VOD M3U/M3U8');
     }
@@ -663,9 +705,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author, fuzzyThreshold })
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao unificar grade de canais');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao unificar grade de canais');
+      throw new Error(data.error || data.message || 'Falha ao unificar grade de canais');
     }
 
     // Invalida cache local para carregar os novos canais unificados
@@ -678,6 +720,10 @@ export const api = {
     if (data.channels && Array.isArray(data.channels) && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', {
         detail: { channels: data.channels, count: data.channels.length }
+      }));
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', {
+        detail: { count: data.channelsCount }
       }));
     }
 
@@ -787,9 +833,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao importar URL M3U8');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao importar URL M3U8');
+      throw new Error(data.error || data.message || 'Falha ao importar URL M3U8');
     }
     return data;
   },
@@ -814,9 +860,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao importar conteúdo M3U8');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao importar conteúdo M3U8');
+      throw new Error(data.error || data.message || 'Falha ao importar conteúdo M3U8');
     }
     return data;
   },
@@ -835,9 +881,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao sincronizar links do repositório');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao sincronizar links do repositório');
+      throw new Error(data.error || data.message || 'Falha ao sincronizar links do repositório');
     }
     return data;
   },
@@ -856,27 +902,27 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ host })
     });
-    return await res.json();
+    return await safeJsonResponse(res);
   },
 
   // M3U Import Logs & Transparency
   async getM3uImportLogs(): Promise<{ success: boolean; logs: M3uImportLogEntry[]; count: number }> {
     const res = await adminFetch('/api/admin/channels/import-logs');
     if (!res.ok) throw new Error('Falha ao obter logs de importação');
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao obter logs de importação');
   },
 
   async clearM3uImportLogs(): Promise<{ success: boolean; message: string }> {
     const res = await adminFetch('/api/admin/channels/import-logs', { method: 'DELETE' });
     if (!res.ok) throw new Error('Falha ao limpar histórico de importações');
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao limpar histórico de importações');
   },
 
   // M3U Auto-Update Scheduler
   async getM3uAutoUpdateConfig(): Promise<{ success: boolean; config: M3uAutoUpdateConfig }> {
     const res = await adminFetch('/api/admin/channels/auto-update-config');
     if (!res.ok) throw new Error('Falha ao obter configurações de auto-atualização');
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao obter configurações de auto-atualização');
   },
 
   async saveM3uAutoUpdateConfig(payload: Partial<M3uAutoUpdateConfig>): Promise<{ success: boolean; config: M3uAutoUpdateConfig; message: string }> {
@@ -885,9 +931,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao salvar configurações de auto-atualização');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao salvar configurações de auto-atualização');
+      throw new Error(data.error || data.message || 'Falha ao salvar configurações de auto-atualização');
     }
     return data;
   },
@@ -907,9 +953,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao salvar fonte M3U');
     if (!res.ok || !data.success) {
-      const err = new Error(data.error || 'Falha ao salvar fonte M3U');
+      const err = new Error(data.error || data.message || 'Falha ao salvar fonte M3U');
       (err as any).data = data;
       throw err;
     }
@@ -927,9 +973,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao atualizar fonte M3U');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao atualizar fonte M3U');
+      throw new Error(data.error || data.message || 'Falha ao atualizar fonte M3U');
     }
     return data;
   },
@@ -939,13 +985,13 @@ export const api = {
       method: 'DELETE'
     });
     if (!res.ok) throw new Error('Falha ao remover fonte');
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao remover fonte');
   },
 
   async getM3uSources(): Promise<{ success: boolean; sources: M3uAutoUpdateSource[]; total: number }> {
     const res = await adminFetch('/api/admin/channels/sources');
     if (!res.ok) throw new Error('Falha ao obter lista de fontes M3U');
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao obter lista de fontes M3U');
   },
 
   // SQLite Database Backup & Diagnostics
@@ -1009,7 +1055,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
     });
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao validar URL M3U');
   },
 
   // Validação Live de URL XMLTV (EPG) no Servidor
@@ -1040,7 +1086,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
     });
-    return await res.json();
+    return await safeJsonResponse(res, 'Falha ao validar URL XMLTV');
   },
 
   async getEpgSources(): Promise<{ success: boolean; sources: any[]; total: number }> {
@@ -1089,9 +1135,9 @@ export const api = {
     const res = await adminFetch('/api/admin/epg/sync', {
       method: 'POST'
     });
-    const data = await res.json();
+    const data = await safeJsonResponse(res, 'Falha ao sincronizar programação EPG');
     if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao sincronizar programação EPG');
+      throw new Error(data.error || data.message || 'Falha ao sincronizar programação EPG');
     }
     return data;
   },
@@ -1102,12 +1148,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author })
     });
-    let data: any;
-    try {
-      data = await res.json();
-    } catch {
-      throw new Error('Falha na resposta do servidor durante auto-atualização periódica.');
-    }
+    const data = await safeJsonResponse(res, 'Falha ao executar ciclo de atualização');
     if (!res.ok || !data?.success) {
       throw new Error(data?.error || data?.message || 'Falha ao executar ciclo de atualização');
     }

@@ -44,7 +44,7 @@ export const GlobalSearchResultsView: React.FC<GlobalSearchResultsViewProps> = (
 
   // Filter Channels
   const matchedChannels = channels.filter(ch => {
-    if (!ch.isActive) return false;
+    if (ch.isActive === false) return false;
     const nameMatch = normalize(ch.name).includes(queryNorm);
     const catMatch = normalize(ch.category).includes(queryNorm);
     const epgNowMatch = ch.epgNow ? normalize(ch.epgNow).includes(queryNorm) : false;

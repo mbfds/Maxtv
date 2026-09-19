@@ -50,10 +50,11 @@ const ObserverChannelCard: React.FC<ChannelCardItemProps> = React.memo(({
   onToggleFavorite
 }) => {
   const cardRef = React.useRef<HTMLDivElement>(null);
-  // The first 18 channels render immediately so above-the-fold appears without delay
-  const [isVisible, setIsVisible] = useState<boolean>(() => idx < 18);
+  // The first 48 channels render immediately so above-the-fold appears without delay
+  const [isVisible, setIsVisible] = useState<boolean>(() => idx < 48);
 
   React.useEffect(() => {
+    if (isVisible) return;
     if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
       setIsVisible(true);
       return;
@@ -67,17 +68,12 @@ const ObserverChannelCard: React.FC<ChannelCardItemProps> = React.memo(({
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             setIsVisible(true);
-          } else {
-            // Unmount heavy media when scrolled far off-screen to preserve TV Box memory
-            if (entry.boundingClientRect.top > window.innerHeight + 350 || entry.boundingClientRect.bottom < -350) {
-              setIsVisible(false);
-            }
           }
         });
       },
       {
         root: null,
-        rootMargin: '300px 0px 300px 0px',
+        rootMargin: '600px 0px 600px 0px',
         threshold: 0
       }
     );
@@ -86,7 +82,7 @@ const ObserverChannelCard: React.FC<ChannelCardItemProps> = React.memo(({
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [isVisible]);
 
   const isLocked = channel.isVipOnly && !isVip;
 
@@ -213,17 +209,31 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
   onPlayVod,
   onRemoveProgress
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<ChannelCategory>('Todos');
-  const [visibleCount, setVisibleCount] = useState<number>(60);
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
+  const [visibleCount, setVisibleCount] = useState<number>(120);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
 
   const isItemFavorite = (id: string) => favorites.some(f => f.id === id);
+
+  // Dynamically collect unique categories present across all channels
+  const availableCategories = React.useMemo(() => {
+    const list: string[] = ['Todos', 'Abertos', 'Esportes', 'Notícias', 'Filmes & Séries', 'Infantis', 'Documentários', 'Variedades & Música'];
+    const set = new Set<string>(list);
+    channels.forEach(ch => {
+      if (ch.category && ch.category.trim() && !set.has(ch.category.trim())) {
+        set.add(ch.category.trim());
+        list.push(ch.category.trim());
+      }
+    });
+    return list;
+  }, [channels]);
 
   // Filter channels with useMemo to avoid recomputing on every render
   const filteredChannels = React.useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return channels.filter(ch => {
-      if (!ch.isActive) return false;
+      // Only exclude if explicitly false; channels with undefined or true are shown
+      if (ch.isActive === false) return false;
       const matchesCategory = selectedCategory === 'Todos' || ch.category === selectedCategory;
       const matchesSearch = !q || ch.name.toLowerCase().includes(q);
       return matchesCategory && matchesSearch;
@@ -232,7 +242,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
   // Reset pagination when category or search changes
   React.useEffect(() => {
-    setVisibleCount(60);
+    setVisibleCount(120);
   }, [selectedCategory, searchQuery]);
 
   const visibleChannels = React.useMemo(() => {
@@ -274,7 +284,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
 
       {/* Category Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 scrollbar-none">
-        {CATEGORIES.map(cat => (
+        {availableCategories.map(cat => (
           <button
             key={cat}
             type="button"

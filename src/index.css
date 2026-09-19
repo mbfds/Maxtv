@@ -95,3 +95,46 @@
   background-color: rgba(10, 15, 30, 0.97) !important;
 }
 
+/* Forçar ocultação de qualquer notificação ou sobreposição nativa de rede do player (HLS/DASH) */
+#live-player-root .player-network-overlay,
+#live-player-root .network-overlay,
+#live-player-root .network-toast,
+#live-player-root .network-notification,
+#live-player-root [class*="network-alert"],
+#live-player-root [class*="network-toast"],
+#live-player-root [class*="network-overlay"],
+#live-player-root [class*="network-status"],
+#live-player-root [class*="connection-status"],
+#live-player-root [class*="buffer-warning"],
+#live-player-root [class*="stream-warning"],
+#live-player-root [class*="hls-overlay"],
+#live-player-root [class*="dash-overlay"],
+#live-player-root [class*="dashjs-overlay"],
+#live-player-root [class*="dashjs-warning"],
+#live-player-root [class*="dashjs-error"],
+#live-player-root .vjs-error-display,
+#live-player-root video::-webkit-media-controls-error-message,
+#live-player-root video::-webkit-media-controls-alert-box,
+.live-player-clean .player-network-overlay,
+.live-player-clean .network-overlay,
+.live-player-clean .network-toast,
+.live-player-clean .network-notification,
+.live-player-clean [class*="network-alert"],
+.live-player-clean [class*="network-toast"],
+.live-player-clean [class*="network-overlay"],
+.live-player-clean [class*="network-status"],
+.live-player-clean [class*="connection-status"],
+.live-player-clean [class*="buffer-warning"],
+.live-player-clean [class*="stream-warning"],
+.live-player-clean [class*="hls-overlay"],
+.live-player-clean [class*="dash-overlay"],
+.live-player-clean [class*="dashjs-overlay"],
+.player-network-overlay,
+.network-overlay {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+

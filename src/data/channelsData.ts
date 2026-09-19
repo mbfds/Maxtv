@@ -8,11 +8,13 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/TV_Globo_2021.svg/320px-TV_Globo_2021.svg.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/GLOBO_SP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (Ao Vivo)',
+        url: 'https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8',
         quality: '1080p'
       },
       {
-        url: 'https://f2472e35a09a.us-east-1.playback.live-video.net/api/video/v1/us-east-1.747125345706.channel.329749502123.m3u8',
+        name: 'Servidor 2 (Backup Nacional)',
+        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
         quality: '720p'
       }
     ],
@@ -27,8 +29,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Sistema_Brasileiro_de_Televis%C3%A3o_logo_2014.svg/320px-Sistema_Brasileiro_de_Televis%C3%A3o_logo_2014.svg.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (SBT Ao Vivo)',
+        url: 'https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Backup)',
+        url: 'http://45.162.64.114/TV_CULTURA/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -42,8 +50,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Logo_da_Rede_Bandeirantes.svg/320px-Logo_da_Rede_Bandeirantes.svg.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (SBT / Band Ao Vivo)',
+        url: 'https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Notícias Ao Vivo)',
+        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -57,13 +71,35 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/RecordTV_2023.png/320px-RecordTV_2023.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/RECORD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (Record News Ao Vivo)',
+        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Cultura Ao Vivo)',
+        url: 'http://45.162.64.114/TV_CULTURA/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
     epgNow: 'Jornal da Record',
     epgNext: 'Câmera Record'
+  },
+  {
+    id: 'tv-cultura',
+    name: 'TV Cultura',
+    category: 'Abertos',
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/TV_Cultura_logo_2021.svg/320px-TV_Cultura_logo_2021.svg.png',
+    sources: [
+      {
+        name: 'Servidor 1 (Cultura HD)',
+        url: 'http://45.162.64.114/TV_CULTURA/index.m3u8',
+        quality: '1080p'
+      }
+    ],
+    isActive: true,
+    epgNow: 'Jornal da Cultura',
+    epgNext: 'Roda Viva'
   },
   {
     id: 'cazetv',
@@ -72,8 +108,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/cazetv.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/CAZETV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (GE Esportes Ao Vivo)',
+        url: 'https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8',
         quality: '1080p 60fps'
+      },
+      {
+        name: 'Servidor 2 (ESPN 4 Esportes)',
+        url: 'http://181.78.197.59:8000/play/a07n/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -88,8 +130,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/sportv.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/SPORTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (SporTV 3 HD)',
+        url: 'http://170.83.49.66:8083/SPORTV3HD/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (GE Ao Vivo)',
+        url: 'https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -104,8 +152,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/sportv2.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/SPORTV2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (ESPN 4 HD)',
+        url: 'http://181.78.197.59:8000/play/a07n/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (SporTV 3)',
+        url: 'http://170.83.49.66:8083/SPORTV3HD/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -120,8 +174,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/premiere.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/PREMIERE_CLUBES_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (GE Esportes)',
+        url: 'https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (SporTV 3)',
+        url: 'http://170.83.49.66:8083/SPORTV3HD/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -136,8 +196,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/premiere2.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/PREMIERE2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (ESPN 4 Esportes)',
+        url: 'http://181.78.197.59:8000/play/a07n/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (GE Esportes)',
+        url: 'https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -152,8 +218,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/CNN_Brasil_logo.svg/320px-CNN_Brasil_logo.svg.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/CNN_BRASIL_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (CNN Brasil HD)',
+        url: 'https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (CNN Money)',
+        url: 'https://amg01391-amg01391c57-amgplt0026.playout.now3.amagi.tv/playlist/amg01391-amg01391c57-amgplt0026/playlist.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -167,8 +239,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/jovempannews.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/JP_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (JP News HD)',
+        url: 'https://amg01391-sbtinfast-amg01391c3-lg-us-8995.playouts.now.amagi.tv/playlist/amg01391-addigital-jovempan-lgus/playlist.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Record News)',
+        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -182,8 +260,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/globonews.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/GLOBONEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (CNN Brasil News)',
+        url: 'https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (JP News)',
+        url: 'https://amg01391-sbtinfast-amg01391c3-lg-us-8995.playouts.now.amagi.tv/playlist/amg01391-addigital-jovempan-lgus/playlist.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -198,8 +282,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/megapix.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/MEGAPIX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (AMC Filmes HD)',
+        url: 'http://170.83.49.66:8083/AMCHD/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (AXN Séries)',
+        url: 'http://170.83.16.50/AXN/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -214,8 +304,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/sonychannel.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (AXN Séries HD)',
+        url: 'http://170.83.16.50/AXN/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (AMC Filmes)',
+        url: 'http://170.83.49.66:8083/AMCHD/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -230,8 +326,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/cartoonnetwork.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/CARTOON_NETWORK_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (Box Kids HD)',
+        url: 'http://170.83.49.66:8083/BOXKIDSHD/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Adult Swim Animado)',
+        url: 'http://168.197.104.22/ADULT_SWIM/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -245,8 +347,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/multishow.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/MULTISHOW_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (Arte 1 Música & Cultura)',
+        url: 'http://45.162.64.114/ARTE1/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (A&E HD)',
+        url: 'http://170.83.16.50/AeE/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -261,8 +369,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/history.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (A&E Documentários HD)',
+        url: 'http://170.83.16.50/AeE/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Amazon Sat)',
+        url: 'https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,
@@ -277,8 +391,14 @@ export const INITIAL_CHANNELS: Channel[] = [
     logo: 'https://cdn.reidoscanais.st/imagens/animalplanet.png',
     sources: [
       {
-        url: 'https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7',
+        name: 'Servidor 1 (Amazon Sat Natureza)',
+        url: 'https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8',
         quality: '1080p'
+      },
+      {
+        name: 'Servidor 2 (Cultura HD)',
+        url: 'http://45.162.64.114/TV_CULTURA/index.m3u8',
+        quality: '720p'
       }
     ],
     isActive: true,

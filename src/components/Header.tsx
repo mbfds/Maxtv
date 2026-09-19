@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     const filteredChannels = channels.filter(ch => {
-      if (!ch.isActive) return false;
+      if (ch.isActive === false) return false;
       const name = ch.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const cat = ch.category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const epg = (ch.epgNow || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');

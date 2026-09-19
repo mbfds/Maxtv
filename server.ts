@@ -1774,7 +1774,11 @@ app.all('/api/proxy', async (req, res) => {
   }
 
   try {
-    const decodedUrl = decodeURIComponent(videoUrl);
+    let decodedUrl = decodeURIComponent(videoUrl);
+    while (decodedUrl.includes('/api/proxy?url=')) {
+      const parts = decodedUrl.split('/api/proxy?url=');
+      decodedUrl = decodeURIComponent(parts[parts.length - 1]);
+    }
     if (!decodedUrl.startsWith('http://') && !decodedUrl.startsWith('https://')) {
       return res.status(400).json({ error: 'Invalid URL protocol' });
     }
@@ -2294,6 +2298,7 @@ function getHealthSummary() {
 
 // 2. CHANNELS API (Grade Unificada Oficial com Cache de Alta Performance)
 app.get('/api/channels', (req, res) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   const now = Date.now();
   if (cachedChannelsResponse && (now - cachedChannelsTimestamp < CHANNELS_CACHE_TTL_MS)) {
     return res.json(cachedChannelsResponse);
@@ -2304,6 +2309,15 @@ app.get('/api/channels', (req, res) => {
 
   if (effectiveChannels.length === 0) {
     effectiveChannels = parsedRamysChannels.length > 0 ? parsedRamysChannels : parsedSaimoChannels;
+  }
+
+  if (effectiveChannels.length === 0) {
+    try {
+      const dbChannels = sqliteGetAllChannels();
+      if (dbChannels && dbChannels.length > 0) {
+        effectiveChannels = dbChannels;
+      }
+    } catch {}
   }
 
   const all = [...customAdminChannels, ...effectiveChannels].map(ch => {
@@ -3953,17 +3967,24 @@ app.post('/api/admin/channels/sync-local-m3u', async (req, res) => {
     let allParsedChannels: ServerChannel[] = [];
     const processedSources: string[] = [];
 
-    for (const src of localSources) {
+    // Processa fontes em paralelo com timeout ágil de 25s
+    const fetchPromises = localSources.map(async (src) => {
       try {
         console.log(`[SYNC LOCAL M3U] Processando fonte cadastrada no banco: ${src.name} (${src.url})`);
-        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(src.url, 120000);
+        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(src.url, 25000);
         const parsed = parseM3UToChannels(content, src.name);
-        if (parsed.length > 0) {
-          allParsedChannels = allParsedChannels.concat(parsed);
-          processedSources.push(`${src.name} (${parsed.length} canais, ${sizeFormatted})`);
-        }
+        return { name: src.name, sizeFormatted, parsed };
       } catch (errSrc: any) {
         console.warn(`[SYNC LOCAL M3U] Falha ao processar lista ${src.name}:`, errSrc.message);
+        return { name: src.name, sizeFormatted: 'falha', parsed: [] as ServerChannel[] };
+      }
+    });
+
+    const results = await Promise.allSettled(fetchPromises);
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.parsed.length > 0) {
+        allParsedChannels = allParsedChannels.concat(r.value.parsed);
+        processedSources.push(`${r.value.name} (${r.value.parsed.length} canais, ${r.value.sizeFormatted})`);
       }
     }
 
@@ -4200,21 +4221,27 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
       if (s.url) uniqueSourcesMap.set(s.url.trim(), s.name || 'Fonte M3U Automática');
     }
 
-    // Se houver fontes cadastradas, baixar e extrair os canais
+    // Se houver fontes cadastradas, baixar e extrair os canais em paralelo com timeout de 25s
     let extraChannelsFromSources: ServerChannel[] = [];
     const downloadedSourcesInfo: string[] = [];
 
-    for (const [sourceUrl, sourceName] of uniqueSourcesMap.entries()) {
+    const sourceDownloadPromises = Array.from(uniqueSourcesMap.entries()).map(async ([sourceUrl, sourceName]) => {
       try {
         console.log(`[UNIFY-NOW] Baixando e sincronizando lista M3U: ${sourceName} (${sourceUrl})`);
-        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(sourceUrl, 90000);
+        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(sourceUrl, 25000);
         const parsed = parseM3UToChannels(content, sourceName);
-        if (parsed.length > 0) {
-          extraChannelsFromSources = extraChannelsFromSources.concat(parsed);
-          downloadedSourcesInfo.push(`${sourceName} (${parsed.length} canais, ${sizeFormatted})`);
-        }
+        return { sourceName, sizeFormatted, parsed };
       } catch (errSrc: any) {
         console.warn(`[UNIFY-NOW] Aviso ao sincronizar fonte ${sourceName}:`, errSrc.message);
+        return { sourceName, sizeFormatted: 'falha', parsed: [] as ServerChannel[] };
+      }
+    });
+
+    const results = await Promise.allSettled(sourceDownloadPromises);
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.parsed.length > 0) {
+        extraChannelsFromSources = extraChannelsFromSources.concat(r.value.parsed);
+        downloadedSourcesInfo.push(`${r.value.sourceName} (${r.value.parsed.length} canais, ${r.value.sizeFormatted})`);
       }
     }
 
@@ -4275,9 +4302,8 @@ app.post('/api/admin/channels/unify-now', async (req, res) => {
       mergedChannelsCount: mergedResult.mergedChannelsCount,
       newChannelsCount: mergedResult.newChannelsCount,
       totalSourcesCount: mergedResult.totalSourcesCount,
-      channels: mergedResult.unified,
       sourcesProcessed: downloadedSourcesInfo,
-      similarityMatches: mergedResult.similarityMatches,
+      similarityMatches: mergedResult.similarityMatches.slice(0, 50),
       durationMs: Date.now() - startTime
     });
   } catch (err: any) {
@@ -6387,18 +6413,24 @@ async function runAutoUpdateCycle(triggerReason: string = 'Agendador Automático
       };
     }
 
-    for (const source of enabledSources) {
+    const autoPromises = enabledSources.map(async (source) => {
       try {
         console.log(`[AUTO-UPDATE] Baixando lista M3U/M3U8 de: ${source.name} (${source.url})`);
-        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(source.url, 120000);
+        const { content, sizeFormatted } = await downloadAndDecodeM3uUrl(source.url, 25000);
         const parsed = parseM3UToChannels(content, `auto-${source.id}`);
-        if (parsed.length > 0) {
-          totalFoundAcrossSources += parsed.length;
-          allIncomingChannels = allIncomingChannels.concat(parsed);
-          sourcesUsed.push(`${source.name} (${parsed.length} canais, ${sizeFormatted})`);
-        }
+        return { name: source.name, sizeFormatted, parsed };
       } catch (errSource: any) {
         console.warn(`[AUTO-UPDATE] Aviso ao baixar fonte ${source.name}:`, errSource.message);
+        return { name: source.name, sizeFormatted: 'falha', parsed: [] as ServerChannel[] };
+      }
+    });
+
+    const results = await Promise.allSettled(autoPromises);
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.parsed.length > 0) {
+        totalFoundAcrossSources += r.value.parsed.length;
+        allIncomingChannels = allIncomingChannels.concat(r.value.parsed);
+        sourcesUsed.push(`${r.value.name} (${r.value.parsed.length} canais, ${r.value.sizeFormatted})`);
       }
     }
 

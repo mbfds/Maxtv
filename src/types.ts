@@ -9,11 +9,13 @@ export type ChannelCategory =
   | 'Variedades & Música';
 
 export interface ChannelSource {
+  name?: string;
   url: string;
   referer?: string;
   userAgent?: string;
   chave?: string;
   quality?: string;
+  isWorking?: boolean;
 }
 
 export interface Channel {

@@ -11,6 +11,7 @@
 
 import { Channel, VodItem } from '../types';
 import { prefetchImagesBatch } from './imageCache';
+import { DEFAULT_CHANNELS_GRID, verifyAndParseChannelsGridResponse } from './gridIntegrity';
 
 const CHANNELS_CACHE_KEY = 'maxtv_cache_channels';
 const VOD_CACHE_KEY = 'maxtv_cache_vod_catalog';
@@ -28,11 +29,10 @@ export function initStartupPrefetch(): void {
   if (isStarted || typeof window === 'undefined') return;
   isStarted = true;
 
-  // 1. Eagerly pre-fetch Channels metadata
+  // 1. Eagerly pre-fetch Channels metadata with response integrity check
   channelsPromise = fetch('/api/channels')
     .then(async (res) => {
-      if (!res.ok) throw new Error('Status ' + res.status);
-      const data = await res.json();
+      const data = await verifyAndParseChannelsGridResponse(res);
       if (data?.channels && Array.isArray(data.channels) && data.channels.length > 0) {
         // Update local storage cache
         try {
@@ -53,15 +53,21 @@ export function initStartupPrefetch(): void {
       return data;
     })
     .catch((err) => {
-      console.warn('[Prefetch] Channels prefetch failed, falling back:', err);
-      return { channels: [], count: 0 };
+      console.warn('[Prefetch] Channels prefetch fallback:', err?.message || err);
+      return DEFAULT_CHANNELS_GRID;
     });
 
   // 2. Eagerly pre-fetch VOD catalog metadata
   vodPromise = fetch('/api/vod')
     .then(async (res) => {
       if (!res.ok) throw new Error('Status ' + res.status);
-      const data = await res.json();
+      const text = await res.text();
+      const trimmed = text ? text.trim() : '';
+      if (!trimmed || !trimmed.startsWith('{')) {
+        isFinished = true;
+        return { success: false, count: 0, items: [] };
+      }
+      const data = JSON.parse(trimmed);
       if (data?.items && Array.isArray(data.items) && data.items.length > 0) {
         // Update local storage cache
         try {
@@ -83,7 +89,7 @@ export function initStartupPrefetch(): void {
       return data;
     })
     .catch((err) => {
-      console.warn('[Prefetch] VOD prefetch failed, falling back:', err);
+      console.warn('[Prefetch] VOD prefetch fallback:', err?.message || err);
       isFinished = true;
       return { success: false, count: 0, items: [] };
     });

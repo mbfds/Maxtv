@@ -215,7 +215,9 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
             // Combine with cached
             const existing = getCachedChannels() || [];
             const merged = unifyWithExisting ? [...existing, ...clientChannels] : clientChannels;
-            localStorage.setItem('maxtv_channels_cache', JSON.stringify({ data: { channels: merged, count: merged.length }, timestamp: Date.now() }));
+            const cachePayload = JSON.stringify({ data: { channels: merged, count: merged.length }, timestamp: Date.now() });
+            localStorage.setItem('maxtv_cache_channels', cachePayload);
+            localStorage.setItem('maxtv_channels_cache', cachePayload);
             window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', { detail: { channels: merged } }));
             onChannelsUpdated(merged);
 
@@ -277,7 +279,9 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
         const clientChannels = convertParsedToChannels(parsedItems);
         const existing = getCachedChannels() || [];
         const merged = unifyWithExisting ? [...existing, ...clientChannels] : clientChannels;
-        localStorage.setItem('maxtv_channels_cache', JSON.stringify({ data: { channels: merged, count: merged.length }, timestamp: Date.now() }));
+        const cachePayload = JSON.stringify({ data: { channels: merged, count: merged.length }, timestamp: Date.now() });
+        localStorage.setItem('maxtv_cache_channels', cachePayload);
+        localStorage.setItem('maxtv_channels_cache', cachePayload);
         window.dispatchEvent(new CustomEvent('maxtv_channels_revalidated', { detail: { channels: merged } }));
         onChannelsUpdated(merged);
 

@@ -305,11 +305,14 @@ export default function App() {
     const fetchChannels = async () => {
       try {
         const res = await api.getChannels();
-        if (res.channels && res.channels.length > 0) {
+        if (res?.channels && res.channels.length > 0) {
           setChannels(res.channels);
+        } else {
+          setChannels(INITIAL_CHANNELS);
         }
       } catch {
         // Fallback to initial channels
+        setChannels(INITIAL_CHANNELS);
       }
     };
 

@@ -948,6 +948,8 @@ export function sqliteGetAllChannels(): any[] {
       quality: r.quality || 'HD',
       epgId: r.epg_id || undefined,
       isVip: Boolean(r.is_vip),
+      isVipOnly: Boolean(r.is_vip),
+      isActive: r.is_working !== 0,
       isAdult: Boolean(r.is_adult),
       sources: sources && sources.length > 0 ? sources : undefined,
       lastChecked: r.last_checked || undefined,

@@ -432,17 +432,42 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   }, [currentSource, compatibilityProtocol, type]);
 
   // By default, IPTV channels, HTTP streams, and M3U8/MPD route through /api/proxy
+  // to avoid CORS, Mixed Content (HTTP on HTTPS), and Referer blocks.
   const needsProxy = React.useMemo(() => {
-    return false; // Force direct streaming for all URLs (Bypass Proxy/CDN)
-  }, [type, rawUrl]);
+    if (!rawUrl) return false;
+    // Already routed through /api/proxy: do not double-wrap
+    if (rawUrl.startsWith('/api/proxy')) return false;
+    // Local / relative assets (e.g. /public/demo.mp4) do not need proxy
+    if (rawUrl.startsWith('/') && !rawUrl.startsWith('//')) return false;
+    // External streams (http:// or https://) must route through /api/proxy
+    return true;
+  }, [rawUrl]);
 
   const [forceProxy, setForceProxy] = useState<boolean | null>(null);
   const usingProxy = forceProxy !== null ? forceProxy : needsProxy;
 
   const streamUrl = React.useMemo(() => {
+    if (!rawUrl) return '';
+
+    // If rawUrl already starts with /api/proxy, clean and return without double-wrapping
+    if (rawUrl.startsWith('/api/proxy')) {
+      let base = rawUrl;
+      if (currentSource?.referer && !base.includes('referer=')) {
+        const sep = base.includes('?') ? '&' : '?';
+        base += `${sep}referer=${encodeURIComponent(currentSource.referer)}`;
+      }
+      if (reloadCounter > 0) {
+        const sep = base.includes('?') ? '&' : '?';
+        base += `${sep}_rt=${reloadCounter}`;
+      }
+      return base;
+    }
+
+    // Wrap external URLs into /api/proxy when usingProxy is enabled
     let base = usingProxy 
       ? `/api/proxy?url=${encodeURIComponent(rawUrl)}${currentSource?.referer ? `&referer=${encodeURIComponent(currentSource.referer)}` : ''}` 
       : rawUrl;
+
     if (reloadCounter > 0) {
       const sep = base.includes('?') ? '&' : '?';
       base += `${sep}_rt=${reloadCounter}`;
@@ -512,8 +537,24 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       return true;
     }
 
+    // Se todas as fontes falharam via Proxy, tenta conexão direta como último recurso
+    if (usingProxy && forceProxy !== false) {
+      setForceProxy(false);
+      failedSourcesSetRef.current.clear();
+      streamLoadStartTimeRef.current = Date.now();
+      setCurrentSourceIndex(0);
+      setIsLoading(false);
+      setHasError(false);
+      setIsTimedOut(false);
+      setIsConnectionUnstable(false);
+      setStreamWarning(null);
+      autoRetryCountRef.current = 0;
+      setReloadCounter(c => c + 1);
+      return true;
+    }
+
     return false;
-  }, [sources, currentSourceIndex, usingProxy, item]);
+  }, [sources, currentSourceIndex, usingProxy, forceProxy, item]);
 
   // Lógica de Reconexão Silenciosa no Background (Overlay-Free e sem feedbacks visuais intrusivos)
   const silentReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1306,10 +1347,19 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                try {
-                  hls.startLoad();
-                } catch (e) {
-                  triggerSilentReconnectRef.current('Erro de rede HLS');
+                if (autoRetryCountRef.current < 2) {
+                  autoRetryCountRef.current += 1;
+                  try {
+                    hls.startLoad();
+                  } catch (e) {
+                    triggerSilentReconnectRef.current('Erro de rede HLS');
+                  }
+                } else {
+                  autoRetryCountRef.current = 0;
+                  try {
+                    hls.destroy();
+                  } catch (e) {}
+                  triggerSilentReconnectRef.current('Falha de rede persistente HLS');
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
@@ -2404,7 +2454,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       )}
       {/* Container */}
       <div 
-        id="player-container"
+        id="live-player-root"
+        data-player-container="true"
         ref={containerRef}
         onClick={(e) => e.stopPropagation()}
         onMouseMove={resetControlsTimer}
@@ -2413,8 +2464,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={isPiP 
-          ? "w-1 h-1 opacity-0 pointer-events-none absolute overflow-hidden" 
-          : "relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none cursor-default"}
+          ? "live-player-clean w-1 h-1 opacity-0 pointer-events-none absolute overflow-hidden" 
+          : "live-player-clean relative w-full max-w-6xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center group select-none cursor-default"}
       >
         {/* Hidden File Input for Subtitles (.vtt / .srt) */}
         <input
