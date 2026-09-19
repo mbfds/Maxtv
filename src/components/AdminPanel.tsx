@@ -6,7 +6,7 @@ import {
   Gift, CalendarPlus, Crown, History, Sparkles, LayoutDashboard,
   Radio, CheckCircle2, ChevronRight, Filter, Flame, ArrowUpRight,
   Activity, Film, WifiOff, FileCode, GitBranch, Layers, Lock,
-  Download, Database, HardDrive, Server, Calendar, Pencil, Wand2
+  Download, Database, HardDrive, Server, Calendar, Pencil, Wand2, Upload
 } from 'lucide-react';
 import { AdminMetrics, Subscriber, PixTransaction, Channel, SystemSettings, VipGrant, ChannelReport, ChannelUpdateHistoryEntry } from '../types';
 import { api } from '../services/api';
@@ -23,6 +23,7 @@ import { AuditLogsViewer } from './AuditLogsViewer';
 import { RealtimeMetricsDashboard } from './RealtimeMetricsDashboard';
 import { ServerHealthDashboard } from './ServerHealthDashboard';
 import { AdminMemoryFooter } from './AdminMemoryFooter';
+import { DatabaseBackupModal } from './DatabaseBackupModal';
 
 interface AdminPanelProps {
   onClose: () => void;
@@ -98,6 +99,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
   };
 
   // Modals inside admin
+  const [isDatabaseBackupModalOpen, setIsDatabaseBackupModalOpen] = useState<boolean>(false);
   const [isGrantModalOpen, setIsGrantModalOpen] = useState<boolean>(false);
   const [grantFormData, setGrantFormData] = useState({
     subscriberId: '',
@@ -587,19 +589,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
           </button>
 
           <button
-            id="btn-header-download-db"
+            id="btn-header-export-db"
             type="button"
-            onClick={handleDownloadBackup}
-            disabled={isDownloadingDb}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-            title="Baixar cópia manual do banco de dados SQLite (data/maxtv.db) com flush WAL de segurança"
+            onClick={() => setIsDatabaseBackupModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all cursor-pointer"
+            title="Exportar banco de dados SQLite (data/maxtv.db) com flush WAL de segurança"
           >
-            {isDownloadingDb ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-            <span>Backup SQLite (.db)</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Exportar DB (.db)</span>
+          </button>
+
+          <button
+            id="btn-header-import-db"
+            type="button"
+            onClick={() => setIsDatabaseBackupModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-all cursor-pointer"
+            title="Importar banco de dados SQLite (.db) de outro ambiente (produção/desenvolvimento)"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Importar DB (.db)</span>
           </button>
 
           <button
@@ -2250,6 +2258,54 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
                   </div>
                 </form>
               </div>
+
+              {/* CARD DE MIGRAÇÃO E SINCRONIZAÇÃO DO BANCO SQLITE (maxtv.db) */}
+              <div className="p-6 rounded-3xl bg-slate-900 border border-indigo-500/30 space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Banco de Dados SQLite (data/maxtv.db)</span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30">
+                          Exportar & Importar Ativo
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Transfira facilmente o banco de dados completo entre os ambientes de produção e desenvolvimento
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/5 space-y-4">
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Você pode <strong>exportar o arquivo maxtv.db</strong> para trazer para este ambiente ou para sua máquina local. Ao <strong>importar</strong> um arquivo .db, todos os canais, transmissões cadastradas, fontes M3U e dados de usuários serão restaurados instantaneamente com flush WAL seguro.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsDatabaseBackupModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Exportar Banco (.db)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsDatabaseBackupModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Importar Banco (.db)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2936,6 +2992,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose, onPreviewChanne
           </div>
         </div>
       )}
+
+      {/* MODAL: EXPORTAR E IMPORTAR BANCO DE DADOS SQLITE (maxtv.db) */}
+      <DatabaseBackupModal
+        isOpen={isDatabaseBackupModalOpen}
+        onClose={() => setIsDatabaseBackupModalOpen(false)}
+        onDatabaseRestored={(channelsCount) => {
+          loadData();
+          setActionFeedback(`Banco de dados restaurado com sucesso! ${channelsCount} canais carregados.`);
+          setTimeout(() => setActionFeedback(''), 5000);
+        }}
+      />
     </div>
   );
 };

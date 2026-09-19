@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { api, getCachedChannels } from '../services/api';
 import { Channel } from '../types';
+import { ChannelMismatchSummary } from '../utils/channelMismatchDetector';
 import { parseM3uText, convertParsedToChannels } from '../utils/m3uParser';
 
 interface ImportChannelsModalProps {
@@ -66,6 +67,7 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
   const [sourceName, setSourceName] = useState('');
   const [unifyWithExisting, setUnifyWithExisting] = useState(true);
   const [enableAutoUpdate, setEnableAutoUpdate] = useState(true);
+  const [skipHighSeverityMismatches, setSkipHighSeverityMismatches] = useState(false);
   
   // Validation state
   const [isValidating, setIsValidating] = useState(false);
@@ -76,6 +78,7 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
     latencyMs?: number;
     sampleChannels?: string[];
     error?: string;
+    mismatchesSummary?: ChannelMismatchSummary;
   } | null>(null);
 
   // File / Text tab state
@@ -145,7 +148,8 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
         channelsCount: res.channelsCount,
         latencyMs: res.latencyMs,
         sampleChannels: res.sampleChannels,
-        error: res.error
+        error: res.error,
+        mismatchesSummary: res.mismatchesSummary
       });
 
       if (!sourceName) {
@@ -186,7 +190,8 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
         url: cleanUrl,
         unifyWithExisting,
         author,
-        sourceLabel: label
+        sourceLabel: label,
+        skipHighSeverityMismatches
       });
 
       // Reload channels from server to update global app state immediately
@@ -560,6 +565,20 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
                       ))}
                     </div>
                   )}
+                  {validationResult.mismatchesSummary && validationResult.mismatchesSummary.mismatchesCount > 0 && (
+                    <div className="mt-3 bg-red-950/20 border border-red-500/20 p-3 rounded-lg">
+                      <p className="text-red-300 font-semibold text-[11px] mb-2">
+                        {validationResult.mismatchesSummary.mismatchesCount} inconsistências detectadas:
+                      </p>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {validationResult.mismatchesSummary.mismatches.map((m, i) => (
+                          <div key={i} className="text-[10px] text-red-200">
+                            <span className="font-bold">{m.channelName}:</span> {m.reason}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {validationResult.error && (
                     <p className="mt-1 text-red-300 font-mono text-[11px]">{validationResult.error}</p>
                   )}
@@ -645,6 +664,23 @@ export const ImportChannelsModal: React.FC<ImportChannelsModalProps> = ({
                     </span>
                     <span className="block text-[11px] text-slate-400">
                       O servidor manterá este link atualizado automaticamente em segundo plano.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={skipHighSeverityMismatches}
+                    onChange={(e) => setSkipHighSeverityMismatches(e.target.checked)}
+                    className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 bg-slate-950 border-white/20"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-200">
+                      Ignorar automaticamente canais com erro grave
+                    </span>
+                    <span className="block text-[11px] text-slate-400">
+                      Não importará canais que apresentem conflitos críticos de emissora ou troca de grade.
                     </span>
                   </div>
                 </label>

@@ -1,9 +1,10 @@
 import { Channel, PixTransaction, Subscriber, AdminMetrics, SystemSettings, ChannelHealthResult, ChannelHealthSummary, ChannelUpdateHistoryEntry, ChannelsConfigFile, ChannelsConfigResponse, RepoLinksInfo, UnifyGradeStats, M3uImportLogEntry, M3uAutoUpdateSource, M3uAutoUpdateConfig, UrlSaveErrorEntry, DatabaseStats, AuditLogEntry, RealtimeDashboardData, ChannelEpgSchedule, EpgEnrichResponse, FuzzyDuplicateCandidate, FuzzyScanResult } from '../types';
+import { ChannelMismatchSummary, ChannelUrlMismatch, analyzeChannelsMismatches, detectChannelUrlMismatch } from '../utils/channelMismatchDetector';
 import { getPrefetchedChannels, getPrefetchedVod } from './prefetchService';
 import { DEFAULT_CHANNELS_GRID, verifyAndParseChannelsGridResponse, ChannelsGridResult } from './gridIntegrity';
 
-export { DEFAULT_CHANNELS_GRID, verifyAndParseChannelsGridResponse };
-export type { ChannelsGridResult };
+export { DEFAULT_CHANNELS_GRID, verifyAndParseChannelsGridResponse, analyzeChannelsMismatches, detectChannelUrlMismatch };
+export type { ChannelsGridResult, ChannelMismatchSummary, ChannelUrlMismatch };
 
 const ONE_HOUR_MS = 60 * 60 * 1000; // 1 hour TTL
 const CHANNELS_CACHE_KEY = 'maxtv_cache_channels';
@@ -818,6 +819,8 @@ export const api = {
     unifyWithExisting?: boolean;
     author?: string;
     sourceLabel?: string;
+    excludeMismatchIds?: string[];
+    skipHighSeverityMismatches?: boolean;
   }): Promise<{
     success: boolean;
     message: string;
@@ -827,6 +830,7 @@ export const api = {
     newChannelsCount: number;
     totalSourcesCount: number;
     durationMs?: number;
+    mismatchesSummary?: ChannelMismatchSummary;
   }> {
     const res = await adminFetch('/api/admin/channels/import-m3u-url', {
       method: 'POST',
@@ -845,6 +849,8 @@ export const api = {
     fileName?: string;
     unifyWithExisting?: boolean;
     author?: string;
+    excludeMismatchIds?: string[];
+    skipHighSeverityMismatches?: boolean;
   }): Promise<{
     success: boolean;
     message: string;
@@ -854,6 +860,7 @@ export const api = {
     newChannelsCount: number;
     totalSourcesCount: number;
     durationMs?: number;
+    mismatchesSummary?: ChannelMismatchSummary;
   }> {
     const res = await adminFetch('/api/admin/channels/import-m3u-content', {
       method: 'POST',
@@ -994,9 +1001,10 @@ export const api = {
     return await safeJsonResponse(res, 'Falha ao obter lista de fontes M3U');
   },
 
-  // SQLite Database Backup & Diagnostics
-  async downloadDatabaseBackup(): Promise<Blob> {
-    const res = await adminFetch('/api/admin/database/backup');
+  // SQLite Database Backup, Export & Import
+  async downloadDatabaseBackup(filename?: string): Promise<Blob> {
+    const query = filename ? `?filename=${encodeURIComponent(filename)}` : '';
+    const res = await adminFetch(`/api/admin/database/backup${query}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Falha ao baixar cópia do banco SQLite' }));
       throw new Error(err.error || 'Falha ao baixar cópia do banco SQLite');
@@ -1004,9 +1012,38 @@ export const api = {
     return await res.blob();
   },
 
-  getDatabaseBackupDownloadUrl(): string {
+  getDatabaseBackupDownloadUrl(filename?: string): string {
     const token = getAdminToken();
-    return `/api/admin/database/backup${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (filename) params.set('filename', filename);
+    const queryString = params.toString();
+    return `/api/admin/database/backup${queryString ? `?${queryString}` : ''}`;
+  },
+
+  getDatabaseExportDownloadUrl(filename = 'maxtv.db'): string {
+    const token = getAdminToken();
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (filename) params.set('filename', filename);
+    const queryString = params.toString();
+    return `/api/admin/database/export${queryString ? `?${queryString}` : ''}`;
+  },
+
+  async importDatabase(file: File | Blob): Promise<{ success: boolean; message: string; channelsCount: number; fileSizeBytes?: number; stats?: any }> {
+    const headers = getAdminHeaders({
+      'Content-Type': 'application/x-sqlite3'
+    });
+    const res = await fetch('/api/admin/database/import', {
+      method: 'POST',
+      headers,
+      body: file
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || `Falha ao importar banco de dados (HTTP ${res.status})`);
+    }
+    return data;
   },
 
   async getDatabaseStats(): Promise<{ success: boolean; stats: DatabaseStats }> {
@@ -1049,6 +1086,7 @@ export const api = {
     contentType?: string;
     sampleChannels?: string[];
     details?: any;
+    mismatchesSummary?: ChannelMismatchSummary;
   }> {
     const res = await adminFetch('/api/admin/channels/validate-m3u-url', {
       method: 'POST',
@@ -1056,6 +1094,26 @@ export const api = {
       body: JSON.stringify({ url })
     });
     return await safeJsonResponse(res, 'Falha ao validar URL M3U');
+  },
+
+  // Diagnóstico de Inconsistências de Grade e URLs M3U (Detecção de Troca de Grade)
+  async checkChannelsMismatches(channelsList?: Channel[]): Promise<ChannelMismatchSummary> {
+    if (channelsList && channelsList.length > 0) {
+      return analyzeChannelsMismatches(channelsList.map(c => ({ ...c, streamUrl: c.sources[0]?.url || '' })));
+    }
+    try {
+      const res = await adminFetch('/api/admin/channels/check-mismatches', { method: 'GET' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.summary) {
+          return json.summary;
+        }
+      }
+    } catch {}
+
+    // Fallback: Analisa canais em cache local
+    const cached = getCachedChannels() || [];
+    return analyzeChannelsMismatches(cached.map(c => ({ ...c, streamUrl: c.sources[0]?.url || '' })));
   },
 
   // Validação Live de URL XMLTV (EPG) no Servidor

@@ -37,6 +37,7 @@ import {
   sqliteGetAllTransactions,
   sqliteRecordSessionHeartbeat,
   sqliteCheckpointAndGetDbPath,
+  sqliteImportDatabase,
   sqliteGetDatabaseStats,
   sqliteSaveUrlErrorLog,
   sqliteGetUrlErrorLogs,
@@ -72,6 +73,7 @@ import {
 } from './serverEpg';
 import { validateStartupEnv } from './src/utils/envValidator';
 import { cleanStreamUrl } from './src/utils/urlSanitizer';
+import { analyzeChannelsMismatches, ChannelMismatchSummary } from './src/utils/channelMismatchDetector';
 
 dotenv.config();
 
@@ -4779,9 +4781,22 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
       throw new Error('O link fornecido não parece ser um arquivo M3U/M3U8 válido.');
     }
 
-    const parsedChannels = parseM3UToChannels(content, 'import-url');
-    if (parsedChannels.length === 0) {
+    const rawParsedChannels = parseM3UToChannels(content, 'import-url');
+    if (rawParsedChannels.length === 0) {
       throw new Error('Nenhum canal foi encontrado no arquivo M3U8 fornecido.');
+    }
+
+    // Diagnóstico de Inconsistências de Grade (Troca de Grade M3U vs Nomes)
+    const mismatchesSummary = analyzeChannelsMismatches(rawParsedChannels.map(c => ({...c, streamUrl: c.streamUrl || (c.sources[0]?.url || '')})));
+    let parsedChannels = rawParsedChannels;
+
+    // Filtra canais desmarcados pelo administrador ou canais com risco crítico
+    if (Array.isArray(req.body.excludeMismatchIds) && req.body.excludeMismatchIds.length > 0) {
+      const excludedSet = new Set(req.body.excludeMismatchIds.map((id: any) => String(id).toLowerCase().trim()));
+      parsedChannels = rawParsedChannels.filter(c => !excludedSet.has(c.id.toLowerCase().trim()) && !excludedSet.has(c.name.toLowerCase().trim()));
+    } else if (req.body.skipHighSeverityMismatches) {
+      const highNames = new Set(mismatchesSummary.mismatches.filter(m => m.severity === 'high').map(m => m.channelName.toLowerCase().trim()));
+      parsedChannels = rawParsedChannels.filter(c => !highNames.has(c.name.toLowerCase().trim()));
     }
 
     const baseList = unifyWithExisting
@@ -4849,7 +4864,8 @@ app.post('/api/admin/channels/import-m3u-url', async (req, res) => {
       logId: logItem.id,
       similarityMatchesCount: similarityMatches.length,
       savedSource: savedSourceItem,
-      sources: m3uAutoUpdateConfig.sources
+      sources: m3uAutoUpdateConfig.sources,
+      mismatchesSummary
     });
   } catch (err: any) {
     const errorMsg = err.message || 'Erro ao importar URL M3U8';
@@ -4892,9 +4908,22 @@ app.post('/api/admin/channels/import-m3u-content', async (req, res) => {
   }
 
   try {
-    const parsedChannels = parseM3UToChannels(content, 'import-file');
-    if (parsedChannels.length === 0) {
+    const rawParsedChannels = parseM3UToChannels(content, 'import-file');
+    if (rawParsedChannels.length === 0) {
       throw new Error('Nenhum canal válido foi extraído do conteúdo M3U8 fornecido.');
+    }
+
+    // Diagnóstico de Inconsistências de Grade (Troca de Grade M3U vs Nomes)
+    const mismatchesSummary = analyzeChannelsMismatches(rawParsedChannels.map(c => ({...c, streamUrl: c.streamUrl || (c.sources[0]?.url || '')})));
+    let parsedChannels = rawParsedChannels;
+
+    // Filtra canais desmarcados pelo administrador ou canais com risco crítico
+    if (Array.isArray(req.body.excludeMismatchIds) && req.body.excludeMismatchIds.length > 0) {
+      const excludedSet = new Set(req.body.excludeMismatchIds.map((id: any) => String(id).toLowerCase().trim()));
+      parsedChannels = rawParsedChannels.filter(c => !excludedSet.has(c.id.toLowerCase().trim()) && !excludedSet.has(c.name.toLowerCase().trim()));
+    } else if (req.body.skipHighSeverityMismatches) {
+      const highNames = new Set(mismatchesSummary.mismatches.filter(m => m.severity === 'high').map(m => m.channelName.toLowerCase().trim()));
+      parsedChannels = rawParsedChannels.filter(c => !highNames.has(c.name.toLowerCase().trim()));
     }
 
     const baseList = unifyWithExisting
@@ -4936,7 +4965,8 @@ app.post('/api/admin/channels/import-m3u-content', async (req, res) => {
       totalSourcesCount,
       durationMs: Date.now() - startTime,
       logId: logItem.id,
-      similarityMatchesCount: similarityMatches.length
+      similarityMatchesCount: similarityMatches.length,
+      mismatchesSummary
     });
   } catch (err: any) {
     logM3uImportEntry({
@@ -5036,6 +5066,7 @@ interface M3uUrlValidationResult {
   fileSizeFormatted?: string;
   isLargeFile?: boolean;
   isGzip?: boolean;
+  mismatchesSummary?: ChannelMismatchSummary;
   details?: any;
 }
 
@@ -5336,6 +5367,13 @@ async function validateM3uUrl(url: string, timeoutMs: number = 60000): Promise<M
       };
     }
 
+    let mismatchesSummary: ChannelMismatchSummary | undefined;
+    try {
+      mismatchesSummary = analyzeChannelsMismatches(parsedChannels.map(c => ({...c, streamUrl: c.streamUrl || (c.sources[0]?.url || '')})));
+    } catch (e) {
+      console.warn('[MISMATCH_DETECTOR] Erro ao analisar divergências no validateM3uUrl:', e);
+    }
+
     return {
       valid: true,
       channelsCount,
@@ -5346,7 +5384,8 @@ async function validateM3uUrl(url: string, timeoutMs: number = 60000): Promise<M
       fileSizeFormatted: formatBytes(actualBytes),
       isLargeFile,
       isGzip,
-      sampleChannels: parsedChannels.slice(0, 5).map(c => c.name)
+      sampleChannels: parsedChannels.slice(0, 5).map(c => c.name),
+      mismatchesSummary
     };
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
@@ -6046,7 +6085,7 @@ app.get('/api/admin/database/backup', (req, res) => {
 
     const stat = fs.statSync(dbPath);
     const dateTag = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const downloadFilename = `maxtv-backup-${dateTag}.db`;
+    const downloadFilename = req.query.filename ? String(req.query.filename) : `maxtv-backup-${dateTag}.db`;
 
     res.setHeader('Content-Type', 'application/x-sqlite3');
     res.setHeader('Content-Length', stat.size);
@@ -6063,6 +6102,117 @@ app.get('/api/admin/database/backup', (req, res) => {
     });
   }
 });
+
+// Alias explícito /api/admin/database/export
+app.get('/api/admin/database/export', (req, res) => {
+  try {
+    const dbPath = sqliteCheckpointAndGetDbPath();
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Arquivo do banco de dados "data/maxtv.db" não foi encontrado.'
+      });
+    }
+    const stat = fs.statSync(dbPath);
+    const downloadFilename = req.query.filename ? String(req.query.filename) : 'maxtv.db';
+
+    res.setHeader('Content-Type', 'application/x-sqlite3');
+    res.setHeader('Content-Length', stat.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
+    fs.createReadStream(dbPath).pipe(res);
+  } catch (err: any) {
+    console.error('[DB EXPORT ERROR] Falha ao exportar banco:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/database/import (Importar e restaurar arquivo .db SQLite completo)
+app.post('/api/admin/database/import', async (req, res) => {
+  try {
+    let buffer: Buffer;
+
+    if (Buffer.isBuffer(req.body)) {
+      buffer = req.body;
+    } else if (req.body && typeof req.body.dataBase64 === 'string') {
+      buffer = Buffer.from(req.body.dataBase64, 'base64');
+    } else {
+      // Leitura direta do fluxo binário da requisição
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+      }
+      buffer = Buffer.concat(chunks);
+    }
+
+    if (!buffer || buffer.length < 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhum dado do banco de dados SQLite foi recebido ou o arquivo está corrompido/vazio.'
+      });
+    }
+
+    const importResult = sqliteImportDatabase(buffer);
+    if (!importResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: importResult.error || 'Falha na validação do arquivo SQLite 3.'
+      });
+    }
+
+    // Atualiza a lista em memória no servidor e no channels-config.json
+    const dbChannels = sqliteGetAllChannels();
+    if (dbChannels && dbChannels.length > 0) {
+      customConfigChannels = dbChannels.map(sanitizeChannelStreams);
+      try {
+        fs.writeFileSync(
+          CHANNELS_CONFIG_FILE,
+          JSON.stringify({ channels: customConfigChannels, lastUpdated: new Date().toISOString() }, null, 2),
+          'utf-8'
+        );
+      } catch (fsErr) {
+        console.warn('[DB IMPORT] Aviso ao sincronizar channels-config.json:', fsErr);
+      }
+    }
+
+    // Invalida cache de canais
+    cachedChannelsResponse = null;
+
+    // Registra auditoria
+    const adminEmail = (req.headers['x-admin-email'] as string) || 'admin@maxtv.local';
+    const adminName = (req.headers['x-admin-name'] as string) || 'Administrador';
+    sqliteRecordAuditLog({
+      adminName,
+      adminEmail,
+      actionType: 'SYSTEM',
+      actionName: 'Importação do Banco SQLite (maxtv.db)',
+      description: `Banco de dados SQLite (maxtv.db) importado com sucesso (${customConfigChannels.length} canais carregados)`,
+      details: {
+        channelsCount: customConfigChannels.length,
+        fileSizeBytes: buffer.length,
+        stats: importResult.stats
+      }
+    });
+
+    console.log(`[DB IMPORT SUCCESS] Banco SQLite importado com sucesso! ${customConfigChannels.length} canais sincronizados.`);
+
+    return res.json({
+      success: true,
+      message: `Banco de dados SQLite importado com sucesso! ${customConfigChannels.length} canais carregados.`,
+      channelsCount: customConfigChannels.length,
+      fileSizeBytes: buffer.length,
+      stats: importResult.stats
+    });
+  } catch (err: any) {
+    console.error('[DB IMPORT ERROR] Erro inesperado ao importar banco:', err);
+    return res.status(500).json({
+      success: false,
+      error: `Erro interno no servidor ao importar banco de dados: ${err.message}`
+    });
+  }
+});
+
 
 app.get('/api/admin/database/stats', (req, res) => {
   try {

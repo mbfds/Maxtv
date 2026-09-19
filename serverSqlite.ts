@@ -1146,6 +1146,76 @@ export function sqliteCheckpointAndGetDbPath(): string {
   return DB_FILE;
 }
 
+/**
+ * Importa e substitui com segurança o banco de dados SQLite principal (maxtv.db).
+ * Realiza verificação de integridade do cabeçalho SQLite 3,
+ * fecha a conexão atual, remove arquivos WAL/SHM obsoletos, grava o novo banco e reinicia a conexão.
+ */
+export function sqliteImportDatabase(buffer: Buffer): { success: boolean; error?: string; channelsCount?: number; stats?: any } {
+  if (!buffer || buffer.length < 100) {
+    return { success: false, error: 'Arquivo do banco de dados vazio ou corrompido.' };
+  }
+
+  // Verifica magic bytes do SQLite 3 ("SQLite format 3\0")
+  const header = buffer.subarray(0, 16).toString('ascii');
+  if (!header.startsWith('SQLite format 3')) {
+    return { success: false, error: 'O arquivo enviado não possui cabeçalho válido do SQLite 3 (esperado "SQLite format 3").' };
+  }
+
+  try {
+    // 1. Fecha conexão atual se aberta
+    if (dbInstance) {
+      try {
+        dbInstance.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+        dbInstance.close();
+      } catch (closeErr) {
+        console.warn('[SQLite IMPORT] Aviso ao fechar banco atual:', closeErr);
+      }
+      dbInstance = null;
+    }
+
+    // 2. Remove arquivos WAL e SHM temporários antigos para evitar dessincronização
+    const walFile = `${DB_FILE}-wal`;
+    const shmFile = `${DB_FILE}-shm`;
+    if (fs.existsSync(walFile)) {
+      try { fs.unlinkSync(walFile); } catch {}
+    }
+    if (fs.existsSync(shmFile)) {
+      try { fs.unlinkSync(shmFile); } catch {}
+    }
+
+    // 3. Grava o novo arquivo do banco de dados
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, buffer);
+    console.log(`[SQLite IMPORT] Novo banco de dados salvo em ${DB_FILE} (${buffer.length} bytes).`);
+
+    // 4. Reinicializa a conexão SQLite
+    const initRes = initSqlite();
+    if (!initRes.success) {
+      return { success: false, error: `Falha ao reinicializar conexão com o banco importado: ${initRes.error}` };
+    }
+
+    // 5. Lê canais e estatísticas do novo banco
+    const channels = sqliteGetAllChannels();
+    const stats = sqliteGetDatabaseStats();
+
+    return {
+      success: true,
+      channelsCount: channels.length,
+      stats
+    };
+  } catch (err: any) {
+    console.error('[SQLite IMPORT] Erro crítico ao importar banco:', err);
+    // Tenta restabelecer conexão
+    try {
+      initSqlite();
+    } catch {}
+    return { success: false, error: `Erro ao importar banco de dados: ${err.message}` };
+  }
+}
+
 export function sqliteGetDatabaseStats() {
   const db = getSqliteDb();
   let dbSizeBytes = 0;

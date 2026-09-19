@@ -1,1472 +1,1738 @@
 {
-  "version": "1.0",
-  "updatedAt": "2026-09-12T23:38:31.062Z",
-  "updatedBy": "Administrador (Remoção do stream de teste)",
-  "description": "Configuração Oficial da Grade de Canais de TV do Sistema",
   "channels": [
     {
       "id": "saimo-a-e",
       "name": "A&E",
       "category": "Variedades & Música",
       "logo": "https://www.tvlogo.org/brazil/a-and-e-br.png",
+      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
+          "name": "A&E HD",
           "url": "http://170.83.16.50/AeE/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/AE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-adult-swim",
       "name": "Adult Swim",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/adult-swim.png",
+      "streamUrl": "http://45.162.64.114/ADULT_SWIM/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://168.197.104.22/ADULT_SWIM/index.m3u8",
+          "name": "Adult Swim HD",
+          "url": "http://45.162.64.114/ADULT_SWIM/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "http://168.197.104.22/ADULT_SWIM/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TRUTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-amc",
       "name": "AMC",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/amc.png",
+      "streamUrl": "http://45.177.114.114/AMC/index.m3u8",
+      "backupStreamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amc/__index.m3u8?sv=12&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788473027-1p5ON3MLfzAs8siCd4PYlYy%2FbYd54KR6B6BZBJq8I%2Bo%3D",
-          "quality": "HD"
+          "name": "AMC HD",
+          "url": "http://45.177.114.114/AMC/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         },
         {
-          "name": "Servidor Alternativo (Ao Vivo)",
+          "name": "AMC (Servidor 2)",
           "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
           "quality": "1080p",
           "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amc/__index.m3u8?sv=12&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788473027-1p5ON3MLfzAs8siCd4PYlYy%2FbYd54KR6B6BZBJq8I%2Bo%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-animal-planet",
       "name": "Animal Planet",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/animal-planet.png",
+      "streamUrl": "http://45.162.64.114/ANIMAL_PLANET/index.m3u8",
+      "backupStreamUrl": "http://45.177.114.114/ANIMAL_PLANET/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Animal Planet HD",
+          "url": "http://45.162.64.114/ANIMAL_PLANET/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Animal Planet (Servidor 2)",
+          "url": "http://45.177.114.114/ANIMAL_PLANET/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ANIMAL_PLANET_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-band",
       "name": "Band",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/band.png",
+      "streamUrl": "http://45.162.64.114/BAND_NEWS/index.m3u8",
+      "backupStreamUrl": "http://45.162.64.114/BAND_SPORTS/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "name": "Band News HD (Grupo Bandeirantes)",
+          "url": "http://45.162.64.114/BAND_NEWS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Band Sports HD (Grupo Bandeirantes)",
+          "url": "http://45.162.64.114/BAND_SPORTS/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-cartoon-network",
       "name": "Cartoon Network",
       "category": "Infantis",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cartoon-network.png",
+      "streamUrl": "http://45.162.64.114/CARTOON_NETWORK/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+          "name": "Cartoon Network HD",
+          "url": "http://45.162.64.114/CARTOON_NETWORK/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CARTOON_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-caz-tv",
       "name": "CazéTV",
       "category": "Esportes",
       "logo": "https://commons.wikimedia.org/wiki/Special:FilePath/Caz%C3%A9TV_wordmark.svg?width=300",
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/MNOP/Amagi/Caze/Caze_TV_BR/Caze_TV.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
+          "name": "CazéTV Oficial",
           "url": "https://dfr80qz435crc.cloudfront.net/MNOP/Amagi/Caze/Caze_TV_BR/Caze_TV.m3u8",
-          "quality": "HD",
-          "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
           "quality": "1080p",
           "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/MNOP/Amagi/Caze/Caze_TV_BR/Caze_TV.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-cnn-brasil",
       "name": "CNN Brasil",
       "category": "Notícias",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cnn-brasil.png",
+      "streamUrl": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8",
+      "backupStreamUrl": "http://45.162.64.114/CNN_BRASIL/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
+          "name": "CNN Brasil HD",
           "url": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8",
-          "quality": "HD",
-          "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
+          "quality": "1080p",
+          "isWorking": true
+        },
+        {
+          "name": "CNN Brasil (Servidor 2)",
+          "url": "http://45.162.64.114/CNN_BRASIL/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-cnn-brasil-money",
       "name": "CNN Brasil Money",
       "category": "Notícias",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cnn-brasil-money.png",
+      "streamUrl": "https://amg01391-amg01391c57-amgplt0026.playout.now3.amagi.tv/playlist/amg01391-amg01391c57-amgplt0026/playlist.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
+          "name": "CNN Brasil Money HD",
           "url": "https://amg01391-amg01391c57-amgplt0026.playout.now3.amagi.tv/playlist/amg01391-amg01391c57-amgplt0026/playlist.m3u8",
-          "quality": "HD",
-          "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8",
-          "quality": "1080p",
+          "quality": "720p",
           "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://amg01391-amg01391c57-amgplt0026.playout.now3.amagi.tv/playlist/amg01391-amg01391c57-amgplt0026/playlist.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-e-",
       "name": "E!",
       "category": "Variedades & Música",
       "logo": "https://commons.wikimedia.org/wiki/Special:FilePath/E%21_Logo_Flat_2012.svg?width=300",
+      "streamUrl": "https://video49.mais.uol.com.br/live/4503.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://video49.mais.uol.com.br/live/4503.mpd",
           "quality": "HD",
           "referer": "https://painel.play.uol.com.br/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://video49.mais.uol.com.br/live/4503.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-ge-tv",
       "name": "GE TV",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/ge-tv.png",
+      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
+          "name": "GE Fast (Globo Esporte Ao Vivo)",
           "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-          "quality": "HD",
-          "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-globo-rj",
       "name": "Globo RJ",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/globo.png",
+      "streamUrl": "https://media2.cdntvms.com.br/tv_morena_dorados/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
+          "name": "TV Morena (Rede Globo HD)",
+          "url": "https://media2.cdntvms.com.br/tv_morena_dorados/index.m3u8",
+          "quality": "720p",
+          "isWorking": true
         },
         {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-          "quality": "1080p",
-          "isWorking": true
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_RIO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-globonews",
       "name": "GloboNews",
       "category": "Notícias",
       "logo": "https://mondrian.claro.com.br/channels/inverse/globonews.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/dsfrp5mjrb/out/v1/9fa07e663bc94e9f93c53726a558478a/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/dsfrp5mjrb/out/v1/9fa07e663bc94e9f93c53726a558478a/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amg01391-sbtinfast-amg01391c4-lg-br-4597.playouts.now.amagi.tv/playlist/amg01391-addigital-cnnbrasil-lgbr/playlist.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/dsfrp5mjrb/out/v1/9fa07e663bc94e9f93c53726a558478a/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-globoplay-novelas",
       "name": "Globoplay Novelas",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/globoplay-novelas.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/ds9ertnhrl/out/v1/cb791b7362754ba1b87d9474ccd95fa3/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/ds9ertnhrl/out/v1/cb791b7362754ba1b87d9474ccd95fa3/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/ds9ertnhrl/out/v1/cb791b7362754ba1b87d9474ccd95fa3/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-gnt",
       "name": "GNT",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/gnt.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/h9c8z9m1dq/out/v1/9b1b1aa15b4f471ea19674290554499e/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/h9c8z9m1dq/out/v1/9b1b1aa15b4f471ea19674290554499e/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/h9c8z9m1dq/out/v1/9b1b1aa15b4f471ea19674290554499e/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-history",
       "name": "History",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/history-channel.png",
+      "streamUrl": "http://45.177.114.114/HISTORY/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.16.50/AeE/index.m3u8",
+          "name": "History Channel HD",
+          "url": "http://45.177.114.114/HISTORY/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HISTORY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-history-2",
       "name": "History 2",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/history-2.png",
+      "streamUrl": "http://45.177.114.114/HISTORY_2/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.16.50/AeE/index.m3u8",
+          "name": "History 2 HD",
+          "url": "http://45.177.114.114/HISTORY_2/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "http://170.83.16.50/AeE/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/H2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-jovem-pan-news",
       "name": "Jovem Pan News",
       "category": "Notícias",
       "logo": "https://www.tvlogo.org/brazil/jovem-pan-news-br.png",
+      "streamUrl": "https://amg01391-sbtinfast-amg01391c3-lg-us-8995.playouts.now.amagi.tv/playlist/amg01391-addigital-jovempan-lgus/playlist.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
+          "name": "Jovem Pan News HD",
           "url": "https://amg01391-sbtinfast-amg01391c3-lg-us-8995.playouts.now.amagi.tv/playlist/amg01391-addigital-jovempan-lgus/playlist.m3u8",
-          "quality": "HD",
-          "userAgent": "Mozilla/5.0 (Linux; U; Android 13; T610K Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/126.0.6478.71 Mobile Safari/537.36 OPR/87.0.2254.75258"
+          "quality": "1080p",
+          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amg01391-sbtinfast-amg01391c3-lg-us-8995.playouts.now.amagi.tv/playlist/amg01391-addigital-jovempan-lgus/playlist.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-megapix",
       "name": "Megapix",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/megapix.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/21ilsertww/out/v1/124c84cbafc745b6b2c47fc9be606727/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/21ilsertww/out/v1/124c84cbafc745b6b2c47fc9be606727/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/21ilsertww/out/v1/124c84cbafc745b6b2c47fc9be606727/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-multishow",
       "name": "Multishow",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/multishow.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/x7aaupxajb/out/v1/49d602c6294147a18d798ce6abbb6957/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/x7aaupxajb/out/v1/49d602c6294147a18d798ce6abbb6957/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/x7aaupxajb/out/v1/49d602c6294147a18d798ce6abbb6957/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-2",
       "name": "Premiere 2",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/oy6rp0jwmf/out/v1/580ecf12bad24979baf8dd993dce053e/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/oy6rp0jwmf/out/v1/580ecf12bad24979baf8dd993dce053e/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/oy6rp0jwmf/out/v1/580ecf12bad24979baf8dd993dce053e/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-3",
       "name": "Premiere 3",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/6onrfniyry/out/v1/f23069c61dbf4e00890a40b705a84079/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/6onrfniyry/out/v1/f23069c61dbf4e00890a40b705a84079/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/6onrfniyry/out/v1/f23069c61dbf4e00890a40b705a84079/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-4",
       "name": "Premiere 4",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/tirjor64kh/out/v1/fd2ed9916d994f09a3bd62b64141b9cb/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/tirjor64kh/out/v1/fd2ed9916d994f09a3bd62b64141b9cb/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/tirjor64kh/out/v1/fd2ed9916d994f09a3bd62b64141b9cb/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-5",
       "name": "Premiere 5",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/1obktrybht/out/v1/08265453c8f64d9fbeb3cf43764403a8/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/1obktrybht/out/v1/08265453c8f64d9fbeb3cf43764403a8/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/1obktrybht/out/v1/08265453c8f64d9fbeb3cf43764403a8/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-6",
       "name": "Premiere 6",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/0bmtb2fxcj/out/v1/b5f50c3632264d32bf857652f631b0fb/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/0bmtb2fxcj/out/v1/b5f50c3632264d32bf857652f631b0fb/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/0bmtb2fxcj/out/v1/b5f50c3632264d32bf857652f631b0fb/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-7",
       "name": "Premiere 7",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/joij38hkop/out/v1/c920c9b42af24588a253530ed2cbd6eb/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/joij38hkop/out/v1/c920c9b42af24588a253530ed2cbd6eb/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/joij38hkop/out/v1/c920c9b42af24588a253530ed2cbd6eb/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-8",
       "name": "Premiere 8",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/2s8gkqz2id/out/v1/41da2546a9a34238b8615d3beb4ee600/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/2s8gkqz2id/out/v1/41da2546a9a34238b8615d3beb4ee600/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/2s8gkqz2id/out/v1/41da2546a9a34238b8615d3beb4ee600/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-premiere-clubes",
       "name": "Premiere Clubes",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/nelfyucw9a/out/v1/6ffb2c365ad14f88b154591beb43d1f6/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/nelfyucw9a/out/v1/6ffb2c365ad14f88b154591beb43d1f6/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/nelfyucw9a/out/v1/6ffb2c365ad14f88b154591beb43d1f6/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-sbt",
       "name": "SBT",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sbt.png",
+      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+      "backupStreamUrl": "https://dai.google.com/linear/hls/event/1XSOdtQ0SH2G8OEmEfGgjQ/master.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
+          "name": "SBT Interior HD (Ao Vivo)",
           "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "SBT News HD (Google DAI)",
+          "url": "https://dai.google.com/linear/hls/event/1XSOdtQ0SH2G8OEmEfGgjQ/master.m3u8",
+          "quality": "720p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SBT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-sbt-news",
       "name": "SBT News",
       "category": "Notícias",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sbt-news.png",
+      "streamUrl": "https://dai.google.com/linear/hls/event/1XSOdtQ0SH2G8OEmEfGgjQ/master.m3u8",
+      "backupStreamUrl": "https://sbtnews.maissbt.com/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://sbtnews.maissbt.com/index.m3u8",
-          "quality": "HD",
-          "referer": "https://mais.sbt.com.br/",
-          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+          "name": "SBT News HD (Oficial Google DAI)",
+          "url": "https://dai.google.com/linear/hls/event/1XSOdtQ0SH2G8OEmEfGgjQ/master.m3u8",
+          "quality": "720p",
+          "isWorking": true
         },
         {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
-          "quality": "1080p",
+          "name": "SBT News Ao Vivo (MaisSBT)",
+          "url": "https://sbtnews.maissbt.com/index.m3u8",
+          "quality": "720p",
           "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://sbtnews.maissbt.com/index.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-sony-channel",
       "name": "Sony Channel",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sony.png",
+      "streamUrl": "http://170.83.16.50/SONY_CHANNEL/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "name": "Sony Channel HD",
+          "url": "http://170.83.16.50/SONY_CHANNEL/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-sportv",
       "name": "SporTV",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sportv-3.png",
+      "streamUrl": "https://p17-common-sign.dynamic.pages.cloudflareusercontent.com/tos-alisg-avt-0068/proxy?container=images&refresh=10&url=https://neosoro.gq/docs/sportv1/__index.m3u8?sv=159&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1786408554-MK0K7%2F0RIabb2i7ktFkDI1P2aEeyuwRUwvOxauQ5e1c%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://p17-common-sign.dynamic.pages.cloudflareusercontent.com/tos-alisg-avt-0068/proxy?container=images&refresh=10&url=https://neosoro.gq/docs/sportv1/__index.m3u8?sv=159&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1786408554-MK0K7%2F0RIabb2i7ktFkDI1P2aEeyuwRUwvOxauQ5e1c%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://p17-common-sign.dynamic.pages.cloudflareusercontent.com/tos-alisg-avt-0068/proxy?container=images&refresh=10&url=https://neosoro.gq/docs/sportv1/__index.m3u8?sv=159&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1786408554-MK0K7%2F0RIabb2i7ktFkDI1P2aEeyuwRUwvOxauQ5e1c%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-sportv-2",
       "name": "SporTV 2",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sportv-3.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/dsa3hwuhd1/out/v1/631b48c8d9ea437e8309d1a4b55acef5/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/dsa3hwuhd1/out/v1/631b48c8d9ea437e8309d1a4b55acef5/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/dsa3hwuhd1/out/v1/631b48c8d9ea437e8309d1a4b55acef5/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-sportv-3",
       "name": "SporTV 3",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sportv-3.png",
+      "streamUrl": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/6otiglnptp/out/v1/add7499679b0422cb6791f7701f95ecc/cenc.mpd",
-          "quality": "HD",
-          "referer": "https://www.primevideo.com/",
-          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
+          "name": "SporTV 3 HD",
           "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
           "quality": "1080p",
           "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/6otiglnptp/out/v1/add7499679b0422cb6791f7701f95ecc/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-telecine-action",
       "name": "Telecine Action",
       "category": "Filmes & Séries",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/3/37/Telecine_Action_2.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecineaction/__index.m3u8?sv=181&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472482-ZnuPAKOOcUnNJSwlKHAUzpC2nD0jQys4%2B%2B4TDFuEZss%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecineaction/__index.m3u8?sv=181&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472482-ZnuPAKOOcUnNJSwlKHAUzpC2nD0jQys4%2B%2B4TDFuEZss%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecineaction/__index.m3u8?sv=181&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472482-ZnuPAKOOcUnNJSwlKHAUzpC2nD0jQys4%2B%2B4TDFuEZss%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-telecine-pipoca",
       "name": "Telecine Pipoca",
       "category": "Filmes & Séries",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Telecine_Pipoca_%282021%29.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepipoca/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472639-q0t4kfoYFwuz0fd9JMSAa%2B%2B62MGZTiRr2rqnMJx96lU%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepipoca/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472639-q0t4kfoYFwuz0fd9JMSAa%2B%2B62MGZTiRr2rqnMJx96lU%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepipoca/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472639-q0t4kfoYFwuz0fd9JMSAa%2B%2B62MGZTiRr2rqnMJx96lU%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-telecine-premium",
       "name": "Telecine Premium",
       "category": "Filmes & Séries",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/1/11/App-telecine-premium-252x252.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepremium/__index.m3u8?sv=96&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472691-FnJa9ar3%2BK%2B9Fsm2Hh%2Bec16N3WQUmrIk78qNE9Mwzic%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepremium/__index.m3u8?sv=96&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472691-FnJa9ar3%2BK%2B9Fsm2Hh%2Bec16N3WQUmrIk78qNE9Mwzic%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinepremium/__index.m3u8?sv=96&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472691-FnJa9ar3%2BK%2B9Fsm2Hh%2Bec16N3WQUmrIk78qNE9Mwzic%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-tv-brasil",
       "name": "TV Brasil",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tv-brasil.png",
+      "streamUrl": "http://45.162.64.114/TV_BRASIL/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "name": "TV Brasil HD",
+          "url": "http://45.162.64.114/TV_BRASIL/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_BRASIL/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-universal-premiere",
       "name": "Universal Premiere",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/universal-premiere.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/khnyllds8v/out/v1/1cf61b7a057e4ffdb31f6d82fb24c679/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/khnyllds8v/out/v1/1cf61b7a057e4ffdb31f6d82fb24c679/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/SPORTV3HD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/khnyllds8v/out/v1/1cf61b7a057e4ffdb31f6d82fb24c679/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-universal-reality",
       "name": "Universal Reality",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/universal-reality.png",
+      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/5ppjwg1ekb/out/v1/393342b545834c218745c3dd33661013/cenc.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/5ppjwg1ekb/out/v1/393342b545834c218745c3dd33661013/cenc.mpd",
           "quality": "HD",
           "referer": "https://www.primevideo.com/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://qw.live.pv-cdn.net/OTTB/gru-nitro/live/clients/dash/enc/5ppjwg1ekb/out/v1/393342b545834c218745c3dd33661013/cenc.mpd"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-warner",
       "name": "Warner",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/warner-channel.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/WARNER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/WARNER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/WARNER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-impd",
       "name": "IMPD",
       "category": "Variedades & Música",
       "logo": "https://d5pgibznjcs0s.cloudfront.net/46d92cf6-4807-45c6-9bfd-b38f80288c86/en/images/logo_full.png",
+      "streamUrl": "https://68882bdaf156a.streamlock.net/impd/ngrp:impd_all/chunklist_w1464410885_b2691072.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://68882bdaf156a.streamlock.net/impd/ngrp:impd_all/chunklist_w1464410885_b2691072.m3u8",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://68882bdaf156a.streamlock.net/impd/ngrp:impd_all/chunklist_w1464410885_b2691072.m3u8"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-globo-sp",
       "name": "Globo SP",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/globo.png",
+      "streamUrl": "https://media2.cdntvms.com.br/tv_morena_dorados/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
+          "name": "TV Morena (Rede Globo HD)",
+          "url": "https://media2.cdntvms.com.br/tv_morena_dorados/index.m3u8",
+          "quality": "720p",
+          "isWorking": true
         },
         {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-          "quality": "1080p",
-          "isWorking": true
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_SP/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-cartoonito",
       "name": "Cartoonito",
       "category": "Infantis",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cartoonito.png",
+      "streamUrl": "http://170.83.16.50/CARTOONITO/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/cartoonito/__index.m3u8?sv=7&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788473248-7Yzu%2FtAxzRQJhmQMxTVyaqyf5vslWwRo1yq49kLi7ms%3D",
-          "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+          "name": "Cartoonito HD",
+          "url": "http://170.83.16.50/CARTOONITO/index.m3u8",
           "quality": "1080p",
           "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/cartoonito/__index.m3u8?sv=7&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788473248-7Yzu%2FtAxzRQJhmQMxTVyaqyf5vslWwRo1yq49kLi7ms%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-cinemax",
       "name": "Cinemax",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cinemax.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/CINEMAX/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/CINEMAX/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CINEMAX/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-discovery-channel",
       "name": "Discovery Channel",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/discovery.png",
+      "streamUrl": "http://45.162.64.114/DISCOVERY_CHANNEL/index.m3u8",
+      "backupStreamUrl": "http://45.177.114.114/DISCOVERY_CHANNEL/index.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Discovery Channel HD",
+          "url": "http://45.162.64.114/DISCOVERY_CHANNEL/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Discovery Channel (Servidor 2)",
+          "url": "http://45.177.114.114/DISCOVERY_CHANNEL/index.m3u8",
+          "quality": "1080p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-discovery-kids",
       "name": "Discovery Kids",
       "category": "Infantis",
       "logo": "https://mondrian.claro.com.br/channels/inverse/discovery-kids.png",
+      "streamUrl": "http://45.177.114.114/DISCOVERY_KIDS/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+          "name": "Discovery Kids HD",
+          "url": "http://45.177.114.114/DISCOVERY_KIDS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-discovery-theater",
       "name": "Discovery Theater",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/discovery-theater.png",
+      "streamUrl": "http://45.177.114.114/DISCOVERY_THEATER/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Discovery Theater HD",
+          "url": "http://45.177.114.114/DISCOVERY_THEATER/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_THEATER_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.955Z"
     },
     {
       "id": "saimo-discovery-world",
       "name": "Discovery World",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/discovery-world.png",
+      "streamUrl": "http://45.162.64.114/DISCOVERY_WORLD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Discovery World HD",
+          "url": "http://45.162.64.114/DISCOVERY_WORLD/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_WORLD_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-espn",
       "name": "ESPN",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/espn-3.png",
+      "streamUrl": "http://170.83.16.50/ESPN/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "name": "ESPN HD",
+          "url": "http://170.83.16.50/ESPN/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-espn-2",
       "name": "ESPN 2",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/espn-3.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN2_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-espn-4",
       "name": "ESPN 4",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/espn-3.png",
+      "streamUrl": "http://45.162.64.114/ESPN_4/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "name": "ESPN 4 HD",
+          "url": "http://45.162.64.114/ESPN_4/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN4_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo",
       "name": "HBO",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo2",
       "name": "HBO2",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo-2.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO2/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO2/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO2/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo-family",
       "name": "HBO Family",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo-family.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_FAMILY/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_FAMILY/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_FAMILY/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo-mundi",
       "name": "HBO Mundi",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo-mundi.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_MUNDI_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_MUNDI_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_MUNDI_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo-plus",
       "name": "HBO Plus",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hboplus.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_PLUS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_PLUS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_PLUS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo-pop",
       "name": "HBO Pop",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo-pop.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_POP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_POP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_POP_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo-signature",
       "name": "HBO Signature",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo-signature.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_SIGNATURE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_SIGNATURE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_SIGNATURE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hbo-xtreme",
       "name": "HBO Xtreme",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hbo-xtreme.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_EXTREME_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/HBO_EXTREME_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HBO_EXTREME_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-hgtv",
       "name": "HGTV",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/hgtv.png",
+      "streamUrl": "http://45.162.64.114/HGTV_HD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "HGTV HD",
+          "url": "http://45.162.64.114/HGTV_HD/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/HGTV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-record",
       "name": "Record",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/record-tv.png",
+      "streamUrl": "http://45.162.64.114/RECORD_NEWS/index.m3u8",
+      "backupStreamUrl": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/RECORD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+          "name": "Record News HD (Ao Vivo)",
+          "url": "http://45.162.64.114/RECORD_NEWS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Record News Pluto TV",
+          "url": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+          "quality": "720p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/RECORD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/RECORD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-space",
       "name": "Space",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/space.png",
+      "streamUrl": "http://45.162.64.114/SPACE/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "name": "Space HD",
+          "url": "http://45.162.64.114/SPACE/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SPACE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tnt",
       "name": "TNT",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tnt.png",
+      "streamUrl": "http://45.162.64.114/TNT/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "name": "TNT HD",
+          "url": "http://45.162.64.114/TNT/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tnt-s-ries",
       "name": "TNT Séries",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tnt-series.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_SERIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/TNT_SERIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_SERIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-universal-tv",
       "name": "Universal TV",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/universal.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/universal/__index.m3u8?sv=160&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472902-u%2FRQX14ioJ69OPfvvDO1qYblKfL%2FF5lv7lKx%2Bx9GxPk%3D",
+      "backupStreamUrl": "https://getcdn.clarocdn.com.br/Content/Channel/SPOUNVHD/dsc3/manifest.mpd",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/universal/__index.m3u8?sv=160&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472902-u%2FRQX14ioJ69OPfvvDO1qYblKfL%2FF5lv7lKx%2Bx9GxPk%3D",
@@ -1477,858 +1743,1053 @@
           "quality": "HD",
           "referer": "https://www.clarotvmais.com.br/",
           "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/universal/__index.m3u8?sv=160&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472902-u%2FRQX14ioJ69OPfvvDO1qYblKfL%2FF5lv7lKx%2Bx9GxPk%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-amc-s-ries",
       "name": "AMC Séries",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/amc.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amcseries/__index.m3u8?sv=104&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472213-9X3RxgrzGBnYkKf9TDcG8To6ntcgw1Ltd1LupkS57Fg%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amcseries/__index.m3u8?sv=104&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472213-9X3RxgrzGBnYkKf9TDcG8To6ntcgw1Ltd1LupkS57Fg%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/amcseries/__index.m3u8?sv=104&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472213-9X3RxgrzGBnYkKf9TDcG8To6ntcgw1Ltd1LupkS57Fg%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-discovery-turbo",
       "name": "Discovery Turbo",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/discovery-turbo.png",
+      "streamUrl": "http://45.162.64.114/DISCOVERY_TURBO/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Discovery Turbo HD",
+          "url": "http://45.162.64.114/DISCOVERY_TURBO/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_TURBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-usa-network",
       "name": "USA Network",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/usa.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/usa/__index.m3u8?sv=152&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472952-usk1Sd862HUsEeFJpIgF1mgp%2BipLQSEzd%2BnacW%2BsYEs%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/usa/__index.m3u8?sv=152&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472952-usk1Sd862HUsEeFJpIgF1mgp%2BipLQSEzd%2BnacW%2BsYEs%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/usa/__index.m3u8?sv=152&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472952-usk1Sd862HUsEeFJpIgF1mgp%2BipLQSEzd%2BnacW%2BsYEs%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-telecine-fun",
       "name": "Telecine Fun",
       "category": "Filmes & Séries",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/f/f8/Telecine_Fun_%282021%29.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinefun/__index.m3u8?sv=45&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472591-MQu9Zm%2F3aV46qgPi%2FGK8lQPITC7rFBu89BYJX9HQhl4%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinefun/__index.m3u8?sv=45&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472591-MQu9Zm%2F3aV46qgPi%2FGK8lQPITC7rFBu89BYJX9HQhl4%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinefun/__index.m3u8?sv=45&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472591-MQu9Zm%2F3aV46qgPi%2FGK8lQPITC7rFBu89BYJX9HQhl4%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-telecine-cult",
       "name": "Telecine Cult",
       "category": "Filmes & Séries",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Telecine_Cult%282021%29.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinecult/__index.m3u8?sv=147&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472536-p1uhXCPAv%2BhiNspGPwSLrgfu%2Bk%2F3lPr0weu%2FwQ0t7Xo%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinecult/__index.m3u8?sv=147&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472536-p1uhXCPAv%2BhiNspGPwSLrgfu%2Bk%2F3lPr0weu%2FwQ0t7Xo%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinecult/__index.m3u8?sv=147&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472536-p1uhXCPAv%2BhiNspGPwSLrgfu%2Bk%2F3lPr0weu%2FwQ0t7Xo%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-telecine-touch",
       "name": "Telecine Touch",
       "category": "Filmes & Séries",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/9/95/TELECINE_Touch_Logo_2021.png",
+      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinetouch/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472733-mezOvP3QyByaaJYUwIpFQYMT3SQbdg5UhkhHmws96XE%3D",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinetouch/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472733-mezOvP3QyByaaJYUwIpFQYMT3SQbdg5UhkhHmws96XE%3D",
           "quality": "HD"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://xn--l---------------------------_________________________-2w85c.null-null.shop/tos-alisg-avt-0068/proxy.m3u8?container=images&refresh=10&url=https://neosoro.gq/docs/telecinetouch/__index.m3u8?sv=39&cc=y&secure_uri=true&nu3zAQc9HC3GbwJq=1788472733-mezOvP3QyByaaJYUwIpFQYMT3SQbdg5UhkhHmws96XE%3D"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-sony-movies",
       "name": "SONY Movies",
       "category": "Filmes & Séries",
       "logo": "https://www.tvlogo.org/brazil/sony-movies-br.png",
+      "streamUrl": "http://45.162.64.114/SONY_MOVIES/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "name": "SONY Movies HD",
+          "url": "http://45.162.64.114/SONY_MOVIES/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SONY_MOVIES/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-globo",
       "name": "Globo",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/globo.png",
+      "streamUrl": "https://media2.cdntvms.com.br/tv_morena_dorados/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
+          "name": "TV Morena (Rede Globo HD)",
+          "url": "https://media2.cdntvms.com.br/tv_morena_dorados/index.m3u8",
+          "quality": "720p",
+          "isWorking": true
         },
         {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GLOBO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tooncast",
       "name": "Tooncast",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tooncast.png",
+      "streamUrl": "http://170.83.16.50/TOONCAST/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Tooncast HD",
+          "url": "http://170.83.16.50/TOONCAST/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TOONCAST/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tlc",
       "name": "TLC",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tlc.png",
+      "streamUrl": "http://45.162.64.114/TLC/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "TLC HD",
+          "url": "http://45.162.64.114/TLC/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TLC_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-arte-1",
       "name": "Arte 1",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/arte1.png",
+      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
+          "name": "Arte 1 HD",
           "url": "http://45.162.64.114/ARTE1/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ARTE_1/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tnt-novelas",
       "name": "TNT Novelas",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tnt-novelas.png",
+      "streamUrl": "http://45.162.64.114/TNT_NOVELAS/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "name": "TNT Novelas HD",
+          "url": "http://45.162.64.114/TNT_NOVELAS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TNT_NOVELAS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-discovery-science",
       "name": "Discovery Science",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/discovery-science.png",
+      "streamUrl": "http://45.177.114.114/DISCOVERY_SCIENCE/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Discovery Science HD",
+          "url": "http://45.177.114.114/DISCOVERY_SCIENCE/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/DISCOVERY_SCIENCE_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-boomerang",
       "name": "Boomerang",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/boomerang.png",
+      "streamUrl": "http://45.162.64.114/BOOMERANG/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Boomerang HD",
+          "url": "http://45.162.64.114/BOOMERANG/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BOOMERANG_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-axn",
       "name": "AXN",
       "category": "Filmes & Séries",
       "logo": "https://mondrian.claro.com.br/channels/inverse/axn.png",
+      "streamUrl": "http://170.83.16.50/AXN/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
+          "name": "AXN HD",
+          "url": "http://170.83.16.50/AXN/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/AXN_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tcm",
       "name": "TCM",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tcm.png",
+      "streamUrl": "http://45.162.64.114/TCM/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "TCM HD",
+          "url": "http://45.162.64.114/TCM/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TCM_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-band-news",
       "name": "Band News",
       "category": "Notícias",
       "logo": "https://mondrian.claro.com.br/channels/inverse/band-news.png",
+      "streamUrl": "http://45.162.64.114/BAND_NEWS/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "name": "Band News HD",
+          "url": "http://45.162.64.114/BAND_NEWS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-band-sports-hd",
       "name": "BAND SPORTS HD",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/band-sports.png",
+      "streamUrl": "http://45.162.64.114/BAND_SPORTS/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
+          "name": "Band Sports HD",
+          "url": "http://45.162.64.114/BAND_SPORTS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BAND_SPORTS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-redetv-",
       "name": "RedeTV!",
       "category": "Abertos",
       "logo": "https://www.tvlogo.org/brazil/rede-tv-br.png",
+      "streamUrl": "http://45.162.64.114/REDE_TV/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+          "name": "RedeTV! HD",
+          "url": "http://45.162.64.114/REDE_TV/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tv-cultura",
       "name": "TV Cultura",
       "category": "Abertos",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cultura.png",
+      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
+      "backupStreamUrl": "https://fpa-gateway.tvcultura.com.br:8181/memfs/606caef0-a290-413d-9f1f-8fcdb3a73831.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TV_CULTURA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
+          "name": "TV Cultura HD",
           "url": "http://45.162.64.114/TV_CULTURA/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Cultura Fast Ao Vivo",
+          "url": "https://fpa-gateway.tvcultura.com.br:8181/memfs/606caef0-a290-413d-9f1f-8fcdb3a73831.m3u8",
+          "quality": "720p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TV_CULTURA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/TV_CULTURA/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_CULTURA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-terra-viva",
       "name": "Terra Viva",
       "category": "Variedades & Música",
       "logo": "https://www.tvlogo.org/brazil/terraviva-br.png",
+      "streamUrl": "http://170.83.16.50/TERRA_VIVA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Terra Viva HD",
+          "url": "http://170.83.16.50/TERRA_VIVA/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TERRA_VIVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-woohoo",
       "name": "Woohoo",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/woohoo.png",
+      "streamUrl": "http://45.162.64.114/WOOHOO/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Woohoo HD",
+          "url": "http://45.162.64.114/WOOHOO/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/WOOHOO_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-prime-box-brazil",
       "name": "PRIME BOX BRAZIL",
       "category": "Filmes & Séries",
       "logo": "https://www.tvlogo.org/brazil/prime-box-brazil-br.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/PRIME_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/PRIME_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://170.83.49.66:8083/AMCHD/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/PRIME_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-espn-3",
       "name": "ESPN 3",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/espn-3.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN3_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/ESPN3_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN3_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-espn-extra",
       "name": "ESPN Extra",
       "category": "Esportes",
       "logo": "https://mondrian.claro.com.br/channels/inverse/espn-extra.png",
+      "streamUrl": "http://45.162.64.114/ESPN_EXTRA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
+          "name": "ESPN Extra HD",
+          "url": "http://45.162.64.114/ESPN_EXTRA/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://dfr80qz435crc.cloudfront.net/EFGH/Amagi/Globo/GE_Fast_BR/GE_Fast.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ESPN_EXTRA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tv-gazeta",
       "name": "TV Gazeta",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tv-gazeta.png",
+      "streamUrl": "http://45.162.64.114/TV_GAZETA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "TV Gazeta HD",
+          "url": "http://45.162.64.114/TV_GAZETA/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/GAZETA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-record-news",
       "name": "Record News",
       "category": "Notícias",
       "logo": "https://mondrian.claro.com.br/channels/inverse/recordnews.png",
+      "streamUrl": "http://45.162.64.114/RECORD_NEWS/index.m3u8",
+      "backupStreamUrl": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/RECORD_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+          "name": "Record News HD",
+          "url": "http://45.162.64.114/RECORD_NEWS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Record News Pluto TV",
+          "url": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
+          "quality": "720p",
+          "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/RECORD_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": false,
-      "streamUrl": "https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/RECORD_NEWS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-can--o-nova",
       "name": "Canção Nova",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/cancao-nova.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/CANCAO_NOVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/CANCAO_NOVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/CANCAO_NOVA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-tv-aparecida",
       "name": "TV Aparecida",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/tv-aparecida.png",
+      "streamUrl": "http://45.162.64.114/TV_APARECIDA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "TV Aparecida HD",
+          "url": "http://45.162.64.114/TV_APARECIDA/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/TV_APARECIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-rede-vida",
       "name": "Rede Vida",
       "category": "Variedades & Música",
       "logo": "https://www.tvlogo.org/brazil/rede-vida-br.png",
+      "streamUrl": "http://45.162.64.114/REDE_VIDA/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Rede Vida HD",
+          "url": "http://45.162.64.114/REDE_VIDA/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/REDE_VIDA_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-discovery-id",
       "name": "Discovery ID",
       "category": "Documentários",
       "logo": "https://mondrian.claro.com.br/channels/inverse/investigacao-discovery.png",
+      "streamUrl": "http://45.162.64.114/DISCOVERY_ID/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
+          "name": "Discovery ID HD",
+          "url": "http://45.162.64.114/DISCOVERY_ID/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "https://amazonsat.brasilstream.com.br/hls/amazonsat/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/ID_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-fish-tv",
       "name": "Fish TV",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/fish-tv.png",
+      "streamUrl": "http://45.162.64.114/FISH_TV/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Fish TV HD",
+          "url": "http://45.162.64.114/FISH_TV/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/FISH_TV_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-box-kids-tv",
       "name": "Box Kids TV",
       "category": "Variedades & Música",
       "logo": "https://www.tvlogo.org/brazil/box-kids-tv-br.png",
+      "streamUrl": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "Box Kids TV HD",
+          "url": "http://170.83.49.66:8083/BOXKIDSHD/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/BOX_KIDS_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-sabor---arte",
       "name": "Sabor & Arte",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/sabor-e-arte.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/SABOR_E_ARTE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/SABOR_E_ARTE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/SABOR_E_ARTE/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-x-sports",
       "name": "X Sports",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/xsports.png",
+      "streamUrl": "http://170.83.16.50/X_SPORTS/index.m3u8",
+      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
-          "url": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
-          "quality": "HD",
-          "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
+          "name": "X Sports HD",
+          "url": "http://170.83.16.50/X_SPORTS/index.m3u8",
           "quality": "1080p",
           "isWorking": true
+        },
+        {
+          "name": "Servidor M3U Original",
+          "url": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+          "quality": "HD"
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/XSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-n-sports",
       "name": "N SPORTS",
       "category": "Variedades & Música",
       "logo": "https://mondrian.claro.com.br/channels/inverse/nsports.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/NSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/NSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/NSPORTS/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     },
     {
       "id": "saimo-music-box-brazil",
       "name": "Music Box Brazil",
       "category": "Variedades & Música",
       "logo": "https://commons.wikimedia.org/wiki/Special:Redirect/file/MusicBoxBrazil.png",
+      "streamUrl": "https://cdn-sp2.satlabscloud.com.br/MUSIC_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
+      "quality": "HD",
+      "isVip": false,
+      "isVipOnly": false,
+      "isActive": true,
+      "isAdult": false,
       "sources": [
         {
           "url": "https://cdn-sp2.satlabscloud.com.br/MUSIC_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7",
           "quality": "HD",
           "referer": "https://reidoscanais.st/"
-        },
-        {
-          "name": "Servidor Alternativo (Ao Vivo)",
-          "url": "http://45.162.64.114/ARTE1/index.m3u8",
-          "quality": "1080p",
-          "isWorking": true
         }
       ],
-      "isActive": true,
-      "isVipOnly": true,
-      "streamUrl": "http://45.162.64.114/ARTE1/index.m3u8",
-      "backupStreamUrl": "https://cdn-sp2.satlabscloud.com.br/MUSIC_BOX_HD/index.m3u8?token=ulDZjn1kAAan1kzoXmUL1B84gijOI6v7"
+      "lastChecked": "2026-09-19T00:23:00.503Z",
+      "isWorking": true,
+      "createdAt": "2026-09-19T00:23:00.503Z",
+      "updatedAt": "2026-09-19T01:37:56.956Z"
     }
-  ]
+  ],
+  "lastUpdated": "2026-09-19T01:57:14.456Z"
 }
