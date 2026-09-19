@@ -110,9 +110,32 @@ app.use(compression({
   }
 }));
 
-// Suporte de alta capacidade a links e uploads com muitos megabytes (até 250MB)
-app.use(express.json({ limit: '250mb' }));
-app.use(express.urlencoded({ extended: true, limit: '250mb' }));
+// Suporte de alta capacidade a links e uploads com muitos megabytes (até 300MB)
+app.use(express.json({ limit: '300mb' }));
+app.use(express.urlencoded({ extended: true, limit: '300mb' }));
+app.use(express.raw({
+  type: [
+    'application/x-sqlite3',
+    'application/octet-stream',
+    'application/vnd.sqlite3',
+    'application/gzip',
+    'application/x-gzip'
+  ],
+  limit: '300mb'
+}));
+
+// Captura e tratamento amigável de erro de limite de tamanho de payload (HTTP 413)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err && (err.status === 413 || err.type === 'entity.too.large')) {
+    console.warn(`[HTTP 413] Payload excedeu o limite máximo em ${req.method} ${req.path}:`, err.message);
+    return res.status(413).json({
+      success: false,
+      error: 'O arquivo enviado excede o limite máximo permitido pelo servidor. Utilize a importação particionada (chunks).',
+      code: 'PAYLOAD_TOO_LARGE'
+    });
+  }
+  next(err);
+});
 
 // CORS middleware
 app.use((req, res, next) => {
@@ -6128,6 +6151,163 @@ app.get('/api/admin/database/export', (req, res) => {
   }
 });
 
+// Helper para finalizar e aplicar restauração do banco SQLite
+function applyRestoredDatabase(buffer: Buffer, req: express.Request, res: express.Response) {
+  if (!buffer || buffer.length < 100) {
+    return res.status(400).json({
+      success: false,
+      error: 'Nenhum dado do banco de dados SQLite foi recebido ou o arquivo está corrompido/vazio.'
+    });
+  }
+
+  const importResult = sqliteImportDatabase(buffer);
+  if (!importResult.success) {
+    return res.status(400).json({
+      success: false,
+      error: importResult.error || 'Falha na validação do arquivo SQLite 3.'
+    });
+  }
+
+  // Atualiza a lista em memória no servidor e no channels-config.json
+  const dbChannels = sqliteGetAllChannels();
+  if (dbChannels && dbChannels.length > 0) {
+    customConfigChannels = dbChannels.map(sanitizeChannelStreams);
+    try {
+      fs.writeFileSync(
+        CHANNELS_CONFIG_FILE,
+        JSON.stringify({ channels: customConfigChannels, lastUpdated: new Date().toISOString() }, null, 2),
+        'utf-8'
+      );
+    } catch (fsErr) {
+      console.warn('[DB IMPORT] Aviso ao sincronizar channels-config.json:', fsErr);
+    }
+  }
+
+  // Invalida cache de canais
+  cachedChannelsResponse = null;
+
+  // Registra auditoria
+  const adminEmail = (req.headers['x-admin-email'] as string) || 'admin@maxtv.local';
+  const adminName = (req.headers['x-admin-name'] as string) || 'Administrador';
+  sqliteRecordAuditLog({
+    adminName,
+    adminEmail,
+    actionType: 'SYSTEM',
+    actionName: 'Importação do Banco SQLite (maxtv.db)',
+    description: `Banco de dados SQLite (maxtv.db) importado com sucesso (${customConfigChannels.length} canais carregados)`,
+    details: {
+      channelsCount: customConfigChannels.length,
+      fileSizeBytes: buffer.length,
+      stats: importResult.stats
+    }
+  });
+
+  console.log(`[DB IMPORT SUCCESS] Banco SQLite importado com sucesso! ${customConfigChannels.length} canais sincronizados.`);
+
+  return res.json({
+    success: true,
+    message: `Banco de dados SQLite importado com sucesso! ${customConfigChannels.length} canais carregados.`,
+    channelsCount: customConfigChannels.length,
+    fileSizeBytes: buffer.length,
+    stats: importResult.stats
+  });
+}
+
+interface DbUploadSession {
+  uploadId: string;
+  totalChunks: number;
+  totalBytes?: number;
+  fileName?: string;
+  chunks: Map<number, Buffer>;
+  createdAt: number;
+}
+const activeDbUploads = new Map<string, DbUploadSession>();
+
+// Limpa sessões de upload expiradas a cada 5 minutos
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, session] of activeDbUploads.entries()) {
+    if (now - session.createdAt > 15 * 60 * 1000) {
+      activeDbUploads.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// POST /api/admin/database/import-chunk (Upload particionado para contornar limites de proxy HTTP 413)
+app.post('/api/admin/database/import-chunk', async (req, res) => {
+  try {
+    const { uploadId, chunkIndex, totalChunks, fileName, fileSizeBytes, chunkDataBase64 } = req.body || {};
+
+    if (!uploadId || chunkIndex === undefined || !totalChunks || !chunkDataBase64) {
+      return res.status(400).json({
+        success: false,
+        error: 'Parâmetros incompletos para upload particionado do banco de dados.'
+      });
+    }
+
+    const cIndex = Number(chunkIndex);
+    const tChunks = Number(totalChunks);
+
+    if (isNaN(cIndex) || isNaN(tChunks) || cIndex < 0 || cIndex >= tChunks) {
+      return res.status(400).json({ success: false, error: 'Índice de parte inválido.' });
+    }
+
+    let session = activeDbUploads.get(uploadId);
+    if (!session) {
+      session = {
+        uploadId,
+        totalChunks: tChunks,
+        totalBytes: fileSizeBytes ? Number(fileSizeBytes) : 0,
+        fileName: fileName || 'maxtv.db',
+        chunks: new Map(),
+        createdAt: Date.now()
+      };
+      activeDbUploads.set(uploadId, session);
+    }
+
+    const chunkBuffer = Buffer.from(chunkDataBase64, 'base64');
+    session.chunks.set(cIndex, chunkBuffer);
+
+    // Se ainda não recebeu todas as partes, responde sucesso parcial
+    if (session.chunks.size < session.totalChunks) {
+      return res.json({
+        success: true,
+        completed: false,
+        receivedChunks: session.chunks.size,
+        totalChunks: session.totalChunks,
+        progressPercent: Math.round((session.chunks.size / session.totalChunks) * 100),
+        message: `Parte ${cIndex + 1} de ${session.totalChunks} recebida.`
+      });
+    }
+
+    // Todas as partes foram recebidas! Monta o arquivo completo em ordem
+    const assembledList: Buffer[] = [];
+    for (let i = 0; i < session.totalChunks; i++) {
+      const part = session.chunks.get(i);
+      if (!part) {
+        return res.status(400).json({
+          success: false,
+          error: `Falha na montagem: parte ${i + 1} de ${session.totalChunks} não foi encontrada.`
+        });
+      }
+      assembledList.push(part);
+    }
+
+    activeDbUploads.delete(uploadId);
+    const assembledBuffer = Buffer.concat(assembledList);
+
+    console.log(`[DB IMPORT CHUNKS] Todas as ${session.totalChunks} partes foram montadas com sucesso (${assembledBuffer.length} bytes)!`);
+
+    return applyRestoredDatabase(assembledBuffer, req, res);
+  } catch (err: any) {
+    console.error('[DB IMPORT CHUNK ERROR] Erro no upload em partes:', err);
+    return res.status(500).json({
+      success: false,
+      error: `Erro ao processar parte do banco de dados: ${err.message}`
+    });
+  }
+});
+
 // POST /api/admin/database/import (Importar e restaurar arquivo .db SQLite completo)
 app.post('/api/admin/database/import', async (req, res) => {
   try {
@@ -6146,64 +6326,7 @@ app.post('/api/admin/database/import', async (req, res) => {
       buffer = Buffer.concat(chunks);
     }
 
-    if (!buffer || buffer.length < 100) {
-      return res.status(400).json({
-        success: false,
-        error: 'Nenhum dado do banco de dados SQLite foi recebido ou o arquivo está corrompido/vazio.'
-      });
-    }
-
-    const importResult = sqliteImportDatabase(buffer);
-    if (!importResult.success) {
-      return res.status(400).json({
-        success: false,
-        error: importResult.error || 'Falha na validação do arquivo SQLite 3.'
-      });
-    }
-
-    // Atualiza a lista em memória no servidor e no channels-config.json
-    const dbChannels = sqliteGetAllChannels();
-    if (dbChannels && dbChannels.length > 0) {
-      customConfigChannels = dbChannels.map(sanitizeChannelStreams);
-      try {
-        fs.writeFileSync(
-          CHANNELS_CONFIG_FILE,
-          JSON.stringify({ channels: customConfigChannels, lastUpdated: new Date().toISOString() }, null, 2),
-          'utf-8'
-        );
-      } catch (fsErr) {
-        console.warn('[DB IMPORT] Aviso ao sincronizar channels-config.json:', fsErr);
-      }
-    }
-
-    // Invalida cache de canais
-    cachedChannelsResponse = null;
-
-    // Registra auditoria
-    const adminEmail = (req.headers['x-admin-email'] as string) || 'admin@maxtv.local';
-    const adminName = (req.headers['x-admin-name'] as string) || 'Administrador';
-    sqliteRecordAuditLog({
-      adminName,
-      adminEmail,
-      actionType: 'SYSTEM',
-      actionName: 'Importação do Banco SQLite (maxtv.db)',
-      description: `Banco de dados SQLite (maxtv.db) importado com sucesso (${customConfigChannels.length} canais carregados)`,
-      details: {
-        channelsCount: customConfigChannels.length,
-        fileSizeBytes: buffer.length,
-        stats: importResult.stats
-      }
-    });
-
-    console.log(`[DB IMPORT SUCCESS] Banco SQLite importado com sucesso! ${customConfigChannels.length} canais sincronizados.`);
-
-    return res.json({
-      success: true,
-      message: `Banco de dados SQLite importado com sucesso! ${customConfigChannels.length} canais carregados.`,
-      channelsCount: customConfigChannels.length,
-      fileSizeBytes: buffer.length,
-      stats: importResult.stats
-    });
+    return applyRestoredDatabase(buffer, req, res);
   } catch (err: any) {
     console.error('[DB IMPORT ERROR] Erro inesperado ao importar banco:', err);
     return res.status(500).json({

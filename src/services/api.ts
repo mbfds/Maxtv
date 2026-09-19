@@ -1030,20 +1030,126 @@ export const api = {
     return `/api/admin/database/export${queryString ? `?${queryString}` : ''}`;
   },
 
-  async importDatabase(file: File | Blob): Promise<{ success: boolean; message: string; channelsCount: number; fileSizeBytes?: number; stats?: any }> {
-    const headers = getAdminHeaders({
-      'Content-Type': 'application/x-sqlite3'
-    });
-    const res = await fetch('/api/admin/database/import', {
-      method: 'POST',
-      headers,
-      body: file
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.success) {
-      throw new Error(data?.error || `Falha ao importar banco de dados (HTTP ${res.status})`);
+  async importDatabase(
+    file: File | Blob,
+    onProgress?: (percent: number, message: string) => void
+  ): Promise<{ success: boolean; message: string; channelsCount: number; fileSizeBytes?: number; stats?: any }> {
+    const totalBytes = file.size;
+
+    // Se o arquivo for maior que 6MB, usa diretamente upload particionado para evitar HTTP 413
+    const shouldUseChunks = totalBytes > 6 * 1024 * 1024;
+
+    if (shouldUseChunks) {
+      return await this.importDatabaseChunked(file, onProgress);
     }
-    return data;
+
+    // Para arquivos menores (<6MB), tenta upload direto com fallback automático
+    try {
+      if (onProgress) onProgress(30, 'Enviando arquivo do banco de dados...');
+      const headers = getAdminHeaders({
+        'Content-Type': 'application/x-sqlite3'
+      });
+      const res = await fetch('/api/admin/database/import', {
+        method: 'POST',
+        headers,
+        body: file
+      });
+      const data = await res.json().catch(() => null);
+      if (res.status === 413 || (!res.ok && res.status >= 400 && res.status < 500 && data?.code === 'PAYLOAD_TOO_LARGE')) {
+        // Fallback automático para particionamento se o proxy rejeitar com 413
+        console.warn('[DB IMPORT] Upload direto recebeu HTTP 413. Ativando particionamento automático...');
+        return await this.importDatabaseChunked(file, onProgress);
+      }
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Falha ao importar banco de dados (HTTP ${res.status})`);
+      }
+      if (onProgress) onProgress(100, 'Banco de dados restaurado com sucesso!');
+      return data;
+    } catch (err: any) {
+      if (err?.message?.includes('413') || err?.message?.toLowerCase().includes('payload') || err?.message?.toLowerCase().includes('too large')) {
+        console.warn('[DB IMPORT] Erro de limite HTTP 413 detectado, ativando particionamento automático:', err);
+        return await this.importDatabaseChunked(file, onProgress);
+      }
+      throw err;
+    }
+  },
+
+  async importDatabaseChunked(
+    file: File | Blob,
+    onProgress?: (percent: number, message: string) => void
+  ): Promise<{ success: boolean; message: string; channelsCount: number; fileSizeBytes?: number; stats?: any }> {
+    const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB por fatia para máxima confiabilidade
+    const totalBytes = file.size;
+    const totalChunks = Math.max(1, Math.ceil(totalBytes / CHUNK_SIZE));
+    const uploadId = `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const fileName = (file as File).name || 'maxtv.db';
+
+    if (onProgress) {
+      onProgress(5, `Iniciando upload particionado em ${totalChunks} partes (${(totalBytes / (1024 * 1024)).toFixed(1)} MB)...`);
+    }
+
+    let lastResponse: any = null;
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, totalBytes);
+      const chunkBlob = file.slice(start, end);
+
+      const percent = Math.min(95, Math.round(((chunkIndex) / totalChunks) * 100));
+      if (onProgress) {
+        onProgress(
+          percent,
+          `Enviando parte ${chunkIndex + 1} de ${totalChunks} (${(end / (1024 * 1024)).toFixed(1)} MB / ${(totalBytes / (1024 * 1024)).toFixed(1)} MB)...`
+        );
+      }
+
+      // Converte fatia para base64
+      const chunkDataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.includes(',') ? result.split(',')[1] : result;
+          resolve(base64);
+        };
+        reader.onerror = () => reject(new Error(`Falha ao ler parte ${chunkIndex + 1} do arquivo.`));
+        reader.readAsDataURL(chunkBlob);
+      });
+
+      const headers = getAdminHeaders({
+        'Content-Type': 'application/json'
+      });
+
+      const res = await fetch('/api/admin/database/import-chunk', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          uploadId,
+          chunkIndex,
+          totalChunks,
+          fileName,
+          fileSizeBytes: totalBytes,
+          chunkDataBase64
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || `Falha ao enviar parte ${chunkIndex + 1} de ${totalChunks} (HTTP ${res.status})`);
+      }
+
+      lastResponse = data;
+    }
+
+    if (onProgress) {
+      onProgress(100, 'Banco de dados restaurado e canais sincronizados!');
+    }
+
+    return lastResponse || {
+      success: true,
+      message: 'Banco de dados importado com sucesso!',
+      channelsCount: 0
+    };
   },
 
   async getDatabaseStats(): Promise<{ success: boolean; stats: DatabaseStats }> {

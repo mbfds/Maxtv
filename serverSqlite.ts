@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 
 export interface SqliteUserDoc {
   id: string;
@@ -1151,9 +1152,21 @@ export function sqliteCheckpointAndGetDbPath(): string {
  * Realiza verificação de integridade do cabeçalho SQLite 3,
  * fecha a conexão atual, remove arquivos WAL/SHM obsoletos, grava o novo banco e reinicia a conexão.
  */
-export function sqliteImportDatabase(buffer: Buffer): { success: boolean; error?: string; channelsCount?: number; stats?: any } {
-  if (!buffer || buffer.length < 100) {
+export function sqliteImportDatabase(inputBuffer: Buffer): { success: boolean; error?: string; channelsCount?: number; stats?: any } {
+  if (!inputBuffer || inputBuffer.length < 100) {
     return { success: false, error: 'Arquivo do banco de dados vazio ou corrompido.' };
+  }
+
+  let buffer = inputBuffer;
+
+  // Suporte a arquivos compactados gzip (.db.gz ou compressão em trânsito)
+  if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
+    try {
+      buffer = zlib.gunzipSync(buffer);
+      console.log(`[SQLite IMPORT] Buffer GZIP descompactado com sucesso (${inputBuffer.length} bytes -> ${buffer.length} bytes).`);
+    } catch (gzErr: any) {
+      return { success: false, error: 'Falha ao descompactar arquivo GZIP do banco de dados: ' + (gzErr.message || gzErr) };
+    }
   }
 
   // Verifica magic bytes do SQLite 3 ("SQLite format 3\0")

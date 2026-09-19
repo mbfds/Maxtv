@@ -35,6 +35,7 @@ export const DatabaseBackupModal: React.FC<DatabaseBackupModalProps> = ({
   const [isLoadingStats, setIsLoadingStats] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [importProgress, setImportProgress] = useState<{ percent: number; message: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [importResult, setImportResult] = useState<{ channelsCount: number; fileSizeBytes?: number } | null>(null);
@@ -147,9 +148,12 @@ export const DatabaseBackupModal: React.FC<DatabaseBackupModalProps> = ({
 
     setIsImporting(true);
     setFeedback(null);
+    setImportProgress({ percent: 5, message: 'Iniciando upload e validação...' });
 
     try {
-      const res = await api.importDatabase(selectedFile);
+      const res = await api.importDatabase(selectedFile, (percent, message) => {
+        setImportProgress({ percent, message });
+      });
       setImportResult({
         channelsCount: res.channelsCount,
         fileSizeBytes: res.fileSizeBytes || selectedFile.size
@@ -173,12 +177,16 @@ export const DatabaseBackupModal: React.FC<DatabaseBackupModalProps> = ({
       }
     } catch (err: any) {
       console.error('[DB IMPORT ERROR]:', err);
+      const is413 = err?.message?.includes('413') || err?.message?.toLowerCase().includes('payload');
       setFeedback({
         type: 'error',
-        message: err.message || 'Erro ao importar arquivo do banco de dados.'
+        message: is413
+          ? 'O arquivo do banco excede o limite de upload direto (HTTP 413). O sistema particiona automaticamente uploads grandes, tente novamente ou verifique se o arquivo é um SQLite 3 válido.'
+          : (err.message || 'Erro ao importar arquivo do banco de dados.')
       });
     } finally {
       setIsImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -387,7 +395,7 @@ export const DatabaseBackupModal: React.FC<DatabaseBackupModalProps> = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".db,.sqlite,.sqlite3,application/x-sqlite3,application/octet-stream"
+                  accept=".db,.sqlite,.sqlite3,.gz,.db.gz,application/x-sqlite3,application/octet-stream"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -423,6 +431,28 @@ export const DatabaseBackupModal: React.FC<DatabaseBackupModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Barra de Progresso de Upload Particionado / Descompressão */}
+              {isImporting && importProgress && (
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-indigo-500/40 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-indigo-300 font-semibold flex items-center gap-2">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                      <span>{importProgress.message}</span>
+                    </span>
+                    <span className="font-mono font-bold text-indigo-400">{importProgress.percent}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 via-emerald-500 to-teal-400 transition-all duration-300 rounded-full"
+                      style={{ width: `${Math.max(5, importProgress.percent)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    O upload é transmitido em fatias seguras para evitar limitações de tamanho de rede (HTTP 413).
+                  </p>
+                </div>
+              )}
 
               {/* Botão de confirmação de importação */}
               {selectedFile && (
