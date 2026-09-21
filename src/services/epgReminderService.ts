@@ -18,8 +18,12 @@ class EpgReminderService {
       const raw = localStorage.getItem(REMINDERS_KEY);
       if (!raw) return [];
       const all: EpgReminder[] = JSON.parse(raw);
-      if (!userEmail) return all;
-      return all.filter(r => r.userEmail.toLowerCase() === userEmail.toLowerCase());
+      const targetEmail = (userEmail || 'local_user').toLowerCase();
+      // Retorna lembretes do usuário logado OU lembretes salvos localmente
+      return all.filter(r => {
+        const rEmail = (r.userEmail || 'local_user').toLowerCase();
+        return rEmail === targetEmail || (userEmail && rEmail === 'local_user');
+      });
     } catch {
       return [];
     }
@@ -35,6 +39,14 @@ class EpgReminderService {
   getReminder(programId: string, userEmail?: string): EpgReminder | undefined {
     const list = this.getReminders(userEmail);
     return list.find(r => r.programId === programId);
+  }
+
+  // Verifica o status atual da permissão de notificações do navegador
+  getPermissionStatus(): NotificationPermission | 'unsupported' {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return 'unsupported';
+    }
+    return Notification.permission;
   }
 
   // Solicitar permissão nativa de notificações no navegador
@@ -62,17 +74,50 @@ class EpgReminderService {
     return Notification.permission === 'granted';
   }
 
+  // Dispara uma notificação de teste imediata no navegador
+  async testNotification(): Promise<boolean> {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return false;
+    }
+    let perm = Notification.permission;
+    if (perm === 'default') {
+      perm = await this.requestNotificationPermission();
+    }
+    if (perm !== 'granted') {
+      return false;
+    }
+    try {
+      const n = new Notification('MAXTV • Notificações Ativadas!', {
+        body: 'Você receberá alertas no navegador quando os programas agendados no Guia EPG forem começar.',
+        icon: '/icon.png',
+        badge: '/icon.png',
+        tag: 'maxtv_test_notification',
+        requireInteraction: false
+      });
+      n.onclick = () => {
+        window.focus();
+        n.close();
+      };
+      return true;
+    } catch (e) {
+      console.warn('Erro ao enviar notificação de teste:', e);
+      return false;
+    }
+  }
+
   // Agendar lembrete para um programa futuro
   addReminder(
     program: EpgProgram,
     channel: Channel,
-    userEmail: string
+    userEmail?: string
   ): EpgReminder {
-    const all = this.getReminders();
+    const raw = localStorage.getItem(REMINDERS_KEY);
+    const all: EpgReminder[] = raw ? JSON.parse(raw) : [];
+    const effectiveEmail = (userEmail || 'local_user').toLowerCase();
 
     // Evita duplicatas
     const existingIndex = all.findIndex(
-      r => r.programId === program.id && r.userEmail.toLowerCase() === userEmail.toLowerCase()
+      r => r.programId === program.id && (r.userEmail || 'local_user').toLowerCase() === effectiveEmail
     );
 
     const newReminder: EpgReminder = {
@@ -85,7 +130,7 @@ class EpgReminderService {
       startTime: program.start,
       formattedTime: program.startFormatted,
       durationMinutes: program.durationMinutes,
-      userEmail: userEmail.toLowerCase(),
+      userEmail: effectiveEmail,
       createdAt: new Date().toISOString(),
       notified: false
     };
@@ -107,15 +152,38 @@ class EpgReminderService {
 
   // Cancelar lembrete
   removeReminder(programId: string, userEmail?: string): void {
-    const all = this.getReminders();
-    const filtered = all.filter(r => {
-      if (userEmail) {
-        return !(r.programId === programId && r.userEmail.toLowerCase() === userEmail.toLowerCase());
-      }
-      return r.programId !== programId;
-    });
     try {
+      const raw = localStorage.getItem(REMINDERS_KEY);
+      if (!raw) return;
+      const all: EpgReminder[] = JSON.parse(raw);
+      const effectiveEmail = (userEmail || 'local_user').toLowerCase();
+
+      const filtered = all.filter(r => {
+        const rEmail = (r.userEmail || 'local_user').toLowerCase();
+        if (userEmail) {
+          return !(r.programId === programId && (rEmail === effectiveEmail || rEmail === 'local_user'));
+        }
+        return r.programId !== programId;
+      });
+
       localStorage.setItem(REMINDERS_KEY, JSON.stringify(filtered));
+    } catch {}
+  }
+
+  // Limpar todos os lembretes do usuário
+  clearAllReminders(userEmail?: string): void {
+    try {
+      const raw = localStorage.getItem(REMINDERS_KEY);
+      if (!raw) return;
+      const all: EpgReminder[] = JSON.parse(raw);
+      const effectiveEmail = (userEmail || 'local_user').toLowerCase();
+
+      const remaining = all.filter(r => {
+        const rEmail = (r.userEmail || 'local_user').toLowerCase();
+        return rEmail !== effectiveEmail && rEmail !== 'local_user';
+      });
+
+      localStorage.setItem(REMINDERS_KEY, JSON.stringify(remaining));
     } catch {}
   }
 
@@ -123,7 +191,7 @@ class EpgReminderService {
   toggleReminder(
     program: EpgProgram,
     channel: Channel,
-    userEmail: string
+    userEmail?: string
   ): { scheduled: boolean; reminder?: EpgReminder } {
     if (this.hasReminder(program.id, userEmail)) {
       this.removeReminder(program.id, userEmail);
@@ -166,19 +234,21 @@ class EpgReminderService {
   startChecker() {
     if (this.checkInterval) return;
 
-    // Checa a cada 20 segundos
+    // Checa a cada 10 segundos
     this.checkInterval = setInterval(() => {
       this.checkDueReminders();
-    }, 20000);
+    }, 10000);
 
     // Executa verificação inicial logo após carregar
-    setTimeout(() => this.checkDueReminders(), 2000);
+    setTimeout(() => this.checkDueReminders(), 1500);
   }
 
   // Verifica se há lembretes que atingiram o horário de início
   private checkDueReminders() {
     try {
-      const all = this.getReminders();
+      const raw = localStorage.getItem(REMINDERS_KEY);
+      if (!raw) return;
+      const all: EpgReminder[] = JSON.parse(raw);
       if (all.length === 0) return;
 
       const nowMs = Date.now();
@@ -188,9 +258,9 @@ class EpgReminderService {
         if (r.notified) return r;
 
         const startMs = new Date(r.startTime).getTime();
-        // Dispara se o horário do programa chegou (com tolerância de até 15 minutos após o início)
-        if (nowMs >= startMs && nowMs <= startMs + 15 * 60 * 1000) {
-          // Dispara notificação nativa
+        // Dispara se o horário do programa chegou ou começa em menos de 1 minuto (com tolerância de até 15 minutos)
+        if (nowMs >= (startMs - 60 * 1000) && nowMs <= (startMs + 15 * 60 * 1000)) {
+          // Dispara notificação nativa do navegador
           this.sendNativeNotification(r);
           // Dispara evento global in-app para toast/banner
           if (typeof window !== 'undefined') {

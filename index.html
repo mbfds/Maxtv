@@ -23,7 +23,25 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Google Cast SDK Sender Framework -->
+    <!-- Google Cast SDK Sender Framework & Early Initialization Hook -->
+    <script>
+      window['__onGCastApiAvailable'] = function(isAvailable) {
+        if (isAvailable) {
+          window.__googleCastAvailable = true;
+          try {
+            if (window.cast && window.cast.framework && window.chrome && window.chrome.cast) {
+              window.cast.framework.CastContext.getInstance().setOptions({
+                receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID || 'CC1AD845',
+                autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+              });
+            }
+          } catch (err) {
+            console.warn('[Cast SDK] Early setup warning:', err);
+          }
+          window.dispatchEvent(new CustomEvent('google_cast_ready', { detail: { isAvailable: true } }));
+        }
+      };
+    </script>
     <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased selection:bg-indigo-600 selection:text-white">

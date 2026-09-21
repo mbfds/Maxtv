@@ -1549,9 +1549,30 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
   const triggerNativeCast = useCallback(async (): Promise<boolean> => {
     const v = videoRef.current;
+    const mediaTitle = 'name' in item ? item.name : (item as any).title;
+    const mediaLogo = 'logo' in item ? item.logo : 'posterUrl' in item ? item.posterUrl : undefined;
+
+    // 1. Tenta o Google Cast SDK Oficial (Chromecast / Google TV / Android TV)
+    try {
+      const castSuccess = await castService.requestGoogleCastSession({
+        title: mediaTitle,
+        streamUrl,
+        mediaType: type,
+        posterUrl: mediaLogo,
+        currentTime: v?.currentTime || 0
+      }, v);
+
+      if (castSuccess) {
+        showToast('Transmitindo na TV via Google Cast!');
+        return true;
+      }
+    } catch (castErr) {
+      console.warn('[LivePlayer] Google Cast falhou ou cancelado:', castErr);
+    }
+
     if (!v) return false;
 
-    // 1. Tenta API W3C Remote Playback (Chrome / Edge / Android / Smart TV)
+    // 2. Tenta API W3C Remote Playback (Chrome / Edge / Android / Smart TV)
     const remote = (v as any).remote;
     if (remote && typeof remote.prompt === 'function') {
       try {
@@ -1565,7 +1586,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       }
     }
 
-    // 2. Tenta Apple AirPlay (Safari / Apple TV / iPhone / iPad / Mac)
+    // 3. Tenta Apple AirPlay (Safari / Apple TV / iPhone / iPad / Mac)
     if (typeof (v as any).webkitShowPlaybackTargetPicker === 'function') {
       try {
         (v as any).webkitShowPlaybackTargetPicker();
@@ -1577,7 +1598,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
 
     return false;
-  }, [showToast]);
+  }, [item, streamUrl, type, showToast]);
 
   const disconnectCast = useCallback(() => {
     const v = videoRef.current;
@@ -2908,24 +2929,60 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                    </div>
                  </div>
 
-                 {/* Close Button Top Right */}
-                 <button
-                    onClick={handleClose}
-                    className="p-3 rounded-full bg-slate-900/40 hover:bg-red-600/80 text-white backdrop-blur-md transition-all pointer-events-auto shadow-lg border border-white/5 group"
-                 >
-                    <X className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-                 </button>
+                 {/* Actions Top Right */}
+                 <div className="flex items-center gap-2 pointer-events-auto">
+                   <button
+                     id="btn-player-cast-header"
+                     type="button"
+                     onClick={() => setIsCastModalOpen(true)}
+                     className={`p-3 rounded-full backdrop-blur-md transition-all shadow-lg border cursor-pointer ${
+                       castState === 'connected'
+                         ? 'bg-emerald-600/90 border-emerald-400 text-white'
+                         : 'bg-slate-900/40 hover:bg-indigo-600/80 text-white border-white/5'
+                     }`}
+                     title="Transmitir para a TV (Chromecast / Smart TV)"
+                   >
+                     <Cast className={`w-5 h-5 ${castState === 'connected' ? 'text-white animate-pulse' : 'text-indigo-300'}`} />
+                   </button>
+
+                   <button
+                      onClick={handleClose}
+                      className="p-3 rounded-full bg-slate-900/40 hover:bg-red-600/80 text-white backdrop-blur-md transition-all pointer-events-auto shadow-lg border border-white/5 group"
+                   >
+                      <X className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                   </button>
+                 </div>
               </div>
 
               {/* Bottom Layer - Progress Bar & Quick Menu */}
               <div className="w-full flex flex-col justify-end p-4 sm:p-6 pointer-events-auto">
-                <div className="flex justify-end w-full mb-3">
+                <div className="flex justify-end items-center gap-2 w-full mb-3">
+                   {/* Dedicated Cast Button in Bottom Bar */}
+                   <button
+                     id="btn-player-cast-bottom"
+                     type="button"
+                     onClick={() => setIsCastModalOpen(true)}
+                     className={`p-3 rounded-full backdrop-blur-md shadow-lg border transition-all cursor-pointer flex items-center gap-2 ${
+                       castState === 'connected'
+                         ? 'bg-emerald-600/90 border-emerald-400 text-white'
+                         : 'bg-slate-900/50 hover:bg-indigo-600/80 border-white/10 text-white'
+                     }`}
+                     title="Transmitir para a TV (Chromecast / Smart TV)"
+                   >
+                     <Cast className={`w-5 h-5 ${castState === 'connected' ? 'text-white' : 'text-indigo-300'}`} />
+                     {castState === 'connected' && (
+                       <span className="text-[10px] font-bold pr-1">Na TV</span>
+                     )}
+                   </button>
+
                    {/* Quick Actions Button */}
                    <button
+                     id="btn-player-settings-toggle"
                      onClick={() => setActiveMenu(activeMenu === 'controls' ? null : 'controls')}
                      className={`p-3 rounded-full backdrop-blur-md shadow-lg border transition-all cursor-pointer ${
                        activeMenu === 'controls' ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900/50 hover:bg-slate-900/80 border-white/10 text-white'
                      }`}
+                     title="Configurações e Controles"
                    >
                      <Settings className="w-5 h-5" />
                    </button>

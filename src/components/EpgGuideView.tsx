@@ -24,11 +24,14 @@ import {
   BellRing,
   Check,
   AlertCircle,
-  Trash2
+  Trash2,
+  Cast
 } from 'lucide-react';
 import { Channel, ChannelCategory, ChannelEpgSchedule, EpgProgram, User, EpgReminder } from '../types';
 import { api } from '../services/api';
 import { epgReminderService, EPG_REMINDER_TRIGGERED_EVENT } from '../services/epgReminderService';
+import { castService, CastConnectionState } from '../services/castService';
+import { CastModal } from './CastModal';
 
 const CATEGORIES: ChannelCategory[] = [
   'Todos',
@@ -93,6 +96,46 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
     action?: () => void;
   } | null>(null);
 
+  // Google Cast / Transmissão para Chromecast e TV
+  const [castChannel, setCastChannel] = useState<Channel | null>(null);
+  const [isCastModalOpen, setIsCastModalOpen] = useState<boolean>(false);
+  const [castState, setCastState] = useState<CastConnectionState>(() => castService.getCastState());
+
+  useEffect(() => {
+    return castService.subscribe((state) => {
+      setCastState(state);
+    });
+  }, []);
+
+  const handleOpenCastForChannel = (channel: Channel) => {
+    setCastChannel(channel);
+    setIsCastModalOpen(true);
+  };
+
+  const handleTriggerNativeCast = async (): Promise<boolean> => {
+    if (!castChannel) return false;
+    const streamUrl = castChannel.sources?.[0]?.url || '';
+    try {
+      const ok = await castService.requestGoogleCastSession({
+        title: castChannel.name,
+        streamUrl: streamUrl,
+        mediaType: 'channel',
+        posterUrl: castChannel.logo
+      });
+      if (ok) {
+        setToastMessage({
+          id: `toast_${Date.now()}`,
+          text: `Transmitindo canal "${castChannel.name}" na TV via Google Cast!`,
+          type: 'success'
+        });
+        return true;
+      }
+    } catch (err) {
+      console.warn('Erro ao disparar Google Cast para canal:', err);
+    }
+    return false;
+  };
+
   // Carrega lembretes persistidos para o usuário atual
   useEffect(() => {
     setReminders(epgReminderService.getReminders(currentUser?.email));
@@ -124,36 +167,38 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Handler para agendar ou remover lembrete de programa futuro
+  // Handler para alternar notificações de programas futuros usando a Notification API do navegador
   const handleToggleReminder = async (program: EpgProgram, channel: Channel) => {
-    if (!currentUser) {
-      setToastMessage({
-        id: `toast_${Date.now()}`,
-        text: 'Faça login na sua conta para agendar lembretes no navegador.',
-        type: 'info',
-        actionLabel: 'Fazer Login',
-        action: () => onOpenAuth?.()
-      });
-      if (onOpenAuth) onOpenAuth();
-      return;
-    }
-
+    // Solicita permissão da Notification API nativa se ainda não concedida
     const permission = await epgReminderService.requestNotificationPermission();
-    const result = epgReminderService.toggleReminder(program, channel, currentUser.email);
-    setReminders(epgReminderService.getReminders(currentUser.email));
+    const effectiveEmail = currentUser?.email || 'local_user';
+    const result = epgReminderService.toggleReminder(program, channel, effectiveEmail);
+    setReminders(epgReminderService.getReminders(effectiveEmail));
 
     if (result.scheduled) {
-      setToastMessage({
-        id: `toast_${Date.now()}`,
-        text: permission === 'granted'
-          ? `Lembrete agendado para "${program.title}" às ${program.startFormatted}! Você será avisado no navegador.`
-          : `Lembrete salvo para "${program.title}" às ${program.startFormatted}. Habilite notificações no navegador para alertas sonoros.`,
-        type: 'success'
-      });
+      if (permission === 'granted') {
+        setToastMessage({
+          id: `toast_${Date.now()}`,
+          text: `Notificação ativada para "${program.title}" às ${program.startFormatted}! Você receberá um alerta no navegador quando começar.`,
+          type: 'success'
+        });
+      } else if (permission === 'denied') {
+        setToastMessage({
+          id: `toast_${Date.now()}`,
+          text: `Lembrete salvo para "${program.title}". Atenção: as notificações estão bloqueadas nas opções do seu navegador. Permita notificações para receber o alerta pop-up.`,
+          type: 'alert'
+        });
+      } else {
+        setToastMessage({
+          id: `toast_${Date.now()}`,
+          text: `Lembrete agendado para "${program.title}" às ${program.startFormatted}! Conceda permissão no navegador para alertas em tela.`,
+          type: 'info'
+        });
+      }
     } else {
       setToastMessage({
         id: `toast_${Date.now()}`,
-        text: `Lembrete de "${program.title}" cancelado.`,
+        text: `Notificação desativada para "${program.title}".`,
         type: 'info'
       });
     }
@@ -445,23 +490,17 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
               </button>
             </div>
 
-            {/* Botão de Lembretes Agendados */}
+            {/* Botão de Lembretes e Notificações no Navegador */}
             <button
               id="btn-epg-view-reminders"
               type="button"
-              onClick={() => {
-                if (!currentUser && onOpenAuth) {
-                  onOpenAuth();
-                } else {
-                  setShowRemindersModal(true);
-                }
-              }}
+              onClick={() => setShowRemindersModal(true)}
               className={`relative flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
                 reminders.length > 0
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
                   : 'bg-slate-900/80 text-slate-400 border-white/10 hover:text-white hover:bg-white/5'
               }`}
-              title="Ver lembretes de programas agendados"
+              title="Ver lembretes e notificações de programas no navegador"
             >
               {reminders.length > 0 ? (
                 <BellRing className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
@@ -472,6 +511,30 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
               {reminders.length > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
                   {reminders.length}
+                </span>
+              )}
+            </button>
+
+            {/* Botão Transmitir na TV (Google Cast) */}
+            <button
+              id="btn-epg-header-cast"
+              type="button"
+              onClick={() => {
+                const target = channels[0];
+                if (target) handleOpenCastForChannel(target);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
+                castState === 'connected'
+                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 border-white/10 hover:text-white hover:bg-white/5'
+              }`}
+              title="Transmitir transmissão para a TV (Chromecast)"
+            >
+              <Cast className={`w-3.5 h-3.5 ${castState === 'connected' ? 'text-emerald-400 animate-pulse' : 'text-indigo-400'}`} />
+              <span className="hidden sm:inline">Transmitir</span>
+              {castState === 'connected' && (
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px]">
+                  TV
                 </span>
               )}
             </button>
@@ -583,18 +646,33 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                           </div>
                         </div>
 
-                        {/* Botão Assistir Canal */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isLocked) onOpenCheckout();
-                            else onSelectChannel(item.channel);
-                          }}
-                          className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer shrink-0 ml-2"
-                          title={isLocked ? 'Canal VIP - Assine para liberar' : `Assistir ${item.channel.name}`}
-                        >
-                          {isLocked ? <Crown className="w-3.5 h-3.5 text-amber-400" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                        </button>
+                        {/* Ações do Canal: Transmitir na TV & Assistir */}
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <button
+                            id={`btn-epg-cast-row-${item.channel.id}`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenCastForChannel(item.channel);
+                            }}
+                            className="p-2 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-200 border border-white/10 hover:border-indigo-500/30 transition-all cursor-pointer"
+                            title={`Transmitir ${item.channel.name} na TV (Chromecast)`}
+                          >
+                            <Cast className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isLocked) onOpenCheckout();
+                              else onSelectChannel(item.channel);
+                            }}
+                            className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer"
+                            title={isLocked ? 'Canal VIP - Assine para liberar' : `Assistir ${item.channel.name}`}
+                          >
+                            {isLocked ? <Crown className="w-3.5 h-3.5 text-amber-400" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Faixa de Programas do Canal */}
@@ -743,17 +821,29 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isLocked) onOpenCheckout();
-                        else onSelectChannel(item.channel);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-950/40 cursor-pointer"
-                    >
-                      {isLocked ? <Crown className="w-3.5 h-3.5 text-amber-300" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                      <span>{isLocked ? 'VIP' : 'Assistir'}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        id={`btn-epg-cast-card-${item.channel.id}`}
+                        type="button"
+                        onClick={() => handleOpenCastForChannel(item.channel)}
+                        className="p-2 rounded-xl bg-slate-800/80 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-200 border border-white/10 hover:border-indigo-500/30 transition-all cursor-pointer"
+                        title={`Transmitir ${item.channel.name} na TV (Chromecast)`}
+                      >
+                        <Cast className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isLocked) onOpenCheckout();
+                          else onSelectChannel(item.channel);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-950/40 cursor-pointer"
+                      >
+                        {isLocked ? <Crown className="w-3.5 h-3.5 text-amber-300" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                        <span>{isLocked ? 'VIP' : 'Assistir'}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Bloco "No Ar Agora" */}
@@ -1026,7 +1116,22 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                 )}
               </button>
 
-              {/* Botão Agendar Lembrete no Navegador para programas futuros */}
+              {/* Botão Transmitir Canal na TV via Google Cast */}
+              <button
+                id="btn-epg-cast-program-channel"
+                type="button"
+                onClick={() => {
+                  const ch = selectedProgram.channel;
+                  handleOpenCastForChannel(ch);
+                }}
+                className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-indigo-950/70 hover:bg-indigo-900/90 text-indigo-300 hover:text-white border border-indigo-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+                title={`Transmitir canal ${selectedProgram.channel.name} ao vivo na TV via Google Cast`}
+              >
+                <Cast className="w-4 h-4 text-indigo-400" />
+                <span>Transmitir na TV</span>
+              </button>
+
+              {/* Botão Alternar Notificação no Navegador para programas futuros */}
               {!selectedProgram.program.isLiveNow && (
                 <button
                   id="btn-epg-schedule-reminder"
@@ -1034,20 +1139,20 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                   onClick={() => handleToggleReminder(selectedProgram.program, selectedProgram.channel)}
                   className={`w-full sm:w-auto py-3.5 px-5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
                     isProgramReminderScheduled(selectedProgram.program.id)
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 shadow-md'
-                      : 'bg-slate-800 hover:bg-slate-700 text-white border-white/10'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-rose-500/20 hover:text-rose-300 hover:border-rose-500/40 shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-700 text-white border-white/10 hover:border-indigo-500/40'
                   }`}
-                  title="Receber notificação nativa no navegador quando o programa iniciar"
+                  title="Receber notificação nativa no navegador (Notification API) quando o programa for começar"
                 >
                   {isProgramReminderScheduled(selectedProgram.program.id) ? (
                     <>
-                      <BellRing className="w-4 h-4 text-amber-400" />
-                      <span>Lembrete Agendado (Cancelar)</span>
+                      <BellRing className="w-4 h-4 text-amber-400 animate-pulse" />
+                      <span>Notificação Ativada (Desativar)</span>
                     </>
                   ) : (
                     <>
                       <Bell className="w-4 h-4 text-indigo-400" />
-                      <span>Agendar Lembrete no Navegador</span>
+                      <span>Notificar no Navegador</span>
                     </>
                   )}
                 </button>
@@ -1082,8 +1187,8 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
                   <BellRing className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Meus Lembretes no Navegador</h3>
-                  <p className="text-xs text-slate-400">Você será notificado assim que cada programa entrar no ar</p>
+                  <h3 className="text-base font-bold text-white">Notificações no Navegador & Lembretes</h3>
+                  <p className="text-xs text-slate-400">Você receberá alertas nativos na tela quando os programas forem começar</p>
                 </div>
               </div>
               <button
@@ -1095,12 +1200,79 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
               </button>
             </div>
 
+            {/* Barra de Status e Controles da Notification API */}
+            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium">Permissão no Navegador:</span>
+                {epgReminderService.getPermissionStatus() === 'granted' ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold inline-flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Ativa / Permitida
+                  </span>
+                ) : epgReminderService.getPermissionStatus() === 'denied' ? (
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[11px] font-bold inline-flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Bloqueada pelo Navegador
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[11px] font-bold inline-flex items-center gap-1">
+                    Pendente
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  id="btn-epg-test-notification"
+                  type="button"
+                  onClick={async () => {
+                    const success = await epgReminderService.testNotification();
+                    if (success) {
+                      setToastMessage({
+                        id: `toast_${Date.now()}`,
+                        text: 'Notificação de teste disparada no navegador!',
+                        type: 'success'
+                      });
+                    } else {
+                      setToastMessage({
+                        id: `toast_${Date.now()}`,
+                        text: 'Não foi possível disparar. Verifique se as notificações do navegador estão habilitadas para esta página.',
+                        type: 'alert'
+                      });
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                >
+                  Testar Alerta
+                </button>
+
+                {reminders.length > 0 && (
+                  <button
+                    id="btn-epg-clear-reminders"
+                    type="button"
+                    onClick={() => {
+                      epgReminderService.clearAllReminders(currentUser?.email);
+                      setReminders([]);
+                      setToastMessage({
+                        id: `toast_${Date.now()}`,
+                        text: 'Todos os lembretes foram removidos.',
+                        type: 'info'
+                      });
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-xs font-semibold border border-rose-500/30 transition-colors cursor-pointer"
+                  >
+                    Limpar Todos
+                  </button>
+                )}
+              </div>
+            </div>
+
             {reminders.length === 0 ? (
               <div className="text-center py-10 bg-slate-950/40 rounded-2xl border border-white/5 p-6">
                 <Bell className="w-10 h-10 text-slate-600 mx-auto mb-2" />
                 <h4 className="text-sm font-bold text-white mb-1">Nenhum lembrete agendado</h4>
                 <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                  Navegue pela grade de horários e clique no sino de qualquer programa futuro para ser avisado no navegador!
+                  Navegue pela grade de horários e clique no sino de qualquer programa futuro para ativar notificações no navegador!
                 </p>
               </div>
             ) : (
@@ -1140,17 +1312,30 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
 
                       <div className="flex items-center gap-2 shrink-0">
                         {targetChannel && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowRemindersModal(false);
-                              onSelectChannel(targetChannel);
-                            }}
-                            className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer"
-                            title={`Assistir canal ${rem.channelName}`}
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleOpenCastForChannel(targetChannel);
+                              }}
+                              className="p-2 rounded-xl bg-slate-800 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-300 border border-white/10 transition-all cursor-pointer"
+                              title={`Transmitir canal ${rem.channelName} na TV`}
+                            >
+                              <Cast className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowRemindersModal(false);
+                                onSelectChannel(targetChannel);
+                              }}
+                              className="p-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all cursor-pointer"
+                              title={`Assistir canal ${rem.channelName}`}
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                            </button>
+                          </>
                         )}
                         <button
                           type="button"
@@ -1214,6 +1399,23 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+      )}
+
+      {/* Modal de Transmissão para Smart TV e Chromecast */}
+      {castChannel && (
+        <CastModal
+          isOpen={isCastModalOpen}
+          onClose={() => setIsCastModalOpen(false)}
+          mediaTitle={castChannel.name}
+          mediaType="channel"
+          mediaLogo={castChannel.logo}
+          streamUrl={castChannel.sources?.[0]?.url || ''}
+          webPlayerUrl={typeof window !== 'undefined' ? `${window.location.origin}?channel=${castChannel.id}` : ''}
+          castState={castState}
+          isCastSupported={true}
+          onTriggerNativeCast={handleTriggerNativeCast}
+          onDisconnectCast={() => castService.disconnect()}
+        />
       )}
     </div>
   );

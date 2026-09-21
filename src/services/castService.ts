@@ -43,23 +43,50 @@ class CastService {
   }
 
   /**
-   * Sets up Google Cast SDK initialization hook window.__onGCastApiAvailable
+   * Sets up Google Cast SDK initialization hook window.__onGCastApiAvailable and event listeners
    */
   private setupCastSdkInitHook() {
     if (typeof window === 'undefined') return;
 
-    // Check if already available
     const win = window as any;
-    if (win.cast && win.cast.framework) {
+
+    // 1. Check if already marked as available by index.html early script
+    if (win.__googleCastAvailable || (win.cast && win.cast.framework)) {
+      this.isCastSdkAvailable = true;
       this.initCastFramework();
-    } else {
-      win.__onGCastApiAvailable = (isAvailable: boolean) => {
-        if (isAvailable) {
-          this.isCastSdkAvailable = true;
-          this.initCastFramework();
-        }
-      };
+      return;
     }
+
+    // 2. Listen to custom ready event from index.html
+    window.addEventListener('google_cast_ready', () => {
+      this.isCastSdkAvailable = true;
+      this.initCastFramework();
+    });
+
+    // 3. Fallback to standard window.__onGCastApiAvailable callback
+    const prevHook = win.__onGCastApiAvailable;
+    win.__onGCastApiAvailable = (isAvailable: boolean) => {
+      if (typeof prevHook === 'function') {
+        try { prevHook(isAvailable); } catch {}
+      }
+      if (isAvailable) {
+        this.isCastSdkAvailable = true;
+        this.initCastFramework();
+      }
+    };
+
+    // 4. Polling safeguard in case script finished loading asynchronously
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (win.cast?.framework?.CastContext) {
+        this.isCastSdkAvailable = true;
+        this.initCastFramework();
+        clearInterval(interval);
+      } else if (attempts >= 15) {
+        clearInterval(interval);
+      }
+    }, 400);
   }
 
   /**
@@ -370,14 +397,66 @@ class CastService {
   }
 
   /**
+   * Prompts user directly with Google Cast picker and streams media to Chromecast
+   */
+  public async requestGoogleCastSession(
+    media: CastMediaPayload,
+    videoElement?: HTMLVideoElement | null
+  ): Promise<boolean> {
+    this.currentMediaPayload = media;
+    const win = window as any;
+
+    if (win.cast?.framework) {
+      try {
+        const castContext = win.cast.framework.CastContext.getInstance();
+        this.setCastState('connecting');
+        await castContext.requestSession();
+        const session = castContext.getCurrentSession();
+        if (session) {
+          await this.loadMediaToCastSession(session, media);
+          const friendlyName = session.getCastDevice()?.friendlyName || 'Google Chromecast';
+          this.activeDevice = {
+            id: `chromecast-${Date.now()}`,
+            name: friendlyName,
+            type: 'chromecast',
+            model: 'Chromecast / Google TV',
+            protocol: 'Google Cast',
+            status: 'connected',
+            location: 'Rede Local Wi-Fi',
+            signalStrength: 'excellent',
+            isNativeCast: true,
+          };
+          this.setCastState('connected');
+          if (videoElement) {
+            videoElement.pause();
+          }
+          return true;
+        }
+      } catch (err: any) {
+        if (err?.name !== 'AbortError' && err?.name !== 'NotFoundError' && err?.errorCode !== 'cancel') {
+          console.warn('[CastService] Erro ao iniciar sessão Google Cast:', err);
+        }
+        this.setCastState('disconnected');
+      }
+    }
+    return false;
+  }
+
+  /**
    * Pushes media stream into active Google Cast Session
    */
   private async loadMediaToCastSession(session: any, media: CastMediaPayload): Promise<void> {
     const win = window as any;
     if (!win.chrome?.cast?.media) return;
 
-    const contentType = media.contentType || (media.streamUrl.includes('.m3u8') ? 'application/x-mpegurl' : 'video/mp4');
-    const mediaInfo = new win.chrome.cast.media.MediaInfo(media.streamUrl, contentType);
+    // Ensure absolute stream URL for external Chromecast hardware
+    let targetStreamUrl = media.streamUrl;
+    if (targetStreamUrl.startsWith('/') && typeof window !== 'undefined') {
+      targetStreamUrl = `${window.location.origin}${targetStreamUrl}`;
+    }
+
+    const contentType = media.contentType || (targetStreamUrl.includes('.m3u8') ? 'application/x-mpegurl' : (targetStreamUrl.includes('.mpd') ? 'application/dash+xml' : 'video/mp4'));
+    const mediaInfo = new win.chrome.cast.media.MediaInfo(targetStreamUrl, contentType);
 
     mediaInfo.streamType = media.mediaType === 'channel'
       ? win.chrome.cast.media.StreamType.LIVE
@@ -388,14 +467,18 @@ class CastService {
     metadata.subtitle = media.mediaType === 'channel' ? 'Transmissão Ao Vivo • MAXTV' : 'Catálogo VOD HD • MAXTV';
 
     if (media.posterUrl) {
-      metadata.images = [{ url: media.posterUrl }];
+      let poster = media.posterUrl;
+      if (poster.startsWith('/') && typeof window !== 'undefined') {
+        poster = `${window.location.origin}${poster}`;
+      }
+      metadata.images = [{ url: poster }];
     }
 
     mediaInfo.metadata = metadata;
 
     const request = new win.chrome.cast.media.LoadRequest(mediaInfo);
     request.autoplay = true;
-    if (media.currentTime && media.currentTime > 0) {
+    if (media.currentTime && media.currentTime > 0 && media.mediaType !== 'channel') {
       request.currentTime = media.currentTime;
     }
 
