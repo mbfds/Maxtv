@@ -12,7 +12,9 @@ import {
   Volume2, 
   ChevronRight,
   ArrowRight,
-  Monitor
+  Monitor,
+  Zap,
+  Shield
 } from 'lucide-react';
 
 export type TvFontScale = 'normal' | 'large' | 'xlarge';
@@ -56,6 +58,37 @@ export const TvBoxDetector: React.FC<TvBoxDetectorProps> = ({
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [connectedGamepadName, setConnectedGamepadName] = useState<string | null>(null);
   const [lastDpadKeyDetected, setLastDpadKeyDetected] = useState<string | null>(null);
+
+  // Transmissão e Buffer Globais para TV Box
+  const [globalTransmissionMode, setGlobalTransmissionMode] = useState<'direct' | 'auto' | 'proxy'>(() => {
+    try {
+      return (localStorage.getItem('satelite_transmission_mode') as any) || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+
+  const [globalBufferPref, setGlobalBufferPref] = useState<string>(() => {
+    try {
+      return localStorage.getItem('satelite_buffer_preference') || 'ultra_direct_lightweight';
+    } catch {
+      return 'ultra_direct_lightweight';
+    }
+  });
+
+  const updateTransmissionMode = (mode: 'direct' | 'auto' | 'proxy') => {
+    setGlobalTransmissionMode(mode);
+    try {
+      localStorage.setItem('satelite_transmission_mode', mode);
+    } catch {}
+  };
+
+  const updateBufferPref = (pref: string) => {
+    setGlobalBufferPref(pref);
+    try {
+      localStorage.setItem('satelite_buffer_preference', pref);
+    } catch {}
+  };
 
   const autoSwitchToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const gamepadPollAnimRef = useRef<number | null>(null);
@@ -511,6 +544,100 @@ export const TvBoxDetector: React.FC<TvBoxDetectorProps> = ({
                   }`}
                 />
               </button>
+            </div>
+
+            {/* Modo de Transmissão & Buffer Ultra-Leve para TV Box */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    Transmissão & Buffer Ultra-Rápido
+                  </span>
+                  <p className="text-xs text-slate-400">
+                    Prioriza conexões diretas na CDN e reduz o consumo de RAM em até 80%
+                  </p>
+                </div>
+              </div>
+
+              {/* Seletor de Transmissão */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateTransmissionMode('direct')}
+                  className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
+                    globalTransmissionMode === 'direct'
+                      ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                      : 'bg-slate-950/60 text-slate-400 border-white/10 hover:text-white'
+                  }`}
+                >
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  <span>⚡ Direto</span>
+                  <span className="text-[9px] opacity-75 font-normal">Zero Hop CDN</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateTransmissionMode('auto')}
+                  className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
+                    globalTransmissionMode === 'auto'
+                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                      : 'bg-slate-950/60 text-slate-400 border-white/10 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-300" />
+                  <span>✨ Auto</span>
+                  <span className="text-[9px] opacity-75 font-normal">Inteligente</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updateTransmissionMode('proxy')}
+                  className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center flex flex-col items-center gap-1 ${
+                    globalTransmissionMode === 'proxy'
+                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                      : 'bg-slate-950/60 text-slate-400 border-white/10 hover:text-white'
+                  }`}
+                >
+                  <Shield className="w-4 h-4 text-blue-300" />
+                  <span>🛡️ Proxy</span>
+                  <span className="text-[9px] opacity-75 font-normal">Anti-CORS</span>
+                </button>
+              </div>
+
+              {/* Seletor de Buffer */}
+              <div className="pt-2 border-t border-white/5">
+                <span className="text-[11px] font-bold text-slate-400 block mb-1.5">
+                  Consumo de Memória RAM & Cache:
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateBufferPref('ultra_direct_lightweight')}
+                    className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
+                      globalBufferPref === 'ultra_direct_lightweight'
+                        ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-300'
+                        : 'bg-slate-950/60 border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-xs font-black block text-white">⚡ Ultra-Leve</span>
+                    <span className="text-[9px] opacity-75">8s buffer · 16MB RAM</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => updateBufferPref('high_speed')}
+                    className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
+                      globalBufferPref === 'high_speed'
+                        ? 'bg-indigo-950/80 border-indigo-500/60 text-indigo-300'
+                        : 'bg-slate-950/60 border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-xs font-black block text-white">🚀 Fibra Óptica</span>
+                    <span className="text-[9px] opacity-75">30s buffer · 40MB</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Informações de Conexão de Controle */}

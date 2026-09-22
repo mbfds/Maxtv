@@ -13,7 +13,7 @@ export interface NetworkSpeedMetrics {
   recentStallsCount: number;
 }
 
-export type BufferTrafficProfile = 'intense_traffic' | 'moderate' | 'high_speed';
+export type BufferTrafficProfile = 'ultra_direct_lightweight' | 'high_speed' | 'moderate' | 'intense_traffic';
 
 export interface DynamicBufferConfig {
   profile: BufferTrafficProfile;
@@ -30,47 +30,61 @@ export interface DynamicBufferConfig {
 
 /**
  * Perfis otimizados para provedores brasileiros (Claro, Vivo, TIM, Oi, Provedores Regionais)
- * especialmente dimensionados para absorver picos de tráfego (futebol, novelas, noites).
+ * especialmente dimensionados para absorver picos de tráfego ou operar no modo mais direto e leve possível.
  */
 export const BUFFER_PROFILES: Record<BufferTrafficProfile, DynamicBufferConfig> = {
-  // Tráfego Intenso / Conexão Instável: Buffer estendido para colchão de absorção contra quedas
-  intense_traffic: {
-    profile: 'intense_traffic',
-    profileLabel: 'Buffer Reforçado (Tráfego Intenso BR)',
-    maxBufferLength: 100, // ~100 segundos
-    maxMaxBufferLength: 200,
-    maxBufferSize: 160 * 1024 * 1024, // 160 MB
-    liveSyncDurationCount: 8, // 8 fragmentos de margem segura
-    liveMaxLatencyDurationCount: 26,
-    backBufferLength: 90,
-    fragLoadingMaxRetry: 8,
-    fragLoadingTimeOutMs: 35000,
-  },
-  // Conexão Moderada: Equilíbrio padrão de latência e consumo de memória
-  moderate: {
-    profile: 'moderate',
-    profileLabel: 'Buffer Equilibrado',
-    maxBufferLength: 60,
-    maxMaxBufferLength: 120,
-    maxBufferSize: 100 * 1024 * 1024, // 100 MB
-    liveSyncDurationCount: 6,
-    liveMaxLatencyDurationCount: 18,
-    backBufferLength: 60,
-    fragLoadingMaxRetry: 6,
-    fragLoadingTimeOutMs: 25000,
+  // Ultra-Leve & Direto: Baixíssima latência (<2s), buffer compacto (8s) e consumo mínimo de RAM (16MB).
+  // Ideal para TV Box, dispositivos mais modestos e início de reprodução ultra-rápido.
+  ultra_direct_lightweight: {
+    profile: 'ultra_direct_lightweight',
+    profileLabel: '⚡ Direto & Ultra-Leve (Baixo Delay & Pouca RAM)',
+    maxBufferLength: 8, // ~8 segundos à frente
+    maxMaxBufferLength: 15,
+    maxBufferSize: 16 * 1024 * 1024, // 16 MB
+    liveSyncDurationCount: 2, // Início imediato (2 fragmentos)
+    liveMaxLatencyDurationCount: 4,
+    backBufferLength: 0, // Descarte imediato do passado para economia máxima de RAM
+    fragLoadingMaxRetry: 4,
+    fragLoadingTimeOutMs: 12000,
   },
   // Fibra / Alta Velocidade: Baixa latência com rápida inicialização
   high_speed: {
     profile: 'high_speed',
     profileLabel: 'Ultra Rápido (Fibra Óptica)',
+    maxBufferLength: 30,
+    maxMaxBufferLength: 60,
+    maxBufferSize: 40 * 1024 * 1024, // 40 MB
+    liveSyncDurationCount: 3,
+    liveMaxLatencyDurationCount: 8,
+    backBufferLength: 15,
+    fragLoadingMaxRetry: 5,
+    fragLoadingTimeOutMs: 15000,
+  },
+  // Conexão Moderada: Equilíbrio padrão de latência e consumo de memória
+  moderate: {
+    profile: 'moderate',
+    profileLabel: 'Buffer Equilibrado',
     maxBufferLength: 45,
     maxMaxBufferLength: 90,
-    maxBufferSize: 80 * 1024 * 1024, // 80 MB
+    maxBufferSize: 60 * 1024 * 1024, // 60 MB
     liveSyncDurationCount: 4,
-    liveMaxLatencyDurationCount: 14,
-    backBufferLength: 45,
-    fragLoadingMaxRetry: 5,
+    liveMaxLatencyDurationCount: 12,
+    backBufferLength: 30,
+    fragLoadingMaxRetry: 6,
     fragLoadingTimeOutMs: 20000,
+  },
+  // Tráfego Intenso / Conexão Instável: Buffer estendido para colchão de absorção contra quedas
+  intense_traffic: {
+    profile: 'intense_traffic',
+    profileLabel: 'Buffer Reforçado (Anti-Travamento)',
+    maxBufferLength: 70, // ~70 segundos
+    maxMaxBufferLength: 140,
+    maxBufferSize: 90 * 1024 * 1024, // 90 MB
+    liveSyncDurationCount: 6,
+    liveMaxLatencyDurationCount: 18,
+    backBufferLength: 45,
+    fragLoadingMaxRetry: 8,
+    fragLoadingTimeOutMs: 30000,
   },
 };
 
@@ -151,6 +165,9 @@ export function applyDynamicBufferToHls(
     hls.config.backBufferLength = config.backBufferLength;
     hls.config.fragLoadingTimeOut = config.fragLoadingTimeOutMs;
     hls.config.fragLoadingMaxRetry = config.fragLoadingMaxRetry;
+    if (config.profile === 'ultra_direct_lightweight') {
+      hls.config.lowLatencyMode = true;
+    }
   } catch {
     // Ignora silenciosamente caso algum parâmetro seja somente-leitura em versões antigas
   }

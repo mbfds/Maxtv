@@ -1704,7 +1704,8 @@ async function loadSaimoCatalog() {
 }
 
 // Helper function to rewrite HLS M3U8 playlists so child manifests and segments route through proxy
-function rewriteM3u8(content: string, baseUrl: string, referer: string): string {
+// Supports directSegments mode (hybrid streaming: manifest via proxy, video chunks direct from source CDN)
+function rewriteM3u8(content: string, baseUrl: string, referer: string, directSegments: boolean = false): string {
   const lines = content.split(/\r?\n/);
   const rewritten = lines.map(line => {
     const trimmed = line.trim();
@@ -1723,7 +1724,11 @@ function rewriteM3u8(content: string, baseUrl: string, referer: string): string 
     // Normal URI line (playlist or TS segment)
     try {
       const absolute = new URL(trimmed, baseUrl).toString();
-      return `/api/proxy?url=${encodeURIComponent(absolute)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}`;
+      const isSegmentUri = absolute.includes('.ts') || absolute.includes('.m4s') || absolute.includes('.aac') || absolute.includes('.mp4');
+      if (directSegments && isSegmentUri) {
+        return absolute; // Segmento baixado direto da CDN sem passar pelo servidor
+      }
+      return `/api/proxy?url=${encodeURIComponent(absolute)}${referer ? `&referer=${encodeURIComponent(referer)}` : ''}${directSegments ? '&direct_segments=1' : ''}`;
     } catch (e) {
       return line;
     }
@@ -1835,6 +1840,7 @@ app.all('/api/proxy', async (req, res) => {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       'Accept': '*/*',
       'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Connection': 'keep-alive',
       'X-Forwarded-For': '177.18.24.1', // Embratel/Claro ISP Brasil para direcionamento de borda
       'X-Real-IP': '177.18.24.1'
     };
@@ -1911,7 +1917,8 @@ app.all('/api/proxy', async (req, res) => {
         });
       }
 
-      const rewritten = rewriteM3u8(text, decodedUrl, referer || '');
+      const directSegments = req.query.direct_segments === '1' || req.query.mode === 'direct_chunks';
+      const rewritten = rewriteM3u8(text, decodedUrl, referer || '', directSegments);
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.status(200).send(rewritten);

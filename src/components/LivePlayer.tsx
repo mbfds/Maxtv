@@ -7,7 +7,7 @@ import {
   RotateCcw, X, ShieldAlert, Sparkles, Crown, Radio, 
   Tv, AlertTriangle, ExternalLink, FastForward, Rewind,
   Server, RefreshCw, Film, PictureInPicture, Camera, 
-  Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff,
+  Settings, SlidersHorizontal, Check, Info, WifiOff, Wifi, ShieldOff, Shield,
   HelpCircle, Activity, Heart, Zap, Wrench, Clock, PauseCircle, PlayCircle,
   Shuffle, Layers, Cpu, Subtitles, Upload, Link, Trash2, FileText, SkipForward, ListOrdered,
   ChevronDown, ArrowLeft, Cast, Airplay
@@ -15,7 +15,7 @@ import {
 import { Channel, VodItem, User, SubtitleTrack } from '../types';
 import { api } from '../services/api';
 import { checkStreamAvailability, reportChannelProblem } from '../utils/streamChecker';
-import { calculateDynamicBufferProfile, applyDynamicBufferToHls, getBrowserNetworkMetrics, getBufferedAheadSeconds, DynamicBufferConfig } from '../utils/smartBufferManager';
+import { calculateDynamicBufferProfile, applyDynamicBufferToHls, getBrowserNetworkMetrics, getBufferedAheadSeconds, DynamicBufferConfig, BUFFER_PROFILES, BufferTrafficProfile } from '../utils/smartBufferManager';
 import { isBrazilHostedUrl } from '../utils/sourcePrioritizer';
 import { favoritesStorage, FAVORITES_UPDATED_EVENT } from '../services/favoritesStorage';
 import { watchProgressStorage } from '../services/watchProgressStorage';
@@ -431,20 +431,87 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
   }, [currentSource, compatibilityProtocol, type]);
 
-  // By default, IPTV channels, HTTP streams, and M3U8/MPD route through /api/proxy
-  // to avoid CORS, Mixed Content (HTTP on HTTPS), and Referer blocks.
-  const needsProxy = React.useMemo(() => {
-    if (!rawUrl) return false;
-    // Already routed through /api/proxy: do not double-wrap
-    if (rawUrl.startsWith('/api/proxy')) return false;
-    // Local / relative assets (e.g. /public/demo.mp4) do not need proxy
-    if (rawUrl.startsWith('/') && !rawUrl.startsWith('//')) return false;
-    // External streams (http:// or https://) must route through /api/proxy
-    return true;
+  // Modo de transmissão configurável: 'direct' (sem proxy), 'proxy' (via proxy) ou 'auto' (inteligente)
+  const [transmissionMode, setTransmissionMode] = useState<'direct' | 'proxy' | 'auto'>(() => {
+    try {
+      return (localStorage.getItem('satelite_transmission_mode') as any) || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+
+  const [userBufferPreference, setUserBufferPreference] = useState<BufferTrafficProfile | 'auto'>(() => {
+    try {
+      return (localStorage.getItem('satelite_buffer_preference') as any) || 'ultra_direct_lightweight';
+    } catch {
+      return 'ultra_direct_lightweight';
+    }
+  });
+
+  const [isDirectFailed, setIsDirectFailed] = useState<boolean>(false);
+
+  // Ao trocar de canal/fonte, reseta a flag de falha direta para tentar conexão direta na nova URL
+  useEffect(() => {
+    setIsDirectFailed(false);
   }, [rawUrl]);
 
-  const [forceProxy, setForceProxy] = useState<boolean | null>(null);
-  const usingProxy = forceProxy !== null ? forceProxy : needsProxy;
+  const handleSetTransmissionMode = useCallback((mode: 'direct' | 'proxy' | 'auto') => {
+    setTransmissionMode(mode);
+    setIsDirectFailed(false);
+    try {
+      localStorage.setItem('satelite_transmission_mode', mode);
+    } catch {}
+    setReloadCounter(c => c + 1);
+    setToastMessage(
+      mode === 'direct' 
+        ? '⚡ Transmissão Direta: conexão direta na CDN com zero hop e menor latência.' 
+        : mode === 'proxy' 
+          ? '🛡️ Proxy Anti-Bloqueio: bypass de restrições CORS.' 
+          : '✨ Modo Auto Inteligente: direto com fallback de segurança.'
+    );
+  }, []);
+
+  const handleSetBufferPreference = useCallback((pref: BufferTrafficProfile | 'auto') => {
+    setUserBufferPreference(pref);
+    try {
+      localStorage.setItem('satelite_buffer_preference', pref);
+    } catch {}
+    if (pref !== 'auto') {
+      const cfg = BUFFER_PROFILES[pref];
+      setActiveBufferProfileLabel(cfg.profileLabel);
+      if (hlsRef.current) {
+        applyDynamicBufferToHls(hlsRef.current, cfg);
+      }
+    }
+    setToastMessage(`Buffer: ${pref === 'auto' ? 'Automático Adaptativo' : BUFFER_PROFILES[pref].profileLabel}`);
+  }, []);
+
+  const isPageHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const isStreamHttp = rawUrl.startsWith('http://');
+
+  // Determina se a transmissão utilizará o proxy intermediário ou irá direto na CDN da fonte
+  const usingProxy = React.useMemo(() => {
+    if (!rawUrl) return false;
+    // Já encapsulado no proxy ou arquivo local/relativo: não encapsula novamente
+    if (rawUrl.startsWith('/api/proxy')) return false;
+    if (rawUrl.startsWith('/') && !rawUrl.startsWith('//')) return false;
+
+    // Se a tentativa direta falhou por CORS para esse canal, cai no proxy acelerado
+    if (isDirectFailed) return true;
+
+    // Se o usuário selecionou manualmente
+    if (transmissionMode === 'proxy') return true;
+    if (transmissionMode === 'direct') return false;
+
+    // Modo 'auto' inteligente:
+    // Se a página for HTTPS e o stream for HTTP puro, navegadores bloqueiam Mixed Content no fetch do JS
+    if (isPageHttps && isStreamHttp) return true;
+    // Se a fonte exigir referer específico obrigatório
+    if (currentSource?.referer) return true;
+
+    // Streams HTTPS (ou se página em HTTP) rodam direto na CDN com máxima velocidade e menor delay!
+    return false;
+  }, [rawUrl, isDirectFailed, transmissionMode, isPageHttps, isStreamHttp, currentSource]);
 
   const streamUrl = React.useMemo(() => {
     if (!rawUrl) return '';
@@ -523,7 +590,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
     // Se todas as fontes falharam, mas ainda não testou o Proxy Acelerado Brasil
     if (!usingProxy) {
-      setForceProxy(true);
+      handleSetTransmissionMode('proxy');
       failedSourcesSetRef.current.clear();
       streamLoadStartTimeRef.current = Date.now();
       setCurrentSourceIndex(0);
@@ -538,8 +605,8 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
 
     // Se todas as fontes falharam via Proxy, tenta conexão direta como último recurso
-    if (usingProxy && forceProxy !== false) {
-      setForceProxy(false);
+    if (usingProxy && transmissionMode !== 'direct') {
+      handleSetTransmissionMode('direct');
       failedSourcesSetRef.current.clear();
       streamLoadStartTimeRef.current = Date.now();
       setCurrentSourceIndex(0);
@@ -554,7 +621,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     }
 
     return false;
-  }, [sources, currentSourceIndex, usingProxy, forceProxy, item]);
+  }, [sources, currentSourceIndex, usingProxy, transmissionMode, handleSetTransmissionMode, item]);
 
   // Lógica de Reconexão Silenciosa no Background (Overlay-Free e sem feedbacks visuais intrusivos)
   const silentReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1164,6 +1231,23 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           dashPlayerRef.current = dashPlayer;
           dashPlayer.initialize(video, streamUrl, true);
 
+          const isUltraLight = userBufferPreference === 'ultra_direct_lightweight' || userBufferPreference === 'auto';
+          try {
+            dashPlayer.updateSettings({
+              streaming: {
+                buffer: {
+                  fastSwitchEnabled: true,
+                  bufferTimeAtTopQuality: isUltraLight ? 8 : 20,
+                  bufferToKeep: isUltraLight ? 2 : 10,
+                },
+                abr: {
+                  autoSwitchBitrate: { video: true, audio: true },
+                  limitBitrateByPortal: true
+                }
+              }
+            });
+          } catch {}
+
           dashPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
             setIsLoading(false);
             setHasError(false);
@@ -1213,19 +1297,25 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       } else if (isHls && Hls.isSupported()) {
         // Gerenciador de buffer dinâmico anti-travamento adaptado para redes do Brasil
         const netMetrics = getBrowserNetworkMetrics();
-        const initialBufferConfig = calculateDynamicBufferProfile({
-          downlinkMbps: netMetrics.downlinkMbps,
-          rttMs: netMetrics.rttMs,
-          effectiveType: netMetrics.effectiveType,
-          measuredThroughputMbps: lastFragSpeedMbpsRef.current,
-          lastMeasuredLatencyMs: connectionLatency,
-          recentStallsCount: recentStallsRef.current,
-        });
+        const initialBufferConfig = userBufferPreference !== 'auto'
+          ? BUFFER_PROFILES[userBufferPreference]
+          : calculateDynamicBufferProfile({
+              downlinkMbps: netMetrics.downlinkMbps,
+              rttMs: netMetrics.rttMs,
+              effectiveType: netMetrics.effectiveType,
+              measuredThroughputMbps: lastFragSpeedMbpsRef.current,
+              lastMeasuredLatencyMs: connectionLatency,
+              recentStallsCount: recentStallsRef.current,
+            });
         setActiveBufferProfileLabel(initialBufferConfig.profileLabel);
+
+        const isUltraLight = initialBufferConfig.profile === 'ultra_direct_lightweight';
 
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: false,
+          lowLatencyMode: isUltraLight || !usingProxy,
+          capLevelToPlayerSize: true, // Limita renderização à resolução real da tela (economiza CPU/RAM em TV Box)
+          fpsDroppedMonitoringPeriod: 5000,
           backBufferLength: initialBufferConfig.backBufferLength,
           maxBufferLength: initialBufferConfig.maxBufferLength,
           maxMaxBufferLength: initialBufferConfig.maxMaxBufferLength,
@@ -1234,14 +1324,14 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           liveMaxLatencyDurationCount: initialBufferConfig.liveMaxLatencyDurationCount,
           startFragPrefetch: true,
           progressive: true,
-          highBufferWatchdogPeriod: 2,
+          highBufferWatchdogPeriod: isUltraLight ? 1 : 2,
           nudgeOffset: 0.2,
           nudgeMaxRetry: 10,
-          manifestLoadingTimeOut: 15000,
+          manifestLoadingTimeOut: 12000,
           manifestLoadingMaxRetry: 4,
           fragLoadingTimeOut: initialBufferConfig.fragLoadingTimeOutMs,
           fragLoadingMaxRetry: initialBufferConfig.fragLoadingMaxRetry,
-          levelLoadingTimeOut: 15000,
+          levelLoadingTimeOut: 12000,
         });
 
         hlsRef.current = hls;
@@ -1338,13 +1428,22 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           if (!data.fatal && (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || data.details === Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE || data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL)) {
             recentStallsRef.current += 1;
             if (hls.config) {
-              hls.config.maxBufferLength = Math.min(130, (hls.config.maxBufferLength || 60) + 20);
-              hls.config.liveSyncDurationCount = Math.min(10, (hls.config.liveSyncDurationCount || 5) + 1);
+              hls.config.maxBufferLength = Math.min(70, (hls.config.maxBufferLength || 8) + 10);
+              hls.config.liveSyncDurationCount = Math.min(5, (hls.config.liveSyncDurationCount || 2) + 1);
             }
             return;
           }
 
           if (data.fatal) {
+            // Se falhar em conexão direta (geralmente CORS / bloqueio da CDN remota)
+            if (!usingProxy && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              console.warn('[STREAM] Conexão direta com restrição CORS da fonte. Alternando para Proxy Acelerado...');
+              setIsDirectFailed(true);
+              setToastMessage('⚡ Alternando para Proxy Acelerado devido a restrição CORS da fonte...');
+              setReloadCounter(c => c + 1);
+              return;
+            }
+
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 if (autoRetryCountRef.current < 2) {
@@ -1423,6 +1522,12 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           setIsPlaying(true);
           setIsLoading(false);
         }).catch(() => {
+          if (!usingProxy) {
+            setIsDirectFailed(true);
+            setToastMessage('⚡ Alternando para Proxy Acelerado...');
+            setReloadCounter(c => c + 1);
+            return;
+          }
           triggerSilentReconnectRef.current('Erro reprodução direta');
         });
       }
@@ -1454,6 +1559,13 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           dashPlayerRef.current.destroy();
         } catch (e) {}
         dashPlayerRef.current = null;
+      }
+      if (video) {
+        try {
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+        } catch (e) {}
       }
     };
   }, [streamUrl, rawUrl, isLocked, usingProxy, currentSourceIndex, type, sources.length, reloadCounter, checkChannelHealth, startExponentialBackoff, compatibilityProtocol]);
@@ -2030,7 +2142,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       setCurrentSourceIndex(prev => prev + 1);
     } else {
       setCurrentSourceIndex(0);
-      setForceProxy(prev => !prev);
+      handleSetTransmissionMode(usingProxy ? 'direct' : 'proxy');
     }
     setHasError(false);
     setIsLoading(true);
@@ -2922,9 +3034,42 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                            <span className="flex items-center gap-1 text-[9px] font-bold text-red-400 uppercase tracking-tighter shrink-0">
                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> AO VIVO
                            </span>
+
+                           {/* Badge de Transmissão Direta / Proxy com Buffer em tempo real */}
+                           <button
+                             type="button"
+                             onClick={() => setActiveMenu(activeMenu === 'controls' ? null : 'controls')}
+                             className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-tight transition-all cursor-pointer border backdrop-blur-md hover:scale-105 active:scale-95"
+                             style={{
+                               backgroundColor: usingProxy ? 'rgba(99, 102, 241, 0.18)' : 'rgba(16, 185, 129, 0.22)',
+                               borderColor: usingProxy ? 'rgba(99, 102, 241, 0.45)' : 'rgba(16, 185, 129, 0.55)',
+                               color: usingProxy ? '#c7d2fe' : '#6ee7b7',
+                             }}
+                             title="Configurar Modo de Transmissão (Direto / Proxy) e Perfil de Buffer"
+                           >
+                             {usingProxy ? (
+                               <>
+                                 <Shield className="w-2.5 h-2.5 text-indigo-300" />
+                                 <span>Proxy BR</span>
+                               </>
+                             ) : (
+                               <>
+                                 <Zap className="w-2.5 h-2.5 text-amber-300" />
+                                 <span>Direto CDN</span>
+                               </>
+                             )}
+                             {bufferedEnd > 0 && (
+                               <span className="opacity-90 ml-0.5">· {bufferedEnd.toFixed(1)}s</span>
+                             )}
+                           </button>
                         </div>
                      ) : (
-                        <span className="text-[10px] text-slate-300">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-slate-300">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                          <span className="text-[9px] text-slate-400">
+                            {usingProxy ? '🛡️ Proxy' : '⚡ Direto'}
+                          </span>
+                        </div>
                      )}
                    </div>
                  </div>
@@ -3096,8 +3241,129 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
                   )}
                 </div>
 
-                {/* 3. Settings Lists (Quality, Speed, Aspect) */}
+                {/* 3. Settings Lists (Quality, Speed, Aspect, Transmission & Buffer) */}
                 <div className="space-y-3 pt-2 border-t border-white/5">
+                  
+                  {/* Seletor de Transmissão Direta vs Proxy */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-amber-400" />
+                        Transmissão
+                      </span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${usingProxy ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30'}`}>
+                        {usingProxy ? '🛡️ Proxy Acelerado' : '⚡ Direto (Zero Hop)'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSetTransmissionMode('direct')}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                          transmissionMode === 'direct'
+                            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                            : 'bg-black/30 text-slate-400 hover:text-white border border-white/10'
+                        }`}
+                        title="Conexão direta na CDN da fonte, sem passar pelo servidor"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Direto</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetTransmissionMode('auto')}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                          transmissionMode === 'auto'
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                            : 'bg-black/30 text-slate-400 hover:text-white border border-white/10'
+                        }`}
+                        title="Automático: direto com fallback inteligente para proxy"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Auto</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetTransmissionMode('proxy')}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                          transmissionMode === 'proxy'
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                            : 'bg-black/30 text-slate-400 hover:text-white border border-white/10'
+                        }`}
+                        title="Roteamento pelo servidor para bypass de CORS e Referer"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        <span>Proxy</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Seletor de Buffer & Economia de Memória */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Cpu className="w-3 h-3 text-indigo-400" />
+                        Buffer & Memória RAM
+                      </span>
+                      <span className="text-[9px] text-slate-400">
+                        {bufferedEnd > 0 ? `${bufferedEnd.toFixed(1)}s carregados` : '0s'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSetBufferPreference('ultra_direct_lightweight')}
+                        className={`p-1.5 rounded-lg text-[9px] font-semibold transition-all cursor-pointer text-left ${
+                          userBufferPreference === 'ultra_direct_lightweight'
+                            ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
+                            : 'bg-black/30 border border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                        title="Início instantâneo, atraso mínimo e menor consumo de RAM"
+                      >
+                        <span className="block font-black text-white">⚡ Ultra-Leve</span>
+                        <span className="text-[8px] opacity-80">8s buffer · &lt;16MB RAM</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetBufferPreference('high_speed')}
+                        className={`p-1.5 rounded-lg text-[9px] font-semibold transition-all cursor-pointer text-left ${
+                          userBufferPreference === 'high_speed'
+                            ? 'bg-indigo-950/80 border border-indigo-500/50 text-indigo-300'
+                            : 'bg-black/30 border border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="block font-black text-white">🚀 Fibra</span>
+                        <span className="text-[8px] opacity-80">30s buffer · 40MB</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetBufferPreference('moderate')}
+                        className={`p-1.5 rounded-lg text-[9px] font-semibold transition-all cursor-pointer text-left ${
+                          userBufferPreference === 'moderate'
+                            ? 'bg-indigo-950/80 border border-indigo-500/50 text-indigo-300'
+                            : 'bg-black/30 border border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="block font-black text-white">⚖️ Equilibrado</span>
+                        <span className="text-[8px] opacity-80">45s buffer · 60MB</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetBufferPreference('intense_traffic')}
+                        className={`p-1.5 rounded-lg text-[9px] font-semibold transition-all cursor-pointer text-left ${
+                          userBufferPreference === 'intense_traffic'
+                            ? 'bg-indigo-950/80 border border-indigo-500/50 text-indigo-300'
+                            : 'bg-black/30 border border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="block font-black text-white">🛡️ Reforçado</span>
+                        <span className="text-[8px] opacity-80">70s buffer anti-queda</span>
+                      </button>
+                    </div>
+                  </div>
                   {qualities.length > 0 && (
                     <div>
                       <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">Resolução</span>
@@ -3262,7 +3528,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
         }}
         usingProxy={usingProxy}
         onToggleProxy={() => {
-          setForceProxy(!usingProxy);
+          handleSetTransmissionMode(usingProxy ? 'direct' : 'proxy');
           setHasError(false);
           setIsLoading(true);
         }}

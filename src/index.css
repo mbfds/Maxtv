@@ -176,6 +176,52 @@ html.tv-box-mode.tv-high-contrast [class*="card"] {
   border-opacity: 1 !important;
 }
 
+/* Visual D-Pad navigation arrow indicator for elements in .active state */
+.tv-box-mode.tv-high-contrast .active,
+html.tv-box-mode.tv-high-contrast .active {
+  position: relative;
+}
+
+.tv-box-mode.tv-high-contrast .active::after,
+html.tv-box-mode.tv-high-contrast .active::after {
+  content: "›";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f59e0b;
+  color: #020617;
+  border: 2px solid #ffffff;
+  border-radius: 9999px;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.85);
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* Active and focus-visible pseudo-classes for .tv-card-contain with 2px white inner stroke and 4px yellow outline */
+.tv-box-mode.tv-high-contrast .tv-card-contain:active,
+.tv-box-mode.tv-high-contrast .tv-card-contain:focus-visible,
+html.tv-box-mode.tv-high-contrast .tv-card-contain:active,
+html.tv-box-mode.tv-high-contrast .tv-card-contain:focus-visible {
+  outline: 4px solid #f59e0b !important;
+  outline-offset: 3px !important;
+  box-shadow: inset 0 0 0 2px #ffffff, 0 0 0 2px #000000, 0 0 16px rgba(245, 158, 11, 0.75) !important;
+  border: 2px solid #ffffff !important;
+  border-color: #ffffff !important;
+  --tw-border-opacity: 1 !important;
+  border-opacity: 1 !important;
+  transform: scale(1.02) !important;
+  z-index: 50 !important;
+}
+
 /* Alvos interativos aumentados para navegação por controle remoto */
 html.tv-box-mode button,
 html.tv-box-mode a[role="button"] {
