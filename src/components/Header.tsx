@@ -595,6 +595,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* TV Box High-Performance Mode Toggle */}
           {onToggleTvBoxMode && (
             <button
+              id="btn-header-tvbox-mode"
               type="button"
               onClick={onToggleTvBoxMode}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
@@ -602,7 +603,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
                   : 'bg-slate-900 border-white/10 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
               }`}
-              title={isTvBoxMode ? 'Modo TV Box Ativo: Alto Desempenho (60fps, sem travamentos)' : 'Ativar Modo TV Box (Ultra Rápido para aparelhos de TV)'}
+              title={isTvBoxMode ? 'Modo TV Box Ativo: Fontes ampliadas, alto contraste e suporte a D-Pad' : 'Ativar Modo TV Box (Otimizado para D-Pad e leitura à distância)'}
             >
               <Tv className={`w-3.5 h-3.5 ${isTvBoxMode ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
               <span className="hidden sm:inline">{isTvBoxMode ? 'Modo TV Box' : 'Modo TV'}</span>

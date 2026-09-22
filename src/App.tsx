@@ -8,6 +8,7 @@ import { FavoritesView } from './components/FavoritesView';
 import { RecentlyAddedSection } from './components/RecentlyAddedSection';
 import { GlobalSearchResultsView } from './components/GlobalSearchResultsView';
 import { EpgGuideView } from './components/EpgGuideView';
+import { TvBoxDetector } from './components/TvBoxDetector';
 
 // Heavy secondary components lazy-loaded to reduce initial bundle and improve TTI
 const LivePlayer = lazy(() => import('./components/LivePlayer').then(m => ({ default: m.LivePlayer })));
@@ -1090,6 +1091,12 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* Alternador Automático para Modo TV Box ao detectar D-Pad / Controle Remoto */}
+      <TvBoxDetector
+        isTvBoxMode={isTvBoxMode}
+        onToggleTvBoxMode={(enabled) => setIsTvBoxMode(enabled)}
+      />
     </div>
   );
 }

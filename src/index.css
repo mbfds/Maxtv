@@ -80,12 +80,106 @@
 
 /* Crisp, instant remote-control D-Pad focus with zero input latency */
 .tv-box-mode :focus-visible {
-  outline: 3px solid #6366f1 !important;
-  outline-offset: 2px !important;
-  box-shadow: none !important;
-  transform: none !important;
+  outline: 4px solid #f59e0b !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 2px #000000, 0 0 16px rgba(245, 158, 11, 0.75) !important;
+  transform: scale(1.02) !important;
   transition: none !important;
-  z-index: 30 !important;
+  z-index: 50 !important;
+}
+
+/* Escala de Fontes para Leitura à Distância (10-Foot UI para TV Box a 3-4 metros) */
+html.tv-box-mode.tv-font-normal {
+  font-size: 16px;
+}
+
+html.tv-box-mode.tv-font-large {
+  font-size: 18px !important;
+}
+
+html.tv-box-mode.tv-font-xlarge {
+  font-size: 20px !important;
+}
+
+html.tv-box-mode {
+  letter-spacing: 0.015em;
+}
+
+/* Alto Contraste para TV (telas LED/LCD à distância) */
+html.tv-box-mode.tv-high-contrast {
+  background-color: #02040a !important;
+}
+
+html.tv-box-mode.tv-high-contrast body {
+  background-color: #02040a !important;
+  color: #ffffff !important;
+}
+
+/* Elevação de contraste para textos secundários */
+html.tv-box-mode.tv-high-contrast .text-slate-400,
+html.tv-box-mode.tv-high-contrast .text-slate-500,
+html.tv-box-mode.tv-high-contrast .text-gray-400,
+html.tv-box-mode.tv-high-contrast .text-gray-500 {
+  color: #cbd5e1 !important;
+}
+
+/* Bordas de cartões e cards mais nítidas e visíveis na TV */
+html.tv-box-mode.tv-high-contrast .border-white\/5,
+html.tv-box-mode.tv-high-contrast .border-white\/10 {
+  border-color: #334155 !important;
+  --tw-border-opacity: 1 !important;
+  border-opacity: 1 !important;
+}
+
+/* Card Background and Border Opacity Adjustments for High Contrast */
+html.tv-box-mode.tv-high-contrast [class*="bg-"][class*="\/"],
+html.tv-box-mode.tv-high-contrast [class*="bg-gradient-"] {
+  @apply bg-slate-950;
+  background-color: #020617 !important; /* bg-slate-950 */
+  background: #020617 !important;
+  background-image: none !important;
+}
+
+html.tv-box-mode.tv-high-contrast [class*="border-"][class*="\/"] {
+  border-color: #ffffff !important;
+  --tw-border-opacity: 1 !important;
+  border-opacity: 1 !important;
+}
+
+/* Active Card Elements in TV Box High Contrast Mode */
+.tv-box-mode.tv-high-contrast .card:active,
+.tv-box-mode.tv-high-contrast .card.active,
+.tv-box-mode.tv-high-contrast .card:focus,
+.tv-box-mode.tv-high-contrast .card:focus-visible,
+.tv-box-mode.tv-high-contrast .tv-card-contain:active,
+.tv-box-mode.tv-high-contrast .tv-card-contain.active,
+.tv-box-mode.tv-high-contrast .tv-card-contain:focus,
+.tv-box-mode.tv-high-contrast .tv-card-contain:focus-visible,
+.tv-box-mode.tv-high-contrast [class*="card"]:active,
+.tv-box-mode.tv-high-contrast [class*="card"].active,
+.tv-box-mode.tv-high-contrast [class*="card"]:focus,
+.tv-box-mode.tv-high-contrast [class*="card"]:focus-visible,
+.tv-box-mode.tv-high-contrast [id*="card"]:active,
+.tv-box-mode.tv-high-contrast [id*="card"].active,
+.tv-box-mode.tv-high-contrast [id*="card"]:focus,
+.tv-box-mode.tv-high-contrast [id*="card"]:focus-visible,
+.tv-box-mode.tv-high-contrast .active-card,
+.tv-box-mode.tv-high-contrast [aria-selected="true"],
+html.tv-box-mode.tv-high-contrast .tv-card-contain,
+html.tv-box-mode.tv-high-contrast [class*="card"] {
+  @apply bg-slate-950;
+  background-color: #020617 !important; /* bg-slate-950 */
+  background: #020617 !important;
+  background-image: none !important;
+  border-color: #ffffff !important;
+  --tw-border-opacity: 1 !important;
+  border-opacity: 1 !important;
+}
+
+/* Alvos interativos aumentados para navegação por controle remoto */
+html.tv-box-mode button,
+html.tv-box-mode a[role="button"] {
+  min-height: 38px;
 }
 
 .tv-box-mode .backdrop-blur-md,
